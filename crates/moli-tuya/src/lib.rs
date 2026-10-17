@@ -115,8 +115,8 @@ fn parse_key(key: &str) -> Option<[u8; 16]> {
 }
 
 async fn run(config: &Config, devices_file: &Path, ctx: &mut DriverCtx) -> anyhow::Result<()> {
-    let file: DeviceFile = match tokio::fs::read(devices_file).await {
-        Ok(bytes) => serde_json::from_slice(&bytes)?,
+    let file = match tokio::fs::read(devices_file).await {
+        Ok(bytes) => DeviceFile::parse(&bytes)?,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
             ctx.wait_for(moli_i18n::tr!(
                 "pilotes.tuya.aucun_appareil",

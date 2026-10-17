@@ -217,6 +217,7 @@ export function deviceKind(d) {
   if (has(d, 'target_temperature')) return 'climate';
   if (has(d, 'key', true)) return 'tv';
   if (has(d, 'playing', true) && has(d, 'volume')) return 'speaker';
+  if (has(d, 'mist_mode', true)) return 'diffuser';
   if (has(d, 'percent_control') || (has(d, 'control', true) && d.points.find((p) => p.key === 'control')?.kind.values?.includes('open')))
     return 'cover';
   if (powerKey(d)) {
@@ -255,6 +256,7 @@ export function roomList() {
         plugs: by('plug').filter((d) => !quiet(d.id)),
         covers: by('cover'),
         climates: by('climate'),
+        diffusers: by('diffuser'),
         media: by('tv', 'speaker'),
         sensors: [...by('sensor', 'camera', 'printer'), ...by('plug').filter((d) => quiet(d.id))],
         lit: by('light').filter((d) => isOn(d.id)).length,

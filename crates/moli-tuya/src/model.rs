@@ -20,6 +20,15 @@ pub struct DeviceFile {
     pub devices: Vec<TuyaDevice>,
 }
 
+impl DeviceFile {
+    /// The file as the driver runs it: each device [`TuyaDevice::complete`].
+    pub fn parse(bytes: &[u8]) -> serde_json::Result<Self> {
+        let mut file: Self = serde_json::from_slice(bytes)?;
+        file.devices.iter_mut().for_each(TuyaDevice::complete);
+        Ok(file)
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct TuyaDevice {
     pub id: String,
@@ -119,8 +128,10 @@ impl Dp {
             DpKind::Enum | DpKind::String => Kind::Text,
             DpKind::Json | DpKind::Raw | DpKind::Bitmap => return None,
         };
-        let writable =
-            self.writable && matches!(self.kind, DpKind::Boolean | DpKind::Integer | DpKind::Enum);
+        // Free text is never written, but a diffuser's colour, checked.
+        let writable = self.writable
+            && (matches!(self.kind, DpKind::Boolean | DpKind::Integer | DpKind::Enum)
+                || self.code == "colour_data");
         Some(PointSpec {
             key: self.code.as_str().into(),
             label: label(&self.code).into(),
@@ -167,6 +178,13 @@ impl Dp {
                 }
                 #[allow(clippy::cast_possible_truncation)]
                 Some(Json::from(raw as i64))
+            }
+            // A colour the device would take for garbage: `rrggbbhhhhssvv`.
+            (DpKind::String, Value::Text(s))
+                if self.code == "colour_data"
+                    && !(s.len() == 14 && s.bytes().all(|b| b.is_ascii_hexdigit())) =>
+            {
+                None
             }
             (DpKind::Enum | DpKind::String, Value::Text(s)) => Some(Json::String(s.to_string())),
             _ => None,
@@ -216,6 +234,12 @@ fn label(code: &str) -> String {
     }
     let known = match code {
         "switch" | "switch_1" => "pilotes.tuya.marche",
+        "switch_led" => "pilotes.tuya.lumiere",
+        "mist_mode" => "pilotes.tuya.brume",
+        "countdown_left" => "pilotes.tuya.temps_restant",
+        "light_scene" => "pilotes.tuya.scene",
+        "bright_value" => "pilotes.tuya.intensite",
+        "colour_data" => "pilotes.tuya.couleur",
         "relay_status" => "pilotes.tuya.retour_courant",
         "light_mode" => "pilotes.tuya.voyant",
         "child_lock" => "pilotes.tuya.securite_enfant",
@@ -250,7 +274,45 @@ fn label(code: &str) -> String {
         .unwrap_or_default()
 }
 
+/// Aroma diffusers (`xxj`) and the ones sold as humidifiers (`jsq`).
+const DIFFUSERS: [&str; 2] = ["xxj", "jsq"];
+
 impl TuyaDevice {
+    /// What the cloud leaves undescribed on a diffuser (ASAKUKI and its
+    /// kin: their own DPs past 100, read-only strings without values), as
+    /// the device was seen to answer: mist `off`/`small`/`big`, timer
+    /// `0`/`1`/`2`/`3` (off, 1 h, 3 h, 6 h), light scene `1`/`2`/`3`
+    /// (gradient, fixed colour, night light), white intensity 0–255, colour
+    /// `rrggbbhhhhssvv`. A DP the cloud did describe is left as it is.
+    pub fn complete(&mut self) {
+        if !DIFFUSERS.contains(&self.category.as_str()) {
+            return;
+        }
+        for dp in &mut self.dps {
+            if dp.writable || !dp.range.is_empty() || dp.max.is_some() {
+                continue;
+            }
+            let values: &[&str] = match (dp.code.as_str(), dp.kind) {
+                ("mist_mode", DpKind::String) => &["off", "small", "big"],
+                ("countdown", DpKind::String) => &["0", "1", "2", "3"],
+                ("light_scene", DpKind::String) => &["1", "2", "3"],
+                ("bright_value", DpKind::Integer) => {
+                    (dp.min, dp.max) = (Some(0.0), Some(255.0));
+                    dp.writable = true;
+                    continue;
+                }
+                ("colour_data", DpKind::String) => {
+                    dp.writable = true;
+                    continue;
+                }
+                _ => continue,
+            };
+            dp.kind = DpKind::Enum;
+            dp.range = values.iter().map(|v| (*v).to_owned()).collect();
+            dp.writable = true;
+        }
+    }
+
     #[must_use]
     pub fn device(&self, instance: &InstanceId) -> Device {
         Device {
@@ -289,6 +351,50 @@ mod tests {
     use super::*;
 
     #[test]
+    fn a_diffusers_undescribed_dps_become_settable() {
+        let mut dev: TuyaDevice = serde_json::from_value(serde_json::json!({
+            "id": "bf1", "name": "Diffuseur", "category": "jsq", "dps": [
+                { "id": 1, "code": "switch", "type": "Boolean", "writable": true },
+                { "id": 13, "code": "countdown", "type": "String" },
+                { "id": 14, "code": "countdown_left", "type": "Integer", "unit": "min" },
+                { "id": 103, "code": "mist_mode", "type": "String" },
+                { "id": 108, "code": "colour_data", "type": "String" },
+                { "id": 109, "code": "light_mode", "type": "String" },
+                { "id": 110, "code": "light_scene", "type": "String" },
+                { "id": 111, "code": "bright_value", "type": "Integer" },
+            ]
+        }))
+        .unwrap();
+        dev.complete();
+        let device = dev.device(&InstanceId::from("tuya"));
+        let point = |key: &str| device.points.iter().find(|p| &*p.key == key).unwrap();
+        assert!(matches!(&point("mist_mode").kind,
+            Kind::Enum { values } if values.iter().map(|v| &**v).eq(["off", "small", "big"])));
+        assert!(point("mist_mode").access.write);
+        assert!(matches!(&point("countdown").kind, Kind::Enum { values } if values.len() == 4));
+        assert!(
+            matches!(point("bright_value").kind, Kind::Numeric { max: Some(m), .. } if (m - 255.0).abs() < 1e-9)
+        );
+        assert!(point("colour_data").access.write);
+        assert!(!point("light_mode").access.write, "never seen to change");
+        assert!(!point("countdown_left").access.write);
+        let colour = dev.dp_by_code("colour_data").unwrap();
+        assert_eq!(
+            colour.encode(&Value::Text("00ff000078ffff".into())),
+            Some(Json::String("00ff000078ffff".into()))
+        );
+        assert_eq!(colour.encode(&Value::Text("vert".into())), None);
+        // Another kind of device keeps what the cloud said.
+        let mut plug: TuyaDevice = serde_json::from_value(serde_json::json!({
+            "id": "bf2", "name": "Prise", "category": "cz",
+            "dps": [{ "id": 103, "code": "mist_mode", "type": "String" }]
+        }))
+        .unwrap();
+        plug.complete();
+        assert!(!plug.dps[0].writable);
+    }
+
+    #[test]
     fn a_strips_outlets_are_numbered_in_words() {
         assert_eq!(label("switch_1"), "Marche");
         assert_eq!(label("switch_2"), "Marche 2");
@@ -298,7 +404,7 @@ mod tests {
         assert_eq!(label("relay_status"), "État au retour du courant");
         assert_eq!(label("child_lock"), "Sécurité enfant");
         // Not a number: as the code says.
-        assert_eq!(label("switch_led"), "Switch led");
+        assert_eq!(label("switch_led"), "Lumière");
         assert_eq!(label("switch_inching"), "Switch inching");
     }
 

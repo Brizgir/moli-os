@@ -5,6 +5,7 @@
   import LightTile from './LightTile.svelte';
   import ClimateCard from './ClimateCard.svelte';
   import CoverTile from './CoverTile.svelte';
+  import DiffuserCard from './DiffuserCard.svelte';
   import AmbiancePicker from './AmbiancePicker.svelte';
   import { phase, PHASES } from '../lib/printers.js';
 
@@ -229,6 +230,10 @@
 
   {#each room.covers as d (d.id)}
     <CoverTile id={d.id} />
+  {/each}
+
+  {#each room.diffusers as d (d.id)}
+    <DiffuserCard id={d.id} />
   {/each}
 
   {#each room.climates as d (d.id)}
