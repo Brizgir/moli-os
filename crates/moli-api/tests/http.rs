@@ -1241,6 +1241,9 @@ async fn the_first_owner_is_invited_from_the_house() {
         serde_json::from_str::<Json>(&people).unwrap()["owner"],
         true
     );
+    let relayed = format!("{outside}{pin}");
+    let (status, _) = request_with(&addr, "POST", "/api/people/moi/invite", None, &relayed).await;
+    assert_eq!(status, 403, "the house's code opens nothing from outside");
     let (status, body) = request_with(&addr, "POST", "/api/people/moi/invite", None, &pin).await;
     assert_eq!(status, 200, "nobody signs in as the owner yet: {body}");
     let code = serde_json::from_str::<Json>(&body).unwrap()["code"]
