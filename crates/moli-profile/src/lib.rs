@@ -1073,6 +1073,12 @@ async fn serve(
     {
         return Ok(Ended::Moved(host));
     }
+    // Remembered before it is said online: whoever sees it online finds
+    // where it answers in the address book.
+    let learned = match follow {
+        Some(_) => Some(learn(ctx, driver.lan, target, configured, &native, declared_mac).await),
+        None => None,
+    };
     let id = ctx.device_id(&native);
     ctx.upsert_device(Device {
         id: id.clone(),
@@ -1091,15 +1097,12 @@ async fn serve(
     ctx.set_availability(&id, true);
     ctx.ready();
     tracing::info!(instance = %ctx.instance(), profile = %profile.meta.id, device = %id, "profile device ready");
-    let mut watch = match follow {
-        Some(_) => Some(Watch {
-            mac: learn(ctx, driver.lan, target, configured, &native, declared_mac).await,
-            native,
-            was_gone: false,
-            looked: Instant::now(),
-        }),
-        None => None,
-    };
+    let mut watch = learned.map(|mac| Watch {
+        mac,
+        native,
+        was_gone: false,
+        looked: Instant::now(),
+    });
     // It answers: the next time it goes silent, it is looked for at once.
     *driver.search.lock().unwrap_or_else(PoisonError::into_inner) = Search::default();
 
