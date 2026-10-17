@@ -333,7 +333,10 @@ async fn connected(
         Failure::Other(e) => e,
     };
     match client.session(&Store(ctx)).await {
-        Ok(()) | Err(Failure::Other(_)) => {}
+        Ok(()) => {}
+        Err(Failure::Other(e)) => {
+            tracing::debug!(instance = %ctx.instance(), error = %format!("{e:#}"), "ring session");
+        }
         Err(e) => return Err(fail(e)),
     }
     let mut tracked: HashMap<DeviceId, Tracked> = HashMap::new();

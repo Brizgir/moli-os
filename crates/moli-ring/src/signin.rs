@@ -171,9 +171,9 @@ mod tests {
     use crate::net::replay::Replay;
 
     const TYPED: &str = r#"{"email":" user@example.com ","password":"not-a-real-one"}"#;
-    const TOKEN: &str = include_str!("../fixtures/oauth-token.json");
-    const TWO_FA: &str = include_str!("../fixtures/oauth-2fa.json");
-    const BAD_CODE: &str = include_str!("../fixtures/oauth-bad-code.json");
+    const TOKEN: &str = include_str!("../../../integrations/ring/fixtures/oauth-token.json");
+    const TWO_FA: &str = include_str!("../../../integrations/ring/fixtures/oauth-2fa.json");
+    const BAD_CODE: &str = include_str!("../../../integrations/ring/fixtures/oauth-bad-code.json");
 
     #[tokio::test]
     async fn the_code_ring_asks_for_then_the_tokens() {
@@ -212,7 +212,7 @@ mod tests {
         let net = Replay::default().then(
             "/oauth/token",
             401,
-            include_str!("../fixtures/oauth-bad-password.json"),
+            include_str!("../../../integrations/ring/fixtures/oauth-bad-password.json"),
         );
         let mut sign_in = SignIn::new("hw-test".into());
         assert_eq!(

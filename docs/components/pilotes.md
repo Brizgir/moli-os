@@ -253,10 +253,17 @@ host = "192.168.1.x"
   est dit **une fois**, s'il a moins de 90 s, et **jamais** depuis la première lecture après un
   démarrage ou une reconnexion (elle ne fait qu'apprendre ce qui est là) : jamais de « on sonne »
   périmé. `doorbell` et `motion` repartent à faux à chaque démarrage.
-- **Tests** : réponses capturées anonymisées (`crates/moli-ring/fixtures/`) rejouées par un faux
+- **Tests** : réponses capturées anonymisées (`integrations/ring/fixtures/`) rejouées par un faux
   transport (`src/net.rs`) : 2FA demandée, code faux puis bon, mot de passe refusé, rotation du
   jeton rangée avant usage, expiration (temps simulé), 401 puis renouvellement, jeton révoqué,
   429 ; lecture des appareils, santé, événements des deux adresses ; fraîcheur des événements.
+- **Non vérifié** (jamais tourné contre les serveurs Ring) : `POST /session` (non bloquant si
+  refusé), la forme exacte de `locations/<loc>/devices/<id>/events` (d'où le repli sur
+  `history`), `chimes/<id>/health`. Marche à suivre au premier essai :
+  `integrations/ring/onboarding.md`.
+- **Décisions** : lecture seule ; sondage plutôt que FCM (pas de dépendance à Firebase, au prix
+  de 10 à 20 s de retard) ; « en ligne » par la disponibilité de l'appareil, pas par un point
+  `online` ; `hardware_id` tiré une fois et gardé au coffre.
 - **Suites** : notifications push (instantané), instantané d'image, volume du carillon en
   écriture.
 

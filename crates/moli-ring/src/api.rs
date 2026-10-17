@@ -238,7 +238,7 @@ mod tests {
         .to_string()
     }
 
-    const DEVICES: &str = include_str!("../fixtures/ring-devices.json");
+    const DEVICES: &str = include_str!("../../../integrations/ring/fixtures/ring-devices.json");
 
     #[tokio::test(start_paused = true)]
     async fn every_new_refresh_token_is_kept_before_it_is_used() {
@@ -313,7 +313,7 @@ mod tests {
         let net = Arc::new(Replay::default().then(
             "/oauth/token",
             401,
-            include_str!("../fixtures/oauth-bad-refresh.json"),
+            include_str!("../../../integrations/ring/fixtures/oauth-bad-refresh.json"),
         ));
         let mut client = Client::new(net, "hw-test", "fake-refresh-0");
         let kept = Kept::default();

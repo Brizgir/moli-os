@@ -24,3 +24,31 @@ options = []
 [origin]
 reused = ""
 author = "agent"
+
+# Replayed by the crate's tests (crates/moli-ring/src/{auth,api,signin,model}.rs).
+[[fixture]]
+file = "fixtures/ring-devices.json"
+
+[[fixture]]
+file = "fixtures/doorbot-health.json"
+
+[[fixture]]
+file = "fixtures/events.json"
+
+[[fixture]]
+file = "fixtures/history.json"
+
+[[fixture]]
+file = "fixtures/oauth-token.json"
+
+[[fixture]]
+file = "fixtures/oauth-2fa.json"
+
+[[fixture]]
+file = "fixtures/oauth-bad-code.json"
+
+[[fixture]]
+file = "fixtures/oauth-bad-password.json"
+
+[[fixture]]
+file = "fixtures/oauth-bad-refresh.json"

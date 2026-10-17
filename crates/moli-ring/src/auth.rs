@@ -198,11 +198,15 @@ mod tests {
 
     fn fixture(name: &str) -> Json {
         let text = match name {
-            "token" => include_str!("../fixtures/oauth-token.json"),
-            "2fa" => include_str!("../fixtures/oauth-2fa.json"),
-            "bad-code" => include_str!("../fixtures/oauth-bad-code.json"),
-            "bad-password" => include_str!("../fixtures/oauth-bad-password.json"),
-            "bad-refresh" => include_str!("../fixtures/oauth-bad-refresh.json"),
+            "token" => include_str!("../../../integrations/ring/fixtures/oauth-token.json"),
+            "2fa" => include_str!("../../../integrations/ring/fixtures/oauth-2fa.json"),
+            "bad-code" => include_str!("../../../integrations/ring/fixtures/oauth-bad-code.json"),
+            "bad-password" => {
+                include_str!("../../../integrations/ring/fixtures/oauth-bad-password.json")
+            }
+            "bad-refresh" => {
+                include_str!("../../../integrations/ring/fixtures/oauth-bad-refresh.json")
+            }
             _ => unreachable!(),
         };
         serde_json::from_str(text).unwrap()

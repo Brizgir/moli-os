@@ -287,7 +287,9 @@ mod tests {
 
     #[test]
     fn the_account_s_doorbell_and_chime() {
-        let all = devices(&fixture(include_str!("../fixtures/ring-devices.json")));
+        let all = devices(&fixture(include_str!(
+            "../../../integrations/ring/fixtures/ring-devices.json"
+        )));
         assert_eq!(all.len(), 2);
         let bell = &all[0];
         assert_eq!(bell.family, Family::Doorbell);
@@ -326,7 +328,9 @@ mod tests {
 
     #[test]
     fn health_gives_the_wifi_and_the_battery() {
-        let h = fixture(include_str!("../fixtures/doorbot-health.json"));
+        let h = fixture(include_str!(
+            "../../../integrations/ring/fixtures/doorbot-health.json"
+        ));
         assert_eq!(health(&h), (Some(-58), Some(87.0)));
         assert_eq!(health(&Json::Null), (None, None));
         let odd = serde_json::json!({ "device_health": { "latest_signal_strength": "7" } });
@@ -335,13 +339,17 @@ mod tests {
 
     #[test]
     fn events_read_from_both_places() {
-        let new = events(&fixture(include_str!("../fixtures/events.json")));
+        let new = events(&fixture(include_str!(
+            "../../../integrations/ring/fixtures/events.json"
+        )));
         assert_eq!(new.len(), 2, "the live view is not an event: {new:?}");
         assert_eq!(new[0].what, Happened::Press);
         assert_eq!(new[0].id, "7000000000000000002");
         assert_eq!(new[1].what, Happened::Motion);
         assert!(new[0].at > new[1].at);
-        let old = events(&fixture(include_str!("../fixtures/history.json")));
+        let old = events(&fixture(include_str!(
+            "../../../integrations/ring/fixtures/history.json"
+        )));
         assert_eq!(old.len(), 1);
         assert_eq!(old[0].id, "7000000000000000009");
         assert_eq!(old[0].what, Happened::Press);
