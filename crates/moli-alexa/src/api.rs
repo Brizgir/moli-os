@@ -12,6 +12,7 @@ use serde_json::{Value as Json, json};
 
 use crate::auth::{self, Jar, USER_AGENT};
 use crate::echo::Echo;
+use crate::media::{self, Playing};
 
 const LIMIT: Duration = Duration::from_secs(20);
 const MAX_BODY: usize = 4 * 1024 * 1024;
@@ -205,17 +206,35 @@ impl Session {
         .map(|_| ())
     }
 
-    /// What `echo` plays now. A speaker with no player at all answers
-    /// 400: it plays nothing.
-    pub(crate) async fn playing(&self, echo: &Echo) -> Result<Playing, Failure> {
+    /// What `echo` plays now, and the shape of the answer for the debug
+    /// log. A speaker with no player at all answers 400: it plays nothing.
+    pub(crate) async fn playing(&self, echo: &Echo) -> Result<(Playing, String), Failure> {
         let path = format!(
             "/api/np/player?deviceSerialNumber={}&deviceType={}&screenWidth=1392",
             echo.serial, echo.device_type
         );
         match self.get(&path).await {
-            Ok(answer) => Ok(player_state(&answer)),
-            Err(Failure::Other(e)) if format!("{e:#}").contains(": HTTP 400") => {
-                Ok(Playing::idle())
+            Ok(answer) => Ok((player_state(&answer), media::player_shape(&answer))),
+            Err(Failure::Other(e)) if status(&e) == Some(400) => {
+                Ok((Playing::idle(), "HTTP 400".into()))
+            }
+            Err(e) => Err(e),
+        }
+    }
+
+    /// The account's media sessions, in one call for every speaker. `None`:
+    /// the account has no such list (an older one), or refuses it; an
+    /// account that refuses it is not taken for a session that expired,
+    /// which would renew the session in a loop.
+    pub(crate) async fn media_sessions(&self) -> Result<Option<Json>, Failure> {
+        match self.get("/api/np/list-media-sessions").await {
+            Ok(answer) => Ok(Some(answer)),
+            Err(Failure::Expired) => Ok(None),
+            Err(Failure::Other(e))
+                if status(&e).is_some_and(|s| (400..500).contains(&s) || s == 501) =>
+            {
+                tracing::debug!(status = status(&e), "alexa: no media sessions list");
+                Ok(None)
             }
             Err(e) => Err(e),
         }
@@ -230,39 +249,15 @@ impl Session {
     }
 }
 
-/// What a speaker plays, as the dashboard shows it.
-#[derive(Clone, Debug, Default, PartialEq)]
-pub(crate) struct Playing {
-    /// `PLAYING`, `PAUSED`, `IDLE`…
-    pub state: String,
-    pub title: String,
-    pub artist: String,
-    pub volume: Option<f64>,
-}
-
-impl Playing {
-    fn idle() -> Self {
-        Self {
-            state: "IDLE".into(),
-            ..Self::default()
-        }
-    }
-}
-
 pub(crate) fn player_state(answer: &Json) -> Playing {
-    let p = &answer["playerInfo"];
-    Playing {
-        state: p["state"].as_str().unwrap_or("IDLE").to_owned(),
-        title: p["infoText"]["title"]
-            .as_str()
-            .unwrap_or_default()
-            .to_owned(),
-        artist: p["infoText"]["subText1"]
-            .as_str()
-            .unwrap_or_default()
-            .to_owned(),
-        volume: p["volume"]["volume"].as_f64(),
-    }
+    media::now_playing(&answer["playerInfo"])
+}
+
+/// An HTTP status in an error from [`Session::send`].
+fn status(e: &anyhow::Error) -> Option<u16> {
+    let text = format!("{e:#}");
+    let (_, after) = text.split_once(": HTTP ")?;
+    after.get(..3)?.parse().ok()
 }
 
 pub(crate) fn volumes(answer: &Json) -> Vec<(String, f64)> {
@@ -576,6 +571,9 @@ mod tests {
         );
         assert_eq!(p.volume, Some(35.0));
         assert_eq!(player_state(&json!({})).state, "IDLE");
+        let e = anyhow::anyhow!("alexa.amazon.fr/api/np/x: HTTP 404 Not Found");
+        assert_eq!(status(&e), Some(404));
+        assert_eq!(status(&anyhow::anyhow!("timed out")), None);
         let v =
             volumes(&json!({ "volumes": [{ "dsn": "A", "speakerVolume": 40 }, { "dsn": "B" }] }));
         assert_eq!(v, [("A".to_owned(), 40.0)]);
