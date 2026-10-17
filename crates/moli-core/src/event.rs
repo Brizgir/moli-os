@@ -47,6 +47,9 @@ pub enum Event {
     Notice {
         notice: Notice,
     },
+    /// The dashboard's layout (`home.json`: rooms, favourites…) was written:
+    /// the dashboards read it again.
+    HomeChanged,
 }
 
 /// A message shown in the dashboard.

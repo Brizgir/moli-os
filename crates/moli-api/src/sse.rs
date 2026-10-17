@@ -174,8 +174,11 @@ impl View {
             Event::DeviceRemoved { device } | Event::LabelChanged { device, .. } => {
                 (Some(device.clone()), true)
             }
-            // A driver's state, a decision on a request: no room in them.
-            Event::DriverStatus { .. } | Event::ApprovalResolved { .. } => return Pass::Event,
+            // A driver's state, a decision on a request, the layout (which
+            // `/api/home` gives anyone): no room in them.
+            Event::DriverStatus { .. } | Event::ApprovalResolved { .. } | Event::HomeChanged => {
+                return Pass::Event;
+            }
             // The house's journal and notices are the household's.
             Event::Journal { .. } | Event::Notice { .. } => return Pass::Drop,
         };

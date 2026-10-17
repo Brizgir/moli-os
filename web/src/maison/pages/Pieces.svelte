@@ -8,6 +8,7 @@
   import { roomList, roomNamed, savePref, roamingSpeakers } from '../lib/home.svelte.js';
   import Icon from '../ui/Icon.svelte';
   import RoomCard from '../ui/RoomCard.svelte';
+  import RoomForm from '../ui/RoomForm.svelte';
   import FilterChips from '../ui/FilterChips.svelte';
   import { categoryOf, loadFilter } from '../lib/filters.js';
   import { floorsOf } from '../lib/floors.js';
@@ -37,6 +38,9 @@
     look = v;
     savePref('pieces-look', v);
   }
+
+  /** The room's sheet: `null` closed, `'new'` a new room, else the room. */
+  let sheet = $state(null);
 
   // Speakers in no room (an Alexa group, « Partout »): one card of their own.
   const everywhere = $derived.by(() => {
@@ -99,6 +103,10 @@
 
   <div class="bar">
     <FilterChips {devices} bind:filter key="pieces-filter" />
+    <button class="new-room" onclick={() => (sheet = 'new')}>
+      <Icon name="plus" size={18} />
+      <span>{t('maison.pieces.nouvelle')}</span>
+    </button>
     <div class="look" role="radiogroup" aria-label={t('maison.pieces.affichage')}>
       <button role="radio" aria-checked={look === 'text'} class:active={look === 'text'} onclick={() => choose('text')} title={t('maison.pieces.avec_noms')}>Aa</button>
       <button role="radio" aria-checked={look === 'icons'} class:active={look === 'icons'} onclick={() => choose('icons')} title={t('maison.pieces.icones')}><Icon name="light" size={15} /></button>
@@ -116,11 +124,19 @@
       {/if}
       <div class="rooms">
         {#each floor.rooms as room (room.name)}
-          <div class="slot"><RoomCard {room} every={filter.includes('capteurs')} icons={look === 'icons'} /></div>
+          <div class="slot"><RoomCard {room} every={filter.includes('capteurs')} icons={look === 'icons'} onedit={(r) => (sheet = r)} /></div>
         {/each}
       </div>
     </section>
   {/each}
+
+  {#if !all.length}
+    <p class="none">{t('maison.pieces.aucune')}</p>
+  {/if}
+
+  {#if sheet}
+    <RoomForm room={sheet === 'new' ? null : sheet} onclose={() => (sheet = null)} />
+  {/if}
 
   {#if everywhere && only(everywhere)}
     <section class="floor" aria-label={everywhere.name}>
@@ -147,6 +163,26 @@
   .bar > :global(:first-child) {
     flex: 1;
     min-width: 0;
+  }
+
+  .new-room {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 40px;
+    padding: 8px 16px 8px 12px;
+    border: none;
+    border-radius: 999px;
+    background: var(--ink);
+    color: var(--surface);
+    font: inherit;
+    font-weight: 650;
+    cursor: pointer;
+  }
+
+  .none {
+    margin: 0;
+    color: var(--ink-3);
   }
 
   .look {

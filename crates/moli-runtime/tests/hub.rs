@@ -1138,3 +1138,86 @@ async fn oversized_orders_are_refused_and_journaled_without_their_bulk() {
         other => panic!("{other:?}"),
     }
 }
+
+/// A speaker published twice: first as « Kitchen », then renamed in its
+/// app, as « Cuisine » (what a cloud driver does on each re-listing).
+struct Renamer;
+
+impl Driver for Renamer {
+    fn kind(&self) -> &'static str {
+        "fake"
+    }
+
+    fn run<'a>(&'a self, ctx: &'a mut DriverCtx) -> BoxFuture<'a, anyhow::Result<()>> {
+        Box::pin(async move {
+            let id = ctx.device_id("echo");
+            let device = |name: &str| Device {
+                id: id.clone(),
+                instance: ctx.instance().clone(),
+                native_name: name.into(),
+                manufacturer: None,
+                model: None,
+                description: None,
+                native_room: Some("Cuisine".into()),
+                members: Vec::new(),
+                points: vec![spec(
+                    "volume",
+                    Kind::Numeric {
+                        min: Some(0.0),
+                        max: Some(100.0),
+                        step: None,
+                    },
+                    true,
+                    Semantic::Config,
+                )],
+            };
+            ctx.upsert_device(device("Kitchen"));
+            ctx.set_state(&id, "volume", Value::Float(35.0));
+            ctx.set_availability(&id, true);
+            ctx.ready();
+            // Published again, unchanged, then under its new name.
+            ctx.upsert_device(device("Kitchen"));
+            ctx.upsert_device(device("Cuisine"));
+            while ctx.next_command().await.is_some() {}
+            Ok(())
+        })
+    }
+}
+
+#[tokio::test]
+async fn a_device_published_again_under_a_new_name_keeps_its_points() {
+    let hub = Hub::new(HubOptions::default()).unwrap();
+    let mut events = hub.subscribe();
+    let cancel = CancellationToken::new();
+    spawn_driver(
+        &hub,
+        InstanceId::from("fake"),
+        Arc::new(Renamer),
+        cancel.clone(),
+    );
+    wait_running(&hub).await;
+    let id = moli_core::DeviceId::from("fake:echo");
+    let mut names = Vec::new();
+    while let Ok(Ok(event)) = tokio::time::timeout(Duration::from_millis(300), events.recv()).await
+    {
+        if let Event::DeviceUpserted { device } = event {
+            names.push(device.native_name.to_string());
+        }
+    }
+    assert_eq!(
+        names,
+        ["Kitchen", "Cuisine"],
+        "one event per definition that changed, none for the same one again"
+    );
+    let view = hub.device(&id).unwrap();
+    assert_eq!(&*view.device.native_name, "Cuisine");
+    assert_eq!(view.online, Some(true));
+    assert_eq!(
+        hub.state(&PointId::from("fake:echo/volume".to_owned()))
+            .map(|s| s.value),
+        Some(Value::Float(35.0)),
+        "the volume read before the rename is still there"
+    );
+    assert_eq!(hub.stats().devices, 1, "no duplicate");
+    cancel.cancel();
+}

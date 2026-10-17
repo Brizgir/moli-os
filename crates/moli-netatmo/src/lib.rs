@@ -36,8 +36,9 @@ use crate::model::{Home, Target};
 const CLIENT_ID: &str = "client_id";
 const CLIENT_SECRET: &str = "client_secret";
 const REFRESH: &str = "refresh_token";
-/// The homes, rooms and modules (one added, renamed…).
-const STRUCTURE: Duration = Duration::from_secs(6 * 3600);
+/// The homes, rooms and modules (one added, renamed in the Netatmo app…):
+/// one `homesdata` call, so a new name shows in the house within minutes.
+const STRUCTURE: Duration = Duration::from_secs(15 * 60);
 /// The store, looked at this often while Moli waits for the person.
 const LOOK: Duration = Duration::from_secs(5);
 /// Never asked more often than this, whatever the config says.

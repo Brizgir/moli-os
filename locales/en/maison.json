@@ -54,13 +54,11 @@
   "maison.accueil.air": "Air",
   "maison.accueil.humidite": "Humidity",
   "maison.accueil.piscine": "Pool",
-
   "maison.air.tres_bon": "Very good",
   "maison.air.bon": "Good",
   "maison.air.moyen": "Moderate",
   "maison.air.mediocre": "Poor",
   "maison.air.mauvais": "Bad",
-
   "maison.dehors.titre": "Outside",
   "maison.dehors.sous_titre": "The weather, the air, the pool and the garden.",
   "maison.dehors.ressenti": "Feels like {feels}° · high {max}° · low {min}°",
@@ -98,7 +96,6 @@
   "maison.dehors.eclaire": "Lit",
   "maison.dehors.noir": "In the dark",
   "maison.dehors.credit": "Weather and air quality:",
-
   "maison.pieces.titre": "Rooms",
   "maison.pieces.sous_titre": "Every room, its lights and what it senses.",
   "maison.pieces.affichage": "Button display",
@@ -108,7 +105,6 @@
   "maison.pieces.allumees_other": "{count} lights on",
   "maison.pieces.toute_la_maison": "Whole house",
   "maison.pieces.toute_la_maison_note": "Speakers that are in no room",
-
   "maison.plan.titre": "Plan",
   "maison.plan.sous_titre": "The house as it is right now. Tap a light to turn it on.",
   "maison.plan.sous_titre_edition": "Tap a device in the list, then the spot where it is. Drag to move it.",
@@ -155,17 +151,14 @@
   "maison.plan.zoom_avant": "Zoom in",
   "maison.plan.zoom_arriere": "Zoom out",
   "maison.plan.tout_le_plan": "Whole plan",
-
   "maison.plan3d.indisponible": "3D isn’t available on this device: {reason}",
   "maison.plan3d.pas_demarre": "3D couldn’t start",
   "maison.plan3d.construction": "Building the house…",
   "maison.plan3d.vue_ensemble": "Back to the full view",
-
   "maison.skin.plan": "Plan",
   "maison.skin.blueprint": "Blueprint",
   "maison.skin.nuit": "Night",
   "maison.skin.aquarelle": "Watercolor",
-
   "maison.meuble.bed": "Bed",
   "maison.meuble.bunk": "Bunk beds",
   "maison.meuble.sofa": "Sofa",
@@ -190,7 +183,6 @@
   "maison.meuble.stairs": "Stairs",
   "maison.meuble.stairs_u": "U-shaped stairs",
   "maison.meuble.other": "Other",
-
   "maison.meteo.previsions": "Forecast",
   "maison.meteo.heures": "Hours",
   "maison.meteo.jours": "7 days",
@@ -214,5 +206,20 @@
   "maison.meteo.legende_pluie": "Rain",
   "maison.meteo.legende_nuages": "Clouds",
   "maison.meteo.legende_vent": "Wind (light → strong)",
-  "maison.meteo.credit": "Forecast by Open-Meteo. The orange dot is the house."
+  "maison.meteo.credit": "Forecast by Open-Meteo. The orange dot is the house.",
+  "maison.pieces.nouvelle": "New room",
+  "maison.pieces.fiche_modifier": "Edit “{name}”",
+  "maison.pieces.nom": "Its name",
+  "maison.pieces.nom_exemple": "Kids' bedroom",
+  "maison.pieces.icone": "Its icon",
+  "maison.pieces.alias": "Its other names",
+  "maison.pieces.alias_exemple": "Bedroom 2, Kids room",
+  "maison.pieces.alias_aide": "The names Hue, Alexa or the plan give this same room, separated by commas.",
+  "maison.pieces.protegee_aide": "For a room to be protected (nobody acts there without you), it is in the moli.toml file, [guard] section.",
+  "maison.pieces.enregistrer": "Save",
+  "maison.pieces.enregistree": "{name}: saved",
+  "maison.pieces.retirer": "Remove from the list",
+  "maison.pieces.retirer_confirmer": "Remove “{name}” from the list? Its devices keep their room.",
+  "maison.pieces.retiree": "{name}: removed from the list",
+  "maison.pieces.aucune": "No room yet: create the first one, then put your devices in it."
 }

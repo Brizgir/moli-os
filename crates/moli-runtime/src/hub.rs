@@ -1110,6 +1110,66 @@ impl Hub {
         Ok(label)
     }
 
+    /// A room renamed by a person: every device labelled in it (any
+    /// spelling of `from`, accents and case aside) is labelled in `to`,
+    /// `labels.toml` is written once, and each move is journaled. Returns
+    /// the devices that moved.
+    pub async fn rename_room(
+        &self,
+        from: &str,
+        to: &str,
+        origin: Origin,
+        actor: Option<String>,
+    ) -> Result<Vec<DeviceId>, LabelError> {
+        let started = Instant::now();
+        let to = to.trim();
+        if to.is_empty() || crate::guard::same_room(from, to) {
+            return Ok(Vec::new());
+        }
+        let _guard = self.0.label_write.lock().await;
+        let mut next = self.read().labels.clone();
+        let mut moved = Vec::new();
+        for (device, label) in &mut next {
+            if label
+                .room
+                .as_deref()
+                .is_some_and(|room| crate::guard::same_room(room, from))
+            {
+                label.room = Some(to.to_owned());
+                moved.push((device.clone(), label.clone()));
+            }
+        }
+        if moved.is_empty() {
+            return Ok(Vec::new());
+        }
+        if let Some(path) = &self.0.opts.labels_path {
+            labels::save(path, &next).await?;
+        }
+        self.write().labels = next;
+        for (device, label) in &moved {
+            self.emit(Event::LabelChanged {
+                device: device.clone(),
+                label: label.clone(),
+            });
+            self.record(
+                origin,
+                actor.clone(),
+                Action::Label {
+                    device: device.clone(),
+                    label: label.clone(),
+                },
+                Outcome::Ok,
+                started,
+            );
+        }
+        Ok(moved.into_iter().map(|(device, _)| device).collect())
+    }
+
+    /// The dashboard's layout file was written: the dashboards read it again.
+    pub fn home_changed(&self) {
+        self.emit(Event::HomeChanged);
+    }
+
     /// Resolves and validates an order without sending it.
     fn prepare(&self, point: &PointId, value: &Value) -> Result<Prepared, CommandError> {
         let (device_id, key) = point.split().ok_or(CommandError::UnknownPoint)?;

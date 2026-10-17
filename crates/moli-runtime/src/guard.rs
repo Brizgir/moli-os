@@ -86,7 +86,7 @@ pub struct QuietStatus {
 /// spaces, and accents (typed or not, in whatever Unicode form): « Petite
 /// chambre » is « petite  chambre », « Chambre a coucher » is « Chambre à
 /// coucher ». Erring towards a match only ever protects more.
-pub(crate) fn same_room(a: &str, b: &str) -> bool {
+pub fn same_room(a: &str, b: &str) -> bool {
     // Decompose, then drop the accents: « Chambre a coucher » typed without
     // its accent is still « Chambre à coucher ».
     let norm = |s: &str| {

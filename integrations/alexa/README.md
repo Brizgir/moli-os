@@ -69,4 +69,8 @@ telle quelle dans un rapport de bug.
 - Pause et lecture ne marchent que si la musique vient d'Alexa (pas de Spotify Connect lancé
   depuis un téléphone).
 - Un changement de mot de passe Amazon peut obliger à refaire la connexion.
-- L'état de lecture est relu toutes les 30 s.
+- L'état de lecture est relu toutes les 30 s ; la liste des enceintes (une ajoutée, une
+  **renommée** dans l'appli Alexa) toutes les 3 min : un nouveau nom apparaît dans Moli en
+  3 min au plus (tant que l'enceinte n'a pas de nom donné dans Moli, qui prime), sans rien
+  perdre de son historique. Si Amazon demande une pause (HTTP 429), la prochaine relecture
+  attend 15 min.
