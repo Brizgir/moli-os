@@ -13,7 +13,7 @@ use serde_json::Value as Json;
 
 use crate::protocol::Version;
 
-/// `data/tuya.json`, written by `moli-os tuya import`. Hand-editable: `ip`,
+/// `tuya.json` in the data directory, written by `moli-os tuya import`. Hand-editable: `ip`,
 /// `version` and `room` are kept across re-imports.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct DeviceFile {

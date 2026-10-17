@@ -503,7 +503,8 @@ fn tuya_import(
     }
     let key = master_key(&config.server.data_dir, false)?
         .context("no master key (MOLI_MASTER_KEY[_FILE], or master.key in the data directory)")?;
-    let devices_file = devices_file.unwrap_or_else(|| config.server.data_dir.join("tuya.json"));
+    let devices_file =
+        devices_file.unwrap_or_else(|| moli_tuya::default_devices_file(&config.server.data_dir));
     let import: moli_tuya::ImportFile = serde_json::from_reader(std::io::stdin().lock())
         .context("invalid import (expected the JSON of tuya-export.py)")?;
     let existing = match std::fs::read(&devices_file) {
@@ -1036,6 +1037,7 @@ fn build_driver(
         )),
         "tuya" => Arc::new(moli_tuya::Tuya::new(
             config.options.clone().try_into().with_context(context)?,
+            data_dir,
         )),
         "presence" => Arc::new(moli_presence::Presence::new(
             config.options.clone().try_into().with_context(context)?,

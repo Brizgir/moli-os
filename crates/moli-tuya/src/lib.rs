@@ -6,7 +6,7 @@
 //! `moli-os tuya import` reads, once, what the Tuya cloud knows (device
 //! list, data points, local keys — through the account Home Assistant
 //! already uses) and files it: keys in the encrypted secret store, the rest
-//! in `data/tuya.json`. From then on each device is reached on the LAN
+//! in `tuya.json` in the data directory. From then on each device is reached on the LAN
 //! (TCP 6668); addresses and protocol versions come from the device file,
 //! the devices' own UDP broadcasts, or, when those are not heard, from
 //! asking the listeners of the home network with each key (`seek`).
@@ -19,7 +19,7 @@ mod seek;
 
 use std::collections::{HashMap, HashSet};
 use std::net::{Ipv4Addr, SocketAddr};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use moli_core::DeviceId;
@@ -35,9 +35,10 @@ use protocol::Version;
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
-    /// Written by `moli-os tuya import`.
-    #[serde(default = "default_file")]
-    pub devices_file: PathBuf,
+    /// Written by `moli-os tuya import`. Missing: `tuya.json` in the data
+    /// directory, where the import writes it.
+    #[serde(default)]
+    pub devices_file: Option<PathBuf>,
     /// Listen to the devices' broadcasts for their address and version.
     #[serde(default = "yes")]
     pub discovery: bool,
@@ -62,8 +63,10 @@ fn default_region() -> String {
     "eu".into()
 }
 
-fn default_file() -> PathBuf {
-    PathBuf::from("data/tuya.json")
+/// The device file in `data_dir`, as `moli-os tuya import` writes it.
+#[must_use]
+pub fn default_devices_file(data_dir: &Path) -> PathBuf {
+    data_dir.join("tuya.json")
 }
 
 fn yes() -> bool {
@@ -79,12 +82,21 @@ pub fn key_name(device_id: &str) -> String {
 #[derive(Debug)]
 pub struct Tuya {
     config: Config,
+    devices_file: PathBuf,
 }
 
 impl Tuya {
+    /// `data_dir` gives the device file when the options name none.
     #[must_use]
-    pub fn new(config: Config) -> Self {
-        Self { config }
+    pub fn new(config: Config, data_dir: &Path) -> Self {
+        let devices_file = config
+            .devices_file
+            .clone()
+            .unwrap_or_else(|| default_devices_file(data_dir));
+        Self {
+            config,
+            devices_file,
+        }
     }
 }
 
@@ -94,7 +106,7 @@ impl Driver for Tuya {
     }
 
     fn run<'a>(&'a self, ctx: &'a mut DriverCtx) -> BoxFuture<'a, anyhow::Result<()>> {
-        Box::pin(run(&self.config, ctx))
+        Box::pin(run(&self.config, &self.devices_file, ctx))
     }
 }
 
@@ -102,13 +114,13 @@ fn parse_key(key: &str) -> Option<[u8; 16]> {
     <[u8; 16]>::try_from(key.as_bytes()).ok()
 }
 
-async fn run(config: &Config, ctx: &mut DriverCtx) -> anyhow::Result<()> {
-    let file: DeviceFile = match tokio::fs::read(&config.devices_file).await {
+async fn run(config: &Config, devices_file: &Path, ctx: &mut DriverCtx) -> anyhow::Result<()> {
+    let file: DeviceFile = match tokio::fs::read(devices_file).await {
         Ok(bytes) => serde_json::from_slice(&bytes)?,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
             ctx.wait_for(moli_i18n::tr!(
                 "pilotes.tuya.aucun_appareil",
-                file = config.devices_file.display()
+                file = devices_file.display()
             ));
             ctx.cancelled().await;
             return Ok(());
@@ -495,6 +507,17 @@ pub fn merge_import(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn devices_file_defaults_to_the_data_dir() {
+        let config: Config = serde_json::from_str("{}").unwrap();
+        let tuya = Tuya::new(config, Path::new("/data"));
+        assert_eq!(tuya.devices_file, Path::new("/data/tuya.json"));
+        let config: Config =
+            serde_json::from_str(r#"{"devices_file": "/elsewhere.json"}"#).unwrap();
+        let tuya = Tuya::new(config, Path::new("/data"));
+        assert_eq!(tuya.devices_file, Path::new("/elsewhere.json"));
+    }
 
     #[test]
     fn imports_keep_hand_edits_and_separate_keys() {

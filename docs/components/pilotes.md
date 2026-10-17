@@ -177,7 +177,7 @@ host = "192.168.1.x"
 id = "tuya"
 kind = "tuya"
 [driver.options]
-devices_file = "/data/tuya.json"   # défaut : data/tuya.json
+# devices_file = "/data/tuya.json" # défaut : tuya.json dans server.data_dir (là où l'import écrit)
 # discovery = true                 # défaut : écoute des diffusions UDP
 ```
 
