@@ -1023,6 +1023,8 @@ fn build_driver(
             config.options.clone().try_into().with_context(context)?,
         )),
         "netatmo" => Arc::new(moli_netatmo::Netatmo::new(
+            config.options.clone().try_into().with_context(context)?,
+        )),
         "ring" => Arc::new(moli_ring::Ring::new(
             config.options.clone().try_into().with_context(context)?,
         )),
