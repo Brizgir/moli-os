@@ -24,6 +24,7 @@ moli-sonos.workspace = true
 moli-bambu.workspace = true
 moli-esphome.workspace = true
 moli-alexa.workspace = true
+moli-ring.workspace = true
 moli-moonraker.workspace = true
 moli-frigate.workspace = true
 moli-philips.workspace = true

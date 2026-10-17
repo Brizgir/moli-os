@@ -81,6 +81,10 @@ pub enum CommandError {
     /// Held by the guard: a human must approve request `id`.
     #[error("awaiting human approval #{id}: {reason}")]
     NeedsApproval { id: u64, reason: String },
+    /// A sign-in (a [`moli_core::Semantic::Secret`] point): a person's, with
+    /// their code, at the dashboard.
+    #[error("only a person, from the dashboard with their code, can give this")]
+    HumanOnly,
 }
 
 #[derive(Debug, Clone, PartialEq, thiserror::Error)]
@@ -495,8 +499,13 @@ impl Hub {
             );
             return Err(error);
         }
+        // A sign-in is a person's, at the dashboard: never an agent's, never
+        // held (the approval would keep it), never journaled.
+        let secret = self.semantic(point) == Some(moli_core::Semantic::Secret);
         let result = match self.prepare(point, &value) {
             Err(e) => Err(e),
+            Ok(_) if secret && origin != Origin::Ui => Err(CommandError::HumanOnly),
+            Ok(prepared) if secret => self.send(prepared).await,
             Ok(prepared) => match self.verdict(point, origin) {
                 Verdict::Allow => self.send(prepared).await,
                 Verdict::Approval(reason) => {
@@ -518,7 +527,7 @@ impl Hub {
             actor,
             Action::Command {
                 point: point.clone(),
-                value,
+                value: if secret { Value::Null } else { value },
             },
             outcome,
             started,
@@ -559,14 +568,17 @@ impl Hub {
 
     /// Whether the point is an order to a machine at work.
     fn is_control(&self, point: &PointId) -> bool {
-        let Some((device, key)) = point.split() else {
-            return false;
-        };
+        self.semantic(point) == Some(moli_core::Semantic::Control)
+    }
+
+    /// What the point means, if it exists.
+    fn semantic(&self, point: &PointId) -> Option<moli_core::Semantic> {
+        let (device, key) = point.split()?;
         self.read()
             .devices
             .get(&device)
             .and_then(|d| d.point(key))
-            .is_some_and(|p| p.semantic == moli_core::Semantic::Control)
+            .map(|p| p.semantic)
     }
 
     /// Every room an order on this device reaches: its own (user label and
@@ -1567,6 +1579,10 @@ impl Hub {
             let Some(spec) = model.devices.get(device).and_then(|d| d.point(key)) else {
                 return;
             };
+            // What a person typed to sign in is never kept.
+            if spec.semantic == moli_core::Semantic::Secret {
+                return;
+            }
             let key = spec.key.clone();
             self.0.state_dirty.store(true, Ordering::Release);
             let states = model.states.entry(device.clone()).or_default();

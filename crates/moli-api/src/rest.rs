@@ -247,7 +247,7 @@ pub(crate) fn command_status(e: &CommandError) -> StatusCode {
     match e {
         CommandError::NeedsApproval { .. } => StatusCode::ACCEPTED,
         CommandError::UnknownPoint => StatusCode::NOT_FOUND,
-        CommandError::ReadOnly => StatusCode::FORBIDDEN,
+        CommandError::ReadOnly | CommandError::HumanOnly => StatusCode::FORBIDDEN,
         CommandError::Invalid(_) => StatusCode::UNPROCESSABLE_ENTITY,
         CommandError::DriverUnavailable | CommandError::Busy => StatusCode::SERVICE_UNAVAILABLE,
         CommandError::Timeout => StatusCode::GATEWAY_TIMEOUT,

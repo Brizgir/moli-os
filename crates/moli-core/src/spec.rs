@@ -156,6 +156,10 @@ pub enum Semantic {
     /// An order to a machine at work (pause or cancel a print): an agent
     /// asking gets a human's approval first.
     Control,
+    /// What a person gives once to connect an account (a cloud sign-in, a
+    /// one-time code): taken from a person at the dashboard only, never
+    /// held for approval, never journaled, never kept as state.
+    Secret,
     Other,
 }
 

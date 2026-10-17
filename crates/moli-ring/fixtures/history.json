@@ -1,0 +1,19 @@
+[
+  {
+    "id": 7000000000000000009,
+    "created_at": "2026-10-17T09:31:00.000Z",
+    "answered": false,
+    "events": [],
+    "kind": "ding",
+    "favorite": false,
+    "snapshot_url": "",
+    "recording": { "status": "ready" },
+    "doorbot": { "id": 10000001, "description": "Porte d'entrée" }
+  },
+  {
+    "id": 7000000000000000008,
+    "created_at": "2026-10-17T09:00:00.000Z",
+    "kind": "on_demand",
+    "doorbot": { "id": 10000001, "description": "Porte d'entrée" }
+  }
+]

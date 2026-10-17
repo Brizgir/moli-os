@@ -80,6 +80,7 @@ impl Driver for FakePlug {
                         true,
                         Semantic::Control,
                     ),
+                    spec("sign_in", Kind::Text, true, Semantic::Secret),
                 ],
             });
             ctx.set_state(&id, "state", Value::Bool(false));
@@ -148,6 +149,44 @@ async fn command_round_trip_updates_state_and_journal() {
     assert_eq!(journal[0].outcome, Outcome::Ok);
     assert_eq!(journal[0].origin, Origin::Api);
     assert!(matches!(journal[0].action, Action::Command { .. }));
+}
+
+#[tokio::test]
+async fn a_sign_in_is_a_persons_and_never_journaled() {
+    let (hub, _cancel) = start(false).await;
+    let password = Value::Text("hunter2-not-real".into());
+    for agent in [
+        Origin::Mcp,
+        Origin::Api,
+        Origin::Household,
+        Origin::Assistant,
+    ] {
+        assert_eq!(
+            hub.command(&point("sign_in"), password.clone(), agent, None)
+                .await,
+            Err(CommandError::HumanOnly)
+        );
+    }
+    hub.command(
+        &point("sign_in"),
+        password,
+        Origin::Ui,
+        Some("a person".into()),
+    )
+    .await
+    .unwrap();
+    // Neither in the journal nor kept as the point's state.
+    let journal = hub.journal(10);
+    assert_eq!(journal.len(), 5);
+    for entry in &journal {
+        let Action::Command { value, .. } = &entry.action else {
+            panic!("{entry:?}");
+        };
+        assert_eq!(*value, Value::Null);
+    }
+    assert_eq!(journal[0].outcome, Outcome::Ok);
+    assert!(hub.state(&point("sign_in")).is_none());
+    assert!(hub.approvals().is_empty());
 }
 
 #[tokio::test]
