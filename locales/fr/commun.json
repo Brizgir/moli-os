@@ -184,6 +184,8 @@
   "commun.piece.prises_allumees": "{on} sur {count}",
   "commun.enceinte.playing": "En lecture",
   "commun.enceinte.paused": "En pause",
+  "commun.enceinte.unknown": "État inconnu",
+  "commun.enceinte.inconnu": "Amazon ne dit pas ce qui joue",
   "commun.enceinte.stopped": "À l’arrêt",
   "commun.enceinte.joue": "Ça joue",
   "commun.enceinte.son_tele": "Le son de la télé",

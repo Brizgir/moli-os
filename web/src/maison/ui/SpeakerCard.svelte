@@ -48,7 +48,7 @@
   {#if title}
     <p class="track"><b>{title}</b>{#if artist}<span class="muted">{` · ${artist}`}</span>{/if}</p>
   {:else}
-    <p class="muted">{playing ? t(soundBar ? 'commun.enceinte.son_tele' : 'commun.enceinte.joue') : t('commun.enceinte.rien')}</p>
+    <p class="muted">{playing ? t(soundBar ? 'commun.enceinte.son_tele' : 'commun.enceinte.joue') : t(state === 'unknown' ? 'commun.enceinte.inconnu' : 'commun.enceinte.rien')}</p>
   {/if}
   {#if group}<p class="muted small">{t('commun.enceinte.groupe')}</p>{/if}
   <div class="row" class:alone={!can('volume')}>

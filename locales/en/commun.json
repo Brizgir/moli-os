@@ -193,6 +193,8 @@
   "commun.piece.prises_allumees": "{on} of {count}",
   "commun.enceinte.playing": "Playing",
   "commun.enceinte.paused": "Paused",
+  "commun.enceinte.unknown": "Unknown",
+  "commun.enceinte.inconnu": "Amazon does not say what plays",
   "commun.enceinte.stopped": "Stopped",
   "commun.enceinte.joue": "Playing now",
   "commun.enceinte.son_tele": "TV sound",

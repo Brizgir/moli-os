@@ -5,6 +5,10 @@
 //! for its members, and the group's player says it plays for them
 //! (`isPlayingInLemur`, each member's volume in `lemurVolume`).
 //!
+//! A speaker none of them describes (a player that answers 400 or a state
+//! of `null`, as an Echo Dot does while it plays) is **unknown**, never
+//! taken for idle: the dashboard then asserts nothing it would act on.
+//!
 //! The sessions' list is read loosely (its shape is not published): the
 //! debug log describes the shape of what came, never a value from it.
 
@@ -17,6 +21,8 @@ use crate::echo::Echo;
 
 pub(crate) const PLAYING: &str = "PLAYING";
 const PAUSED: &str = "PAUSED";
+/// No source said anything of the speaker.
+pub(crate) const UNKNOWN: &str = "UNKNOWN";
 /// Where a sessions' answer may keep its list.
 const LISTS: [&str; 3] = ["mediaSessionList", "mediaSessions", "sessions"];
 /// Where a session may keep what it plays.
@@ -35,11 +41,21 @@ pub(crate) struct Playing {
 }
 
 impl Playing {
-    pub(crate) fn idle() -> Self {
+    pub(crate) fn unknown() -> Self {
         Self {
-            state: "IDLE".into(),
+            state: UNKNOWN.into(),
             ..Self::default()
         }
+    }
+
+    /// No source said whether the speaker plays.
+    pub(crate) fn is_unknown(&self) -> bool {
+        self.state == UNKNOWN
+    }
+
+    /// The dashboard's `playing`: `None` while unknown.
+    pub(crate) fn plays(&self) -> Option<bool> {
+        (!self.is_unknown()).then_some(self.state == PLAYING)
     }
 
     /// Something to show: playing, paused, or a title. An idle session says
@@ -49,7 +65,8 @@ impl Playing {
     }
 }
 
-/// What a player, or a session's `nowPlayingData`, says.
+/// What a player, or a session's `nowPlayingData`, says. No state at all
+/// (`null`, absent) is unknown, not idle.
 pub(crate) fn now_playing(p: &Json) -> Playing {
     let state = ["playerState", "state"]
         .iter()
@@ -59,7 +76,7 @@ pub(crate) fn now_playing(p: &Json) -> Playing {
     let text = |k: &str| p["infoText"][k].as_str().unwrap_or_default().to_owned();
     Playing {
         state: if state.is_empty() {
-            "IDLE".into()
+            UNKNOWN.into()
         } else {
             state
         },
@@ -73,6 +90,50 @@ pub(crate) fn now_playing(p: &Json) -> Playing {
             .filter_map(|(serial, v)| Some((serial.clone(), v.as_f64().or(v["volume"].as_f64())?)))
             .collect(),
     }
+}
+
+/// What `/api/media/state` says (the older per-speaker state the open
+/// clients read): `currentState` or `state`, a title when it gives one,
+/// its volume. No state at all is unknown.
+pub(crate) fn media_state(answer: &Json) -> Playing {
+    let state = ["currentState", "state", "playerState"]
+        .iter()
+        .find_map(|k| answer[*k].as_str())
+        .unwrap_or_default()
+        .to_uppercase();
+    let text = |keys: &[&str]| {
+        keys.iter()
+            .find_map(|k| {
+                answer[*k]
+                    .as_str()
+                    .or_else(|| answer["infoText"][*k].as_str())
+            })
+            .unwrap_or_default()
+            .to_owned()
+    };
+    Playing {
+        state: if state.is_empty() {
+            UNKNOWN.into()
+        } else {
+            state
+        },
+        title: text(&["title"]),
+        artist: text(&["artist", "subText1"]),
+        volume: answer["volume"]
+            .as_f64()
+            .or(answer["volume"]["volume"].as_f64()),
+        members: Vec::new(),
+    }
+}
+
+/// The shape of a `/api/media/state` answer, as [`player_shape`].
+pub(crate) fn media_shape(answer: &Json) -> String {
+    format!(
+        "keys=[{}] state={} title={}",
+        keys(answer),
+        word(&answer["currentState"]),
+        !media_state(answer).title.is_empty(),
+    )
 }
 
 /// One media session: where it plays, and what.
@@ -291,7 +352,8 @@ mod tests {
         let text = match name {
             "sessions" => include_str!("../fixtures/list-media-sessions.json"),
             "group" => include_str!("../fixtures/player-group-playing.json"),
-            "member" => include_str!("../fixtures/player-member-idle.json"),
+            "member" => include_str!("../fixtures/player-state-null.json"),
+            "media" => include_str!("../fixtures/media-state.json"),
             _ => unreachable!(),
         };
         serde_json::from_str(text).unwrap()
@@ -337,6 +399,46 @@ mod tests {
     }
 
     #[test]
+    fn no_state_is_unknown_not_idle() {
+        // An Echo Dot answers `state: null` to np/player while it plays.
+        let p = crate::api::player_state(&fixture("member"));
+        assert_eq!(p.state, UNKNOWN);
+        assert_eq!(p.plays(), None);
+        assert_eq!(p.volume, Some(30.0));
+        assert_eq!(now_playing(&json!({})).plays(), None);
+        assert_eq!(
+            now_playing(&json!({ "state": "IDLE" })).plays(),
+            Some(false)
+        );
+        assert_eq!(
+            now_playing(&json!({ "state": "playing" })).plays(),
+            Some(true)
+        );
+        assert_eq!(Playing::unknown().plays(), None);
+        // A session that says nothing is left to the next source.
+        let silent = Session {
+            endpoints: vec![("A".into(), None)],
+            playing: Playing::unknown(),
+        };
+        assert!(from_sessions(&[&echo("A", false, &[])], &[silent]).is_empty());
+    }
+
+    #[test]
+    fn the_media_state_is_read_loosely() {
+        let p = media_state(&fixture("media"));
+        assert_eq!(p.state, "PLAYING");
+        assert_eq!(p.plays(), Some(true));
+        assert_eq!(p.volume, Some(25.0));
+        assert!(p.title.is_empty());
+        assert_eq!(media_state(&json!({ "state": "paused" })).state, "PAUSED");
+        assert!(media_state(&json!({})).is_unknown());
+        let shape = media_shape(&fixture("media"));
+        assert!(shape.starts_with("keys=["), "{shape}");
+        assert!(shape.contains("state=PLAYING title=false"), "{shape}");
+        assert!(!shape.contains("fictif"), "{shape}");
+    }
+
+    #[test]
     fn a_group_that_plays_makes_its_members_play() {
         let (garage, salon, cellar) = (
             echo("G0000000000000A1", false, &[]),
@@ -352,7 +454,8 @@ mod tests {
         let group = crate::api::player_state(&fixture("group"));
         assert_eq!(group.members.len(), 2);
         let member = crate::api::player_state(&fixture("member"));
-        assert_eq!(member.state, "IDLE");
+        // A member whose player says nothing is lit by its group all the same.
+        assert!(member.is_unknown());
         let elsewhere = Playing {
             state: PLAYING.into(),
             title: "Autre chose".into(),

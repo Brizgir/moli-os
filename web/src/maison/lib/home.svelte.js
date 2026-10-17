@@ -237,7 +237,11 @@ export function deviceKind(d) {
  *  `paused_playback`) or `stopped`. */
 export function speakerState(id) {
   if (value(id, 'playing') === true) return 'playing';
-  return /^paused/.test(String(value(id, 'state') ?? '')) ? 'paused' : 'stopped';
+  const state = String(value(id, 'state') ?? '');
+  // An Echo none of Amazon's answers describes: not asserted stopped
+  // (the person would press « play » over music that plays).
+  if (value(id, 'playing') == null && state === 'unknown') return 'unknown';
+  return /^paused/.test(state) ? 'paused' : 'stopped';
 }
 
 /** A multi-room group of speakers (Alexa « Partout »): no volume of its own. */
