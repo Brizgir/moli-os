@@ -46,6 +46,24 @@ music = ""             # le service par défaut : vide = celui du compte (AMAZON
 | `announce` ✎ | une annonce (son d'annonce, puis la phrase ; à activer sur l'Echo) |
 | `command` ✎ | une commande Alexa écrite, comme si on lui parlait |
 
+## Ce qui joue : d'où Moli le sait
+
+Toutes les 30 s, Moli demande à Amazon, en un seul appel pour tout le compte, les sessions
+média en cours (celles que montre l'appli Alexa). Pour une enceinte dont aucune session ne dit
+rien, il interroge son lecteur à elle. Puis il regarde les groupes : quand un groupe
+multi-pièces joue, Amazon répond « inactif » pour chacun de ses membres. Moli affiche alors
+chaque membre en lecture, avec le titre du groupe et le volume de ce membre quand Amazon le
+donne. Un compte plus ancien sans liste de sessions marche comme avant, uniquement avec les
+lecteurs.
+
+Pour comprendre une enceinte qui joue mais que Moli voit inactive, il faut passer le journal
+au niveau debug pour ce pilote (ajouter `moli_alexa=debug` à `RUST_LOG`, par exemple `info,moli_alexa=debug`). À chaque changement, une ligne
+`alexa playing` décrit la **forme** des réponses : les champs présents, le nombre de
+sessions, les états, et pour chaque enceinte son type, son état et la source de cet état
+(`sessions`, `player` ou `group`). Une enceinte y est désignée par son rang et son type,
+jamais par son nom, son numéro de série ou le titre joué. Cette ligne peut donc être copiée
+telle quelle dans un rapport de bug.
+
 ## Limites
 
 - Pause et lecture ne marchent que si la musique vient d'Alexa (pas de Spotify Connect lancé

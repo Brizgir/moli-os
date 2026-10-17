@@ -1,0 +1,19 @@
+{
+  "playerInfo": {
+    "state": "PLAYING",
+    "isPlayingInLemur": true,
+    "infoText": { "title": "Un titre", "subText1": "Un artiste", "subText2": "Un album", "header": null },
+    "provider": { "providerName": "Amazon Music" },
+    "progress": { "mediaProgress": 42, "mediaLength": 240, "allowScrubbing": true },
+    "volume": null,
+    "lemurVolume": {
+      "compositeVolume": { "volume": 38, "muted": false },
+      "memberVolume": {
+        "G0000000000000A1": { "volume": 30, "muted": false },
+        "G0000000000000B2": { "volume": 45, "muted": false }
+      }
+    },
+    "mediaId": "fictif-media-id",
+    "queueId": "fictif-queue-id"
+  }
+}

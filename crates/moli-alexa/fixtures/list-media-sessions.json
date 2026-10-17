@@ -1,0 +1,38 @@
+{
+  "mediaSessionList": [
+    {
+      "endpointList": [
+        {
+          "id": { "deviceSerialNumber": "G0000000000000A1", "deviceType": "A32DOYMUN6DTXA" },
+          "friendlyName": "Echo fictif",
+          "encryptedDeviceAccountId": "AXXXXXXXXXXXXX"
+        }
+      ],
+      "mediaSessionId": "amzn1.media-session.fictif-1",
+      "nowPlayingData": {
+        "playerState": "PLAYING",
+        "infoText": { "title": "Un titre", "subText1": "Un artiste", "subText2": "Un album" },
+        "provider": { "providerName": "Amazon Music" },
+        "progress": { "mediaProgress": 42, "mediaLength": 240 },
+        "volume": { "volume": 30, "muted": false }
+      }
+    },
+    {
+      "endpointList": [
+        { "id": { "deviceSerialNumber": "G0000000000000B2", "deviceType": "A32DOYMUN6DTXA" } }
+      ],
+      "mediaSessionId": "amzn1.media-session.fictif-2",
+      "nowPlayingData": {
+        "playerState": "PAUSED",
+        "infoText": { "title": "Une radio", "subText1": "" }
+      }
+    },
+    {
+      "endpointList": [
+        { "id": { "deviceSerialNumber": "G0000000000000C3", "deviceType": "A32DOYMUN6DTXA" } }
+      ],
+      "mediaSessionId": "amzn1.media-session.fictif-3",
+      "nowPlayingData": { "playerState": "IDLE" }
+    }
+  ]
+}

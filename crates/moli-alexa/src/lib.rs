@@ -10,6 +10,7 @@ mod api;
 mod auth;
 mod echo;
 mod encode;
+mod media;
 
 use std::collections::HashMap;
 use std::time::Duration;
@@ -245,6 +246,10 @@ struct Home {
     music: String,
     /// Speakers whose state could not be read, said once per session.
     unreadable: std::collections::HashSet<String>,
+    /// The account answers the media sessions' list (until it refuses).
+    sessions: bool,
+    /// The last shape logged, to log it again only when it changes.
+    shape: String,
 }
 
 impl Home {
@@ -275,6 +280,8 @@ async fn connected(
         speakers: HashMap::new(),
         music,
         unreadable: std::collections::HashSet::new(),
+        sessions: true,
+        shape: String::new(),
     };
     discover(ctx, &mut home).await?;
     set_text(ctx, account, "status", "connected");
@@ -347,27 +354,33 @@ async fn discover(ctx: &DriverCtx, home: &mut Home) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// What each speaker plays (a session over: an error, `connected` starts again).
+/// What each speaker plays: the account's media sessions, each speaker's
+/// own player for the rest, then the groups that play for their members (a
+/// session over: an error, `connected` starts again).
 async fn playing(ctx: &DriverCtx, home: &mut Home) -> anyhow::Result<()> {
+    let (sessions, sessions_shape) = media_sessions(ctx, home).await;
     let Home {
         session,
         speakers,
         unreadable,
+        shape,
         ..
     } = home;
-    for (id, e) in speakers.iter() {
-        if !e.online {
+    let mut online: Vec<&Echo> = speakers.values().filter(|e| e.online).collect();
+    online.sort_by(|a, b| a.serial.cmp(&b.serial));
+    let mut states = media::from_sessions(&online, &sessions);
+    let mut sources: HashMap<String, String> = states
+        .keys()
+        .map(|s| (s.clone(), "sessions".to_owned()))
+        .collect();
+    for e in &online {
+        if states.contains_key(&e.serial) {
             continue;
         }
         match session.playing(e).await {
-            Ok(p) => {
-                ctx.set_state(id, "playing", Value::Bool(p.state == "PLAYING"));
-                set_text(ctx, id, "state", &p.state.to_lowercase());
-                set_text(ctx, id, "title", &p.title);
-                set_text(ctx, id, "artist", &p.artist);
-                if let (Some(v), false) = (p.volume, e.group) {
-                    ctx.set_state(id, "volume", Value::Float(v));
-                }
+            Ok((p, answer)) => {
+                sources.insert(e.serial.clone(), format!("player {{{answer}}}"));
+                states.insert(e.serial.clone(), p);
             }
             Err(Failure::Expired) => anyhow::bail!("{RENEW}"),
             Err(Failure::Other(err)) => {
@@ -377,7 +390,66 @@ async fn playing(ctx: &DriverCtx, home: &mut Home) -> anyhow::Result<()> {
             }
         }
     }
+    for m in media::through_groups(&online, &mut states) {
+        sources.insert(m, "group".into());
+    }
+    for (id, e) in speakers.iter() {
+        let Some(p) = states.get(&e.serial) else {
+            continue;
+        };
+        ctx.set_state(id, "playing", Value::Bool(p.state == media::PLAYING));
+        set_text(ctx, id, "state", &p.state.to_lowercase());
+        set_text(ctx, id, "title", &p.title);
+        set_text(ctx, id, "artist", &p.artist);
+        if let (Some(v), false) = (p.volume, e.group) {
+            ctx.set_state(id, "volume", Value::Float(v));
+        }
+    }
+    // Speakers by their kind and their place in the list, never by name.
+    let now = online
+        .iter()
+        .enumerate()
+        .map(|(i, e)| {
+            let p = states.get(&e.serial);
+            format!(
+                "#{i} {}/{}: {} from {}{}",
+                e.family,
+                e.device_type,
+                p.map_or("?", |p| p.state.as_str()),
+                sources.get(&e.serial).map_or("nowhere", String::as_str),
+                if p.is_some_and(|p| !p.title.is_empty()) {
+                    " titled"
+                } else {
+                    ""
+                },
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("; ");
+    let now = format!("sessions {{{sessions_shape}}}; {now}");
+    if *shape != now {
+        tracing::debug!(instance = %ctx.instance(), shape = %now, "alexa playing");
+        *shape = now;
+    }
     Ok(())
+}
+
+/// The account's media sessions, and the shape of the answer for the log.
+async fn media_sessions(ctx: &DriverCtx, home: &mut Home) -> (Vec<media::Session>, String) {
+    if !home.sessions {
+        return (Vec::new(), "none on this account".into());
+    }
+    match home.session.media_sessions().await {
+        Ok(Some(answer)) => (media::sessions(&answer), media::sessions_shape(&answer)),
+        Ok(None) => {
+            home.sessions = false;
+            (Vec::new(), "none on this account".into())
+        }
+        Err(e) => {
+            tracing::debug!(instance = %ctx.instance(), error = %e, "alexa media sessions");
+            (Vec::new(), "unreachable".into())
+        }
+    }
 }
 
 /// One order; a session that expired is renewed once and the order sent again.
