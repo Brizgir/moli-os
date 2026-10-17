@@ -1,0 +1,16 @@
+{
+  "device_health": {
+    "id": 10000001,
+    "wifi_name": "Wi-Fi de la maison",
+    "battery_percentage": 87,
+    "battery_percentage_category": "very_good",
+    "battery_voltage": null,
+    "latest_signal_strength": -58,
+    "latest_signal_category": "good",
+    "average_signal_strength": -60,
+    "firmware": "cam-1.00.000",
+    "updated_at": "2026-10-17T09:00:00Z",
+    "wifi_is_ring_network": false,
+    "external_connection": false
+  }
+}

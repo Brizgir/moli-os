@@ -66,6 +66,12 @@ un humain.**
   3D) : retenues pour un humain **quelle que soit la pièce** dès que l'origine n'est pas de
   confiance (`hub.rs`, `is_control`). Une impression ratée ou un plateau abîmé ne se rattrape
   pas : un agent propose, un humain décide.
+- **Connexions de compte** (sémantique `secret` : un jeton de compte cloud collé par la personne ;
+  jamais un mot de passe, qui ne transite pas par Moli) : acceptées de l'origine `ui` seulement
+  (une personne avec son code),
+  sinon refusées en 403 (`HumanOnly`), jamais retenues pour approbation (la demande garderait
+  la valeur). La valeur va au pilote et nulle part ailleurs : `null` au journal, jamais gardée
+  comme état du point (`hub.rs`, `command`, `record_state`).
 - Origines de confiance (jamais retenues) : `ui` (le dashboard avec une session PIN),
   `system`, `automation` (un automatisme validé par un humain = son intention).
 - `household` (le dashboard du foyer **sans** code, mode `dashboard = "trusted"` : réseau

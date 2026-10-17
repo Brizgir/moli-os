@@ -97,6 +97,10 @@ l'exige).
 - Seuls `z2m` (`password_env`) et, en option, `hue` (`app_key_env`) lisent un secret dans une
   variable d'environnement ; la config ne contient que le **nom** de la variable.
 - Aucune surface ne sert jamais un secret.
+- Un compte cloud que la personne connecte depuis le tableau de bord (Ring) : un jeton fait sur
+  son ordinateur (jamais un mot de passe : il ne transite pas par Moli) arrive au pilote par un
+  point d'écriture de sémantique `Semantic::Secret` (personne seulement, jamais journalisé ni
+  gardé, voir [coeur.md](coeur.md)) ; le pilote ne range que le jeton que le service lui rend.
 
 ## Briques réseau partagées : `moli-net`
 
@@ -219,6 +223,61 @@ host = "192.168.1.x"
 - **Identité** : UID de la caméra (stable même si elle change de canal) ; à défaut `ch<N>` (numéro de canal, moins stable).
 - **Pièges** : le certificat est épinglé par une poignée de main nue **avant** tout envoi d'identifiants ; c'est un **X.509 v1**, vérifié à la main par `moli-net`. Une seule session (jeton) est gardée même à travers les redémarrages du pilote : les stations limitent les sessions simultanées. Codes `-6`/`-7` : nouvelle connexion. Le jeton voyage dans l'URL : aucune erreur ne cite l'URL. Une caméra sur batterie peut mettre ~10 s à se réveiller (14 s accordées à l'image). Station injoignable : toutes les détections passent à `null` (jamais de « personne vue » périmée).
 - **Tests** : `src/lib.rs` (événements lus aux deux niveaux `md`/`visitor` et `ai`, erreurs par commande, jeton masqué au débogage) ; `crates/moli-net/src/legacy.rs` sur le certificat public réel du Home Hub (`integrations/reolink/fixtures/home-hub-cert.b64`).
+
+## `ring` : sonnettes et carillons Ring (`crates/moli-ring`)
+
+- **Couvre** : les sonnettes, caméras (`stickup_cams`) et carillons d'un compte Ring. **Lecture
+  seule**, pas d'image. Interface **non officielle** (celle de l'appli Android), le seul chemin :
+  un appareil Ring n'ouvre aucun port sur le réseau local.
+- **Connexion** (Système, carte Ring, `web/src/maison/ui/RingAccount.svelte`) : Ring n'offre
+  aucune page de connexion pour une autre application, et **le mot de passe ne passe jamais par
+  Moli**. La personne fait un jeton sur son ordinateur avec le client de Ring (`npx -p
+  ring-client-api ring-auth-cli` : e-mail, mot de passe et code 2FA y sont demandés par Ring,
+  rien n'arrive à Moli), puis le colle dans la carte : l'appareil `ring:account` a un point
+  d'écriture `Semantic::Secret`, `sign_in`, qui reçoit le jeton tel quel (brut, ou la forme
+  base64 `{"rt", "hid"}` de ring-auth-cli : `hid` devient alors le `hardware_id` de Moli, le
+  même « appareil client autorisé » que l'ordinateur). Moli le vérifie par un `POST
+  oauth.ring.com/oauth/token` (`grant_type = refresh_token`, client `ring_official_android`,
+  en-tête `hardware_id`) ; Ring le remplace aussitôt. Ce qui est collé n'est ni journalisé
+  (`null` au journal), ni gardé comme état, ni affiché (`src/signin.rs`). `status` :
+  `sign_in`, `connecting`, `connected`, `error`, `slow_down`.
+- **Secrets** (écrits par le pilote) : `refresh_token`, **réécrit à chaque renouvellement** (Ring
+  le remplace ; un jeton qui n'a pas pu être rangé n'est pas utilisé ; sans coffre, rien n'est
+  envoyé à Ring : un jeton collé est consommé par sa première vérification), et `hardware_id`
+  (celui du jeton collé, sinon un UUID tiré une fois, gardé pour toujours : Moli reste un seul
+  « appareil client autorisé » du compte). Jeton refusé (400/401 sur le renouvellement) :
+  oublié, retour à la connexion.
+- **Protocole** : `api.ring.com/clients_api`, `Authorization: Bearer` (une heure, renouvelé 5 min
+  avant ou sur un 401, une fois). `POST /session` à la connexion ; `ring_devices` toutes les
+  5 min (appareils, en ligne par `alerts.connection`, batterie `battery_life`, volume du
+  carillon) ; `doorbots|chimes/<id>/health` toutes les 15 min (`latest_signal_strength`,
+  `battery_percentage`) ; derniers événements toutes les `poll` s (10 par défaut, 5 au moins) :
+  `locations/<loc>/devices/<id>/events?limit=5`, ou l'ancien `doorbots/<id>/history` si le
+  premier répond 404. 429 : pause de 10 min.
+- **Configuration** : `kind = "ring"`, option `poll` seulement.
+- **Points** : sonnette `doorbell` (impulsion, vrai 10 s), `motion` (vrai 60 s après le dernier),
+  `battery` (%), `wifi_signal` (dBm) ; caméra : les mêmes sans `doorbell` ; carillon : `volume`
+  (0 à 11), `wifi_signal`. En ligne : disponibilité de l'appareil.
+- **Pièges** : pas de notifications push (FCM) dans cette version, d'où le sondage. Un événement
+  est dit **une fois**, s'il a moins de 90 s, et **jamais** depuis la première lecture après un
+  démarrage ou une reconnexion (elle ne fait qu'apprendre ce qui est là) : jamais de « on sonne »
+  périmé. `doorbell` et `motion` repartent à faux à chaque démarrage, et dès que Ring devient
+  injoignable (les appareils passent alors indisponibles jusqu'à la reconnexion).
+- **Tests** : réponses capturées anonymisées (`integrations/ring/fixtures/`) rejouées par un faux
+  transport (`src/net.rs`) : jeton collé (brut ou forme ring-auth-cli) vérifié et son
+  `hardware_id` adopté, texte qui n'est pas un jeton jamais envoyé à Ring, jeton refusé, jamais
+  de mot de passe dans une requête, rotation du jeton rangée avant usage, expiration (temps
+  simulé), 401 puis renouvellement, jeton révoqué, 429 ; lecture des appareils, santé,
+  événements des deux adresses ; fraîcheur des événements.
+- **Non vérifié** (jamais tourné contre les serveurs Ring) : `POST /session` (non bloquant si
+  refusé), la forme exacte de `locations/<loc>/devices/<id>/events` (d'où le repli sur
+  `history`), `chimes/<id>/health`. Marche à suivre au premier essai :
+  `integrations/ring/onboarding.md`.
+- **Décisions** : lecture seule ; sondage plutôt que FCM (pas de dépendance à Firebase, au prix
+  de 10 à 20 s de retard) ; « en ligne » par la disponibilité de l'appareil, pas par un point
+  `online` ; `hardware_id` tiré une fois et gardé au coffre.
+- **Suites** : notifications push (instantané), instantané d'image, volume du carillon en
+  écriture.
 
 ## `sonos` : enceintes Sonos (`crates/moli-sonos`)
 
@@ -499,7 +558,7 @@ Un seul pilote générique pour tout appareil HTTP décrit en TOML. Voir [profil
 - Tout passe par `.\scripts\dev.ps1 sh scripts/check.sh` (fmt, clippy `-D warnings`, `cargo test --workspace`, dans Docker ; voir [exploitation.md](exploitation.md)). Une crate seule : `.\scripts\dev.ps1 cargo test -p moli-tuya`.
 - Les tests de pilotes sont des tests unitaires purs (sans réseau), souvent sur des captures réelles : fixtures Z2M et Hue, réponses Reolink, Meross, Daikin, Moonraker.
 - `crates/moli-net` : épinglage (premier certificat adopté puis exigé, empreinte `AB:CD…` normalisée ; le vérificateur ne fait que hacher les octets, aucun vrai certificat nécessaire) et corps bornés.
-- `crates/moli-runtime/tests/hub.rs` couvre le contrat côté cœur : aller-retour de commande, refus, clés inconnues ignorées, pilote qui panique relancé, appareils étrangers refusés.
+- `crates/moli-runtime/tests/hub.rs` couvre le contrat côté cœur : aller-retour de commande, refus, clés inconnues ignorées, pilote qui panique relancé, appareils étrangers refusés, identifiants (`secret`) refusés aux agents et jamais journalisés.
 - `crates/moli-os/src/config.rs` vérifie que `moli.example.toml` est valide.
 - Sur du vrai matériel : propriétés inoffensives, jamais dans une pièce protégée, état initial remis (voir `AGENTS.md`).
 
@@ -522,6 +581,7 @@ ni pièce native). Il ne déplace jamais rien. Sans argument : plan à blanc ; `
 | `hue` | `moli-hue` | HTTPS CLIP v2 + SSE, local, épinglé | oui : lumières, pièces ; zones non | pont Philips Hue (CLIP v2) |
 | `tuya` | `moli-tuya` | TCP 6668 chiffré 3.3/3.4/3.5, UDP 6666/6667/7000 ; cloud en lecture | oui : DP booléens, entiers, enum (local seulement) | prises Tuya (local, écriture comprise) ; capteurs sur pile et passerelles (cloud) |
 | `reolink` | `moli-reolink` | HTTPS API locale, épinglé (X.509 v1) | non (+ images) | Reolink Home Hub (caméras, sonnette) |
+| `ring` | `moli-ring` | HTTPS, API cloud de l'appli Ring (non officielle) | non | pas encore (cible : sonnette Ring et Chime) |
 | `sonos` | `moli-sonos` | UPnP/SOAP HTTP 1400 ; annonces en WebSocket TLS 1443 | oui : lecture, volume, sourdine, annonces | Sonos Beam |
 | `philips` | `moli-philips` | JointSpace HTTPS 1926, digest, WoL ; Android TV Remote, Cast | oui : alimentation, volume, sourdine, Ambilight, touches, appli | Philips Google TV (lecture) |
 | `frigate` | `moli-frigate` | MQTT + HTTP interne 5000 | oui : détection, enregistrement, instantanés | Frigate |

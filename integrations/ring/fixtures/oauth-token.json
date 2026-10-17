@@ -1,0 +1,7 @@
+{
+  "access_token": "fake-access-token",
+  "expires_in": 3600,
+  "refresh_token": "fake-refresh-token",
+  "scope": "client",
+  "token_type": "Bearer"
+}

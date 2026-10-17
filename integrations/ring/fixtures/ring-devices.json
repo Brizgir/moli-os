@@ -1,0 +1,47 @@
+{
+  "doorbots": [
+    {
+      "id": 10000001,
+      "description": "Porte d'entrée",
+      "device_id": "aabbccddeeff",
+      "kind": "doorbell_oyster",
+      "location_id": "00000000-0000-4000-8000-000000000001",
+      "time_zone": "Europe/Paris",
+      "address": "1 rue de l'Exemple",
+      "latitude": 0.0,
+      "longitude": 0.0,
+      "firmware_version": "Up to Date",
+      "battery_life": "87",
+      "battery_life_2": null,
+      "external_connection": false,
+      "subscribed": true,
+      "subscribed_motions": true,
+      "owned": true,
+      "owner": { "id": 1, "first_name": "Prénom", "last_name": "Nom", "email": "user@example.com" },
+      "alerts": { "connection": "online", "battery": "normal" },
+      "features": { "motions_enabled": true, "show_recordings": true },
+      "settings": { "doorbell_volume": 7, "chime_settings": { "type": 0, "enable": true } }
+    }
+  ],
+  "authorized_doorbots": [],
+  "stickup_cams": [],
+  "chimes": [
+    {
+      "id": 10000002,
+      "description": "Carillon",
+      "device_id": "aabbccddee01",
+      "kind": "chime_pro_v2",
+      "location_id": "00000000-0000-4000-8000-000000000001",
+      "time_zone": "Europe/Paris",
+      "address": "1 rue de l'Exemple",
+      "firmware_version": "Up to Date",
+      "owned": true,
+      "alerts": { "connection": "offline" },
+      "settings": { "volume": 6, "ding_audio_user_id": "", "motion_audio_user_id": "" },
+      "do_not_disturb": { "seconds_left": 0 }
+    }
+  ],
+  "base_stations": [],
+  "beams_bridges": [],
+  "other": []
+}

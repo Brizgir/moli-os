@@ -1,0 +1,47 @@
+[integration]
+id = "ring"
+name = "Sonnettes et carillons Ring"
+# Unofficial: the Ring app's own cloud API, which Ring may change at any
+# time. Ring devices answer nothing on the home network.
+brands = ["Ring"]
+models = ["Video Doorbell", "Battery Doorbell", "Chime", "Chime Pro", "Stick Up Cam"]
+transport = "https"
+driver = "ring"
+crate = "moli-ring"
+
+[discovery]
+# A cloud account: nothing to find on the home network.
+mdns = []
+ssdp = []
+ports = []
+
+[needs]
+# Given by the dashboard's sign-in (a token pasted by the person, made on
+# their own computer: no password ever goes through Moli), never typed into
+# a file. Both are rewritten by the driver.
+secrets = ["refresh_token", "hardware_id"]
+vars = []
+options = []
+
+[origin]
+reused = ""
+author = "agent"
+
+# Replayed by the crate's tests (crates/moli-ring/src/{auth,api,signin,model}.rs).
+[[fixture]]
+file = "fixtures/ring-devices.json"
+
+[[fixture]]
+file = "fixtures/doorbot-health.json"
+
+[[fixture]]
+file = "fixtures/events.json"
+
+[[fixture]]
+file = "fixtures/history.json"
+
+[[fixture]]
+file = "fixtures/oauth-token.json"
+
+[[fixture]]
+file = "fixtures/oauth-bad-refresh.json"
