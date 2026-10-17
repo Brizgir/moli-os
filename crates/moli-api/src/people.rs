@@ -23,6 +23,7 @@
 use std::collections::{HashMap, HashSet};
 use std::num::NonZeroU32;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, PoisonError};
 
 use axum::http::HeaderMap;
@@ -230,6 +231,9 @@ pub(crate) struct People {
     book: Mutex<Book>,
     sessions: Mutex<HashMap<String, PersonSession>>,
     write: tokio::sync::Mutex<()>,
+    /// Whether Cloudflare Access stands in front of the house: only then
+    /// does an e-mail let anyone in.
+    access: AtomicBool,
 }
 
 impl std::fmt::Debug for People {
@@ -480,6 +484,7 @@ impl People {
             book: Mutex::new(book),
             sessions: Mutex::new(sessions),
             write: tokio::sync::Mutex::new(()),
+            access: AtomicBool::new(false),
         };
         if changed && let Err(e) = people.save_now() {
             tracing::error!(error = %e, "people.json not written");
@@ -518,14 +523,22 @@ impl People {
         lock(&self.book).clone()
     }
 
+    /// Cloudflare Access stands in front of the house (`[server.access]`).
+    pub(crate) fn behind_access(&self, yes: bool) {
+        self.access.store(yes, Ordering::Relaxed);
+    }
+
     /// Whether an owner can sign in (a password set, or an e-mail Access
     /// vouches for): until then, the house's code manages the people (else
-    /// the first owner, created but not yet invited, could never be).
+    /// the first owner, created but not yet invited, could never be). An
+    /// e-mail without Access opens nothing: it does not count.
     pub(crate) fn has_owner(&self) -> bool {
+        let access = self.access.load(Ordering::Relaxed);
         lock(&self.book).people.iter().any(|p| {
             p.role == Role::Owner
                 && active(p)
-                && (!p.emails.is_empty() || self.hub.core_secret(&password_key(&p.id)).is_some())
+                && ((access && !p.emails.is_empty())
+                    || self.hub.core_secret(&password_key(&p.id)).is_some())
         })
     }
 
@@ -1074,6 +1087,25 @@ mod tests {
         let b = p.create(draft("B", Role::Owner)).await.unwrap();
         p.remove("a").await.unwrap();
         assert!(p.get(&b.id).is_some());
+    }
+
+    /// The first owner, created from the house with the e-mail they use
+    /// elsewhere: without Access, nobody can sign in as them yet.
+    #[tokio::test]
+    async fn an_e_mail_makes_an_owner_only_behind_access() {
+        let hub = hub_with_store();
+        let p = People::open(hub, None, &[]);
+        let mut d = draft("Moi", Role::Owner);
+        d.emails = vec!["user@example.com".into()];
+        let me = p.create(d).await.unwrap();
+        assert!(!p.has_owner(), "no Access: the house's code still manages");
+        p.behind_access(true);
+        assert!(p.has_owner(), "Access vouches for the e-mail");
+        p.behind_access(false);
+        p.set_password(&me.id, "un mot de passe long")
+            .await
+            .unwrap();
+        assert!(p.has_owner(), "a password: they sign in");
     }
 
     #[tokio::test]

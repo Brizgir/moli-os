@@ -70,9 +70,12 @@ pub(crate) fn is_owner(
     {
         return true;
     }
+    // The house's code manages the people from the house only: never a
+    // person signed in from the Internet with their password (a member
+    // who knows the code would make themself an owner from anywhere).
     !persons.has_owner()
         && !humans.has_owners()
-        && caller.is_household()
+        && matches!(caller.via, Via::Lan | Via::Loopback | Via::Access { .. })
         && humans.is_human(headers, &caller.key)
 }
 
