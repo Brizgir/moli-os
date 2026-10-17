@@ -1,0 +1,85 @@
+{
+  "status": "ok",
+  "time_server": 1700000000,
+  "body": {
+    "home": {
+      "id": "home-1",
+      "rooms": [
+        {
+          "id": "1001",
+          "reachable": true,
+          "therm_measured_temperature": 19.5,
+          "therm_setpoint_temperature": 20,
+          "therm_setpoint_mode": "schedule",
+          "therm_setpoint_start_time": 1699990000,
+          "therm_setpoint_end_time": 0,
+          "anticipating": false,
+          "open_window": false
+        },
+        {
+          "id": "1002",
+          "reachable": true,
+          "therm_measured_temperature": 18.2,
+          "therm_setpoint_temperature": 17,
+          "therm_setpoint_mode": "manual",
+          "therm_setpoint_start_time": 1699990000,
+          "therm_setpoint_end_time": 1700010000,
+          "heating_power_request": 0,
+          "anticipating": false,
+          "open_window": false
+        },
+        {
+          "id": "1003",
+          "reachable": true,
+          "therm_measured_temperature": 20.4,
+          "therm_setpoint_temperature": 19,
+          "therm_setpoint_mode": "schedule",
+          "heating_power_request": 0,
+          "anticipating": false,
+          "open_window": false
+        }
+      ],
+      "modules": [
+        {
+          "id": "aa:bb:cc:dd:ee:01",
+          "type": "NAPlug",
+          "firmware_revision": 200,
+          "rf_strength": 62,
+          "wifi_strength": 44
+        },
+        {
+          "id": "aa:bb:cc:dd:ee:02",
+          "type": "NATherm1",
+          "battery_state": "full",
+          "battery_level": 4100,
+          "boiler_valve_comfort_boost": false,
+          "boiler_status": true,
+          "firmware_revision": 70,
+          "rf_strength": 58,
+          "reachable": true,
+          "bridge": "aa:bb:cc:dd:ee:01"
+        },
+        {
+          "id": "aa:bb:cc:dd:ee:03",
+          "type": "NRV",
+          "battery_state": "high",
+          "battery_level": 3000,
+          "firmware_revision": 79,
+          "rf_strength": 70,
+          "reachable": true,
+          "bridge": "aa:bb:cc:dd:ee:01"
+        },
+        {
+          "id": "aa:bb:cc:dd:ee:04",
+          "type": "NRV",
+          "battery_state": "low",
+          "battery_level": 2650,
+          "firmware_revision": 79,
+          "rf_strength": 85,
+          "reachable": false,
+          "bridge": "aa:bb:cc:dd:ee:01"
+        }
+      ]
+    }
+  }
+}
