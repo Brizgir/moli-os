@@ -46,7 +46,7 @@
     <span class="chip {playing ? 'warm' : ''}">{t(`commun.enceinte.${state}`)}</span>
   </div>
   {#if title}
-    <p class="track"><b>{title}</b>{#if artist}<span class="muted"> · {artist}</span>{/if}</p>
+    <p class="track"><b>{title}</b>{#if artist}<span class="muted">{` · ${artist}`}</span>{/if}</p>
   {:else}
     <p class="muted">{playing ? t(soundBar ? 'commun.enceinte.son_tele' : 'commun.enceinte.joue') : t('commun.enceinte.rien')}</p>
   {/if}
