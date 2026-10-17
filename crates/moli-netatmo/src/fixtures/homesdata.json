@@ -1,0 +1,75 @@
+{
+  "body": {
+    "homes": [
+      {
+        "id": "home-1",
+        "name": "Maison",
+        "altitude": 100,
+        "coordinates": [0.0, 0.0],
+        "country": "FR",
+        "timezone": "Europe/Paris",
+        "therm_setpoint_default_duration": 180,
+        "therm_mode": "schedule",
+        "rooms": [
+          { "id": "1001", "name": "Salon", "type": "livingroom", "module_ids": ["aa:bb:cc:dd:ee:02"] },
+          { "id": "1002", "name": "Chambre", "type": "bedroom", "module_ids": ["aa:bb:cc:dd:ee:03"] },
+          { "id": "1003", "name": "Bureau", "type": "office", "module_ids": ["aa:bb:cc:dd:ee:04"] },
+          { "id": "1004", "name": "Garage", "type": "garage", "module_ids": [] }
+        ],
+        "modules": [
+          {
+            "id": "aa:bb:cc:dd:ee:01",
+            "type": "NAPlug",
+            "name": "Relais",
+            "setup_date": 1600000000,
+            "modules_bridged": ["aa:bb:cc:dd:ee:02", "aa:bb:cc:dd:ee:03", "aa:bb:cc:dd:ee:04"]
+          },
+          {
+            "id": "aa:bb:cc:dd:ee:02",
+            "type": "NATherm1",
+            "name": "Thermostat",
+            "setup_date": 1600000000,
+            "room_id": "1001",
+            "bridge": "aa:bb:cc:dd:ee:01"
+          },
+          {
+            "id": "aa:bb:cc:dd:ee:03",
+            "type": "NRV",
+            "name": "Vanne chambre",
+            "setup_date": 1600000000,
+            "room_id": "1002",
+            "bridge": "aa:bb:cc:dd:ee:01"
+          },
+          {
+            "id": "aa:bb:cc:dd:ee:04",
+            "type": "NRV",
+            "name": "Vanne bureau",
+            "setup_date": 1600000000,
+            "room_id": "1003",
+            "bridge": "aa:bb:cc:dd:ee:01"
+          }
+        ],
+        "schedules": []
+      },
+      {
+        "id": "home-2",
+        "name": "Chalet",
+        "rooms": [{ "id": "2001", "name": "Entrée", "type": "lobby" }],
+        "modules": [{ "id": "aa:bb:cc:dd:ee:05", "type": "NACamera", "name": "Caméra", "room_id": "2001" }]
+      }
+    ],
+    "user": {
+      "email": "user@example.com",
+      "language": "fr-FR",
+      "locale": "fr-FR",
+      "feel_like_algorithm": 0,
+      "unit_pressure": 0,
+      "unit_system": 0,
+      "unit_wind": 0,
+      "id": "user-1"
+    }
+  },
+  "status": "ok",
+  "time_exec": 0.05,
+  "time_server": 1700000000
+}

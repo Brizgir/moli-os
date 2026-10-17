@@ -150,5 +150,8 @@
   "serveur.personnes.point_depuis": "Dans cette zone depuis",
   "serveur.personnes.point_nombre": "Personnes à la maison",
   "serveur.personnes.point_quelquun": "Quelqu'un à la maison",
-  "serveur.personnes.point_tous_partis": "Tout le monde est parti"
+  "serveur.personnes.point_tous_partis": "Tout le monde est parti",
+  "serveur.cle.netatmo_humain": "seule une personne (code) donne les clés de l'app Netatmo",
+  "serveur.cle.netatmo_pilote_inconnu": "pas de pilote netatmo de ce nom",
+  "serveur.cle.netatmo_invalide": "ce ne sont pas des clés d'app Netatmo (client ID puis client secret, tels que dev.netatmo.com les affiche)"
 }

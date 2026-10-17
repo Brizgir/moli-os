@@ -446,6 +446,50 @@ pièces ; il commande ensuite les membres en origine `system` (journal : `lumina
 - **Points** : `home` (binaire, sémantique occupation), lecture seule.
 - **Machines** : `[[driver.options.machine]]` avec `id`, `name`, `ip` (sur le réseau déclaré) : appareil « Machine » (`description` = son adresse), point `online` (allumée tant qu'elle répond, éteinte après deux relevés sans réponse). C'est l'équivalent de l'intégration `ping` de HA pour un ordinateur.
 
+## `netatmo` : chauffage Netatmo Energy (`crates/moli-netatmo`)
+
+- **Couvre** : thermostat connecté (`NATherm1`), vannes de radiateur (`NRV`), leur relais
+  (`NAPlug`), OpenTherm (`OTH`, `OTM`). Le relais n'a pas d'interface locale exploitable :
+  **API cloud officielle** (`api.netatmo.com`), avec l'app de la personne. Mode d'emploi pour
+  elle (création de l'app pas à pas) : `integrations/netatmo/README.md`.
+- **Connexion** (modèle d'Alexa) : `client_id` et `client_secret` de l'app au coffre de
+  l'instance, par la carte « Chauffage Netatmo » de Système (`PUT /api/integrations/netatmo-app`,
+  humain seulement ; le pilote regarde le coffre toutes les 5 s) ou par
+  `moli-os secrets set <instance> client_id|client_secret` (tube, puis redémarrage). Puis OAuth2
+  *authorization code* : la carte ouvre `oauth2/authorize` (scopes `read_thermostat
+  write_thermostat`, `state` aléatoire, `redirect_uri` = option, défaut
+  `http://localhost/moli-netatmo`, à déclarer dans l'app) ; la personne colle l'adresse de
+  retour (ou le code seul) dans le point `sign_in` du compte ; le pilote vérifie le `state`,
+  échange le code (`oauth2/token`) et range `refresh_token`. Statut `waiting` traduit tant que
+  ce n'est pas fait (`pilotes.netatmo.app_a_creer`, `pilotes.netatmo.a_connecter`).
+- **Jetons** : accès renouvelé 5 min avant sa fin (3 h) et une fois de plus si Netatmo le
+  refuse (codes 2 et 3) ; Netatmo fait **tourner** le refresh token : le nouveau est rangé au
+  coffre avant tout usage. `invalid_grant` → refresh token oublié, nouvelle autorisation
+  demandée ; `invalid_client` → statut `app_refused`, attente de nouvelles clés.
+- **Quotas** : `homestatus` toutes les `poll_seconds` (300, 120 au moins), `homesdata` au
+  démarrage puis toutes les 6 h ; jamais deux requêtes à moins de 1 s ; quota atteint
+  (code 26 ou HTTP 429) : silence de 1 min doublé jusqu'à 30 min, rien ne part pendant ;
+  erreur réseau : relecture espacée (×2 jusqu'à 30 min).
+- **Appareils** : le compte (`status` : `app_missing`, `sign_in`, `connecting`, `connected`,
+  `quota`, `error`, `app_refused` ; `sign_in_url`, `redirect_uri`, `sign_in` ✎) ; une **pièce
+  chauffée** par pièce Netatmo ayant thermostat ou vanne (`native_room` = son nom : la garde
+  des pièces protégées s'applique) : `temperature`, `setpoint` ✎ (7 à 30 °C, pas 0,5 ; bornes
+  vérifiées par le hub et le pilote), `setpoint_mode` ✎ (seul `schedule` s'écrit : retour au
+  planning), `heating` (`heating_power_request` > 0, ou chaudière du thermostat) ; la
+  **maison** : `mode` ✎ (`schedule`, `away`, `hg`, lu d'après les pièces), `members` = ses
+  pièces (la garde les vérifie toutes) ; chaque **module** : `reachable`, `rf_signal` (dBm),
+  et pour thermostat et vannes `battery`, `battery_low`, `battery_voltage` (mV).
+- **Écritures** : `setpoint` → `setroomthermpoint` `mode=manual` avec `endtime` = maintenant +
+  `setpoint_minutes` (option ; sans : durée de la maison dans l'appli Netatmo, sinon 3 h) ;
+  `setpoint_mode=schedule` → `mode=home` ; `mode` → `setthermmode` sans fin. L'échéance du
+  hub est regardée juste avant l'envoi : un ordre qui n'a pas pu partir dans les 5 s n'est
+  jamais envoyé (`pilotes.netatmo.trop_tard`). Après un ordre réussi, l'état de la maison est
+  relu aussitôt.
+- **Tests** : fixtures anonymisées (`src/fixtures/`), rotation et expiration des jetons,
+  quota, ordre tardif, espacement, correspondance des points, bornes. Pas encore vérifié sur
+  du vrai matériel ; essai prévu : lecture d'abord, puis une consigne sur une pièce neutre,
+  jamais une chambre, la personne présente, remise sur `schedule` ensuite.
+
 ## `profile` : profils déclaratifs (`crates/moli-profile`)
 
 Un seul pilote générique pour tout appareil HTTP décrit en TOML. Voir [profils.md](profils.md).
@@ -485,6 +529,7 @@ ni pièce native). Il ne déplace jamais rien. Sans argument : plan à blanc ; `
 | `moonraker` | `moli-moonraker` | HTTP local 7125 | lumière, `control` (humain pour un agent) | Snapmaker U1 |
 | `tapo` | `moli-tapo` | HTTP 80 + KLAP v2 | oui : tout | pas encore (cible : Tapo L530) |
 | `igd` | `moli-igd` | UPnP IGD (SSDP + SOAP) | non | Livebox |
+| `netatmo` | `moli-netatmo` | HTTPS, API cloud officielle (OAuth2) | consigne d'une pièce, retour au planning, mode de la maison | pas encore (cible : thermostat et vannes Netatmo) |
 | `ipp` | `moli-ipp` | IPP 2.0 HTTP 631 | identifier, annuler, imprimer (tableau de bord) | Canon MG3600 |
 | `host` | `moli-host` | /proc, /sys ; WoL ; agent HTTP sortant | allumer, éteindre, veille, Claude et Codex pour le téléphone (PIN) | hôte Linux ; PC Windows avec l'agent |
 | `presence` | `moli-presence` | UDP + table ARP de l'hôte | non | téléphones sur le Wi-Fi |
