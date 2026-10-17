@@ -1194,3 +1194,76 @@ async fn an_invited_person_reaches_the_house_from_the_internet() {
     assert_eq!(status, 401);
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// The first owner, created at home with an e-mail (no Cloudflare Access):
+/// the house's code still manages the people until they choose their
+/// password; then they alone do, from anywhere.
+#[tokio::test]
+async fn the_first_owner_is_invited_from_the_house() {
+    let dir = std::env::temp_dir().join(format!("moli-http-owner-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let hub = Hub::new(HubOptions {
+        secrets: Some((
+            dir.join("secrets.enc"),
+            moli_runtime::MasterKey::generate().unwrap(),
+        )),
+        ..HubOptions::default()
+    })
+    .unwrap();
+    let options = moli_api::Options {
+        ui_pin: Some(moli_api::UiPin::new("482915")),
+        home_path: Some(dir.join("home.json")),
+        ..moli_api::Options::default()
+    };
+    let addr = serve(&hub, &options).await;
+    let outside = "X-Forwarded-For: 203.0.113.9\r\n";
+    let (_, pin, _) = request_cookie(
+        &addr,
+        "POST",
+        "/api/session",
+        &json!({ "pin": "482915" }),
+        "",
+        "moli_session",
+    )
+    .await;
+    let pin = format!("Cookie: {}\r\n", pin.unwrap());
+    let (status, body) = request_with(
+        &addr,
+        "POST",
+        "/api/people",
+        Some(&json!({ "name": "Moi", "role": "owner", "emails": ["user@example.com"] })),
+        &pin,
+    )
+    .await;
+    assert_eq!(status, 201, "{body}");
+    let (_, people) = request_with(&addr, "GET", "/api/people", None, &pin).await;
+    assert_eq!(
+        serde_json::from_str::<Json>(&people).unwrap()["owner"],
+        true
+    );
+    let (status, body) = request_with(&addr, "POST", "/api/people/moi/invite", None, &pin).await;
+    assert_eq!(status, 200, "nobody signs in as the owner yet: {body}");
+    let code = serde_json::from_str::<Json>(&body).unwrap()["code"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let (status, cookie, body) = request_cookie(
+        &addr,
+        "POST",
+        "/api/invitation",
+        &json!({ "code": code, "password": "le jardin fleuri" }),
+        outside,
+        "moli_person",
+    )
+    .await;
+    assert_eq!(status, 200, "{body}");
+    let (status, _) = request_with(&addr, "POST", "/api/people/moi/invite", None, &pin).await;
+    assert_eq!(status, 403, "a password: the code manages nobody now");
+    let me = format!("{outside}Cookie: {}\r\n", cookie.unwrap());
+    let (_, people) = request_with(&addr, "GET", "/api/people", None, &me).await;
+    assert_eq!(
+        serde_json::from_str::<Json>(&people).unwrap()["owner"],
+        true
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}

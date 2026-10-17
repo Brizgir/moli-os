@@ -159,6 +159,17 @@ dashboard commande sans code), `via` et `who` (l'e-mail reconnu par Access).
   images de plan 20 / 10 s. Le budget large du tableau de bord (100 commandes / 10 s) ne
   vaut que pour le foyer, pas pour un simple en-tête.
 
+**Personnes** (`crates/moli-api/src/people_api.rs`, `people.rs`) : `/api/people` (lire,
+créer, modifier, retirer), `/api/people/{id}/invite` (code d'invitation, 7 jours),
+`/api/zones`, `POST /api/invitation {code, password}` (le mot de passe, la connexion). Est
+propriétaire une personne de ce rôle connectée, un propriétaire Access de `[server.access]`,
+ou, **tant qu'aucun propriétaire ne peut se connecter**, une session ouverte avec le code de
+la maison depuis le foyer (le code ne s'ouvre jamais depuis Internet ni une adresse
+Tailscale). « Peut se connecter » : un mot de passe choisi, ou un e-mail dans sa fiche
+**et** `[server.access]` configuré ; sans Access, un e-mail n'ouvre rien et ne compte pas.
+Ainsi le premier propriétaire, créé depuis le tableau de bord, reçoit son invitation de la
+même session ; dès qu'il a choisi son mot de passe, lui seul gère les personnes.
+
 ### 1.4 Qui la garde croit
 
 `crates/moli-runtime/src/guard.rs` (`GuardPolicy::check`). La politique vit dans
