@@ -164,8 +164,9 @@ créer, modifier, retirer), `/api/people/{id}/invite` (code d'invitation, 7 jour
 `/api/zones`, `POST /api/invitation {code, password}` (le mot de passe, la connexion). Est
 propriétaire une personne de ce rôle connectée, un propriétaire Access de `[server.access]`,
 ou, **tant qu'aucun propriétaire ne peut se connecter**, une session ouverte avec le code de
-la maison depuis le foyer (le code ne s'ouvre jamais depuis Internet ni une adresse
-Tailscale). « Peut se connecter » : un mot de passe choisi, ou un e-mail dans sa fiche
+la maison depuis le foyer : le réseau de la maison, cette machine ou Cloudflare Access, jamais
+une personne connectée par mot de passe depuis Internet ou une adresse Tailscale, même si elle
+connaît le code (sinon un membre se ferait propriétaire de dehors). « Peut se connecter » : un mot de passe choisi, ou un e-mail dans sa fiche
 **et** `[server.access]` configuré ; sans Access, un e-mail n'ouvre rien et ne compte pas.
 Ainsi le premier propriétaire, créé depuis le tableau de bord, reçoit son invitation de la
 même session ; dès qu'il a choisi son mot de passe, lui seul gère les personnes.

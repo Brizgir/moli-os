@@ -1270,3 +1270,89 @@ async fn the_first_owner_is_invited_from_the_house() {
     );
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// A member signed in from the Internet with their password, who knows the
+/// house's code: the code manages nobody from there, even while the first
+/// owner has no password yet (revue 2026-10, P1).
+#[tokio::test]
+async fn the_house_code_manages_nobody_from_the_internet() {
+    let dir = std::env::temp_dir().join(format!("moli-http-code-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let hub = Hub::new(HubOptions {
+        secrets: Some((
+            dir.join("secrets.enc"),
+            moli_runtime::MasterKey::generate().unwrap(),
+        )),
+        ..HubOptions::default()
+    })
+    .unwrap();
+    let options = moli_api::Options {
+        ui_pin: Some(moli_api::UiPin::new("482915")),
+        home_path: Some(dir.join("home.json")),
+        ..moli_api::Options::default()
+    };
+    let addr = serve(&hub, &options).await;
+    let outside = "X-Forwarded-For: 203.0.113.9\r\n";
+    let (_, pin, _) = request_cookie(
+        &addr,
+        "POST",
+        "/api/session",
+        &json!({ "pin": "482915" }),
+        "",
+        "moli_session",
+    )
+    .await;
+    let pin = format!("Cookie: {}\r\n", pin.unwrap());
+    let owner = json!({ "name": "Moi", "role": "owner", "emails": ["user@example.com"] });
+    assert_eq!(
+        request_with(&addr, "POST", "/api/people", Some(&owner), &pin)
+            .await
+            .0,
+        201
+    );
+    let member = json!({ "name": "Élodie", "role": "member" });
+    assert_eq!(
+        request_with(&addr, "POST", "/api/people", Some(&member), &pin)
+            .await
+            .0,
+        201
+    );
+    let (_, body) = request_with(&addr, "POST", "/api/people/elodie/invite", None, &pin).await;
+    let code = serde_json::from_str::<Json>(&body).unwrap()["code"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let invitation = json!({ "code": code, "password": "le jardin fleuri" });
+    let (status, cookie, _) = request_cookie(
+        &addr,
+        "POST",
+        "/api/invitation",
+        &invitation,
+        outside,
+        "moli_person",
+    )
+    .await;
+    assert_eq!(status, 200);
+    let me = format!("{outside}Cookie: {}\r\n", cookie.unwrap());
+    // The member, from the Internet, types the house's code.
+    let (_, house, _) = request_cookie(
+        &addr,
+        "POST",
+        "/api/session",
+        &json!({ "pin": "482915" }),
+        &me,
+        "moli_session",
+    )
+    .await;
+    let both = format!("{me}Cookie: {}\r\n", house.unwrap_or_default());
+    let (status, _) = request_with(&addr, "POST", "/api/people/moi/invite", None, &both).await;
+    assert_eq!(
+        status, 403,
+        "the house's code manages nobody from the Internet"
+    );
+    let promoted = json!({ "name": "Élodie", "role": "owner" });
+    let (status, _) =
+        request_with(&addr, "PUT", "/api/people/elodie", Some(&promoted), &both).await;
+    assert_eq!(status, 403, "nobody promotes themself");
+    let _ = std::fs::remove_dir_all(&dir);
+}
