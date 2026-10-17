@@ -14,7 +14,7 @@ use moli_runtime::BoxFuture;
 use serde_json::{Value as Json, json};
 use tokio::time::Instant;
 
-use crate::auth::{self, Answer, Grant, USER_AGENT};
+use crate::auth::{self, Answer, USER_AGENT};
 use crate::net::Transport;
 
 pub(crate) const API_HOST: &str = "api.ring.com";
@@ -87,12 +87,7 @@ impl Client {
 
     /// A new access token (and refresh token, kept in `vault` before use).
     async fn renew(&mut self, vault: &dyn Vault) -> Result<(), Failure> {
-        let answer = auth::token(
-            &*self.net,
-            &self.hardware_id,
-            &Grant::Refresh(&self.refresh),
-        )
-        .await?;
+        let answer = auth::token(&*self.net, &self.hardware_id, &self.refresh).await?;
         match answer {
             Answer::Tokens(t) => {
                 vault
@@ -103,9 +98,7 @@ impl Client {
                 self.access = Some((t.access, Instant::now() + t.lasts));
                 Ok(())
             }
-            Answer::Revoked | Answer::BadPassword | Answer::Code { .. } | Answer::BadCode => {
-                Err(Failure::SignInAgain)
-            }
+            Answer::Revoked => Err(Failure::SignInAgain),
             Answer::TooMany => Err(Failure::TooMany),
             Answer::Other(why) => Err(Failure::Other(anyhow::anyhow!("Ring sign-in: {why}"))),
         }

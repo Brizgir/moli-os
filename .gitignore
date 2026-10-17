@@ -3,3 +3,5 @@
 web/node_modules
 web/dist
 *.bak-*
+# A raw capture of a device or a cloud answer, before it is anonymised.
+*.real.json

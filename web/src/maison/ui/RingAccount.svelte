@@ -3,10 +3,12 @@
   import { t } from '../../lib/i18n.svelte.js';
   import Icon from './Icon.svelte';
 
-  /** Each Ring account Moli reads: connected (its devices), or the two
-   *  steps of the sign-in. The e-mail and password go from here to Moli,
-   *  which hands them to Ring and forgets them: never stored, never in the
-   *  journal (the points are « secret »); only Ring's token is kept, in
+  /** Each Ring account Moli reads: connected (its devices), or the sign-in.
+   *  Ring has no sign-in page for other apps: the person makes a token on
+   *  their own computer (Ring's own client asks the e-mail, password and
+   *  code there) and pastes it here. Moli never sees the password; the
+   *  pasted token goes to Ring once, is never stored, journaled or shown
+   *  (the point is « secret »); only the token Ring gives back is kept, in
    *  Moli's encrypted store. */
   const accounts = $derived(
     Object.values(hub.devices ?? {}).filter((d) => d.manufacturer === 'Ring' && d.model === 'Ring' && d.points?.some((p) => p.key === 'sign_in')),
@@ -14,24 +16,22 @@
   const devicesOf = (account) =>
     Object.values(hub.devices ?? {}).filter((d) => d.instance === account.instance && d.manufacturer === 'Ring' && d.model !== 'Ring').length;
 
-  let email = $state('');
-  let password = $state('');
-  let code = $state('');
+  let pasted = $state('');
   let busy = $state(false);
   let error = $state('');
 
-  async function send(id, key, text, label, done) {
+  async function connect(id) {
     busy = true;
     error = '';
     try {
       const res = await fetch('/api/command', {
         method: 'POST',
         headers: { 'content-type': 'application/json', 'x-moli-origin': 'ui' },
-        body: JSON.stringify({ point: `${id}/${key}`, value: text }),
+        body: JSON.stringify({ point: `${id}/sign_in`, value: pasted.trim() }),
       });
       if (res.status === 403) {
         // A person's code first; the same step is sent again after it.
-        home.held = { label, reason: 'ton code', custom: () => send(id, key, text, label, done) };
+        home.held = { label: t('systeme.ring.connecter'), reason: 'ton code', custom: () => connect(id) };
         return;
       }
       const body = await res.json().catch(() => ({}));
@@ -39,27 +39,13 @@
         error = body.error ?? res.statusText;
         return;
       }
-      done();
+      pasted = '';
     } catch (e) {
       error = e.message;
     } finally {
       busy = false;
     }
   }
-
-  const signIn = (id) =>
-    send(id, 'sign_in', JSON.stringify({ email: email.trim(), password }), t('systeme.ring.connecter'), () => {
-      password = '';
-    });
-
-  const confirm = (id) =>
-    send(id, 'code', code.trim(), t('systeme.ring.valider'), () => {
-      code = '';
-      email = '';
-    });
-
-  const byText = (by) =>
-    by === 'totp' ? t('systeme.ring.par_appli') : by === 'email' ? t('systeme.ring.par_email') : t('systeme.ring.par_sms');
 </script>
 
 {#each accounts as a (a.id)}
@@ -74,8 +60,6 @@
             {t('systeme.ring.connecte', { n: devicesOf(a) })}
           {:else if status === 'sign_in'}
             {t('systeme.ring.a_connecter')}
-          {:else if status === 'code'}
-            {byText(value(a.id, 'code_by'))}
           {:else if status === 'slow_down'}
             {t('systeme.ring.attendre')}
           {:else if status === 'error'}
@@ -88,23 +72,18 @@
     </div>
 
     {#if status === 'sign_in'}
-      <form class="form" onsubmit={(e) => (e.preventDefault(), signIn(a.id))}>
-        <label for="ring-email">{t('systeme.ring.email')}</label>
-        <input id="ring-email" type="email" bind:value={email} autocomplete="username" spellcheck="false" />
-        <label for="ring-password">{t('systeme.ring.mot_de_passe')}</label>
-        <input id="ring-password" type="password" bind:value={password} autocomplete="current-password" />
-        <button class="btn primary" disabled={busy || !email.includes('@') || !password}>{busy ? t('systeme.ring.verification') : t('systeme.ring.connecter')}</button>
+      <ol class="steps">
+        <li>{t('systeme.ring.etape1')} <code>npx -p ring-client-api ring-auth-cli</code></li>
+        <li>{t('systeme.ring.etape2')}</li>
+        <li>{t('systeme.ring.etape3')}</li>
+      </ol>
+      <form class="form" onsubmit={(e) => (e.preventDefault(), connect(a.id))} autocomplete="off">
+        <label for="ring-pasted">{t('systeme.ring.coller')}</label>
+        <input id="ring-pasted" type="password" bind:value={pasted} autocomplete="off" spellcheck="false" />
+        <button class="btn primary" disabled={busy || pasted.trim().length < 16}>{busy ? t('systeme.ring.verification') : t('systeme.ring.connecter')}</button>
         {#if error}<p class="error">{error}</p>{/if}
       </form>
       <small class="muted">{t('systeme.ring.aide')}</small>
-    {:else if status === 'code'}
-      <form class="form" onsubmit={(e) => (e.preventDefault(), confirm(a.id))} autocomplete="off">
-        <label for="ring-code">{t('systeme.ring.code')}</label>
-        <input id="ring-code" bind:value={code} inputmode="numeric" autocomplete="one-time-code" spellcheck="false" />
-        <button class="btn primary" disabled={busy || code.trim().length < 4}>{busy ? t('systeme.ring.verification') : t('systeme.ring.valider')}</button>
-        {#if error}<p class="error">{error}</p>{/if}
-      </form>
-      <small class="muted">{t('systeme.ring.code_aide')}</small>
     {/if}
     <small class="muted">{t('systeme.ring.officieux')}</small>
   </section>
@@ -142,6 +121,24 @@
     display: grid;
     gap: 2px;
     min-width: 0;
+  }
+
+  .steps {
+    margin: 0;
+    padding-left: 1.3em;
+    display: grid;
+    gap: 8px;
+  }
+
+  .steps li {
+    overflow-wrap: anywhere;
+  }
+
+  .steps code {
+    font-size: 0.92em;
+    padding: 1px 6px;
+    border-radius: 6px;
+    background: var(--surface);
   }
 
   .form {

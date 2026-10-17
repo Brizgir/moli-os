@@ -1,10 +1,10 @@
-//! Signing in to Ring as its Android app does (`oauth.ring.com`, client
-//! `ring_official_android`): once with the e-mail and password a person
-//! typed in the dashboard, then the one-time code Ring sends (SMS, e-mail or
-//! an authenticator app); afterwards only the refresh token, which Ring
-//! replaces at every renewal. The hardware id names Moli among the
-//! account's « authorized client devices »: the same one for good, so the
-//! account does not fill up with Molis.
+//! Ring's token endpoint (`oauth.ring.com`, client `ring_official_android`),
+//! asked with a refresh token only: the one a person pasted from the
+//! dashboard (made on their own computer, where Ring itself took the
+//! e-mail, the password and the one-time code), then the one Ring gives
+//! back at every renewal. No password ever goes through here. The hardware
+//! id names Moli among the account's « authorized client devices »: the
+//! same one for good, so the account does not fill up with Molis.
 //!
 //! Interface facts from the open projects that use the same API
 //! (ring-client-api, python-ring-doorbell); no code of theirs.
@@ -64,71 +64,29 @@ impl std::fmt::Debug for Tokens {
     }
 }
 
-/// Ring's answer to a sign-in or a renewal.
+/// Ring's answer to a renewal.
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) enum Answer {
     Tokens(Tokens),
-    /// A one-time code is needed; Ring sent it by `sms`, `email`, or the
-    /// person reads it in an authenticator app (`totp`).
-    Code {
-        by: String,
-    },
-    /// The code typed is wrong or expired.
-    BadCode,
-    /// The e-mail or the password is wrong.
-    BadPassword,
     /// Ring no longer accepts the refresh token: sign in again.
     Revoked,
-    /// Too many tries: Ring makes one wait (about ten minutes for codes).
+    /// Too many tries: Ring makes one wait (about ten minutes).
     TooMany,
     Other(String),
 }
 
-/// How the account is asked.
-pub(crate) enum Grant<'a> {
-    Password {
-        email: &'a str,
-        password: &'a str,
-        code: Option<&'a str>,
-    },
-    Refresh(&'a str),
-}
-
-impl Grant<'_> {
-    fn body(&self) -> Json {
-        match self {
-            Self::Password {
-                email, password, ..
-            } => json!({
-                "client_id": CLIENT_ID,
-                "scope": "client",
-                "grant_type": "password",
-                "username": email,
-                "password": password,
-            }),
-            Self::Refresh(token) => json!({
-                "client_id": CLIENT_ID,
-                "scope": "client",
-                "grant_type": "refresh_token",
-                "refresh_token": token,
-            }),
-        }
-    }
-
-    fn code(&self) -> &str {
-        match self {
-            Self::Password { code, .. } => code.unwrap_or_default(),
-            Self::Refresh(_) => "",
-        }
-    }
-}
-
-/// Asks `oauth.ring.com` for tokens.
+/// Asks `oauth.ring.com` for tokens, with a refresh token.
 pub(crate) async fn token(
     net: &dyn Transport,
     hardware_id: &str,
-    grant: &Grant<'_>,
+    refresh: &str,
 ) -> anyhow::Result<Answer> {
+    let body = json!({
+        "client_id": CLIENT_ID,
+        "scope": "client",
+        "grant_type": "refresh_token",
+        "refresh_token": refresh,
+    });
     let request = Request::builder()
         .method(Method::POST)
         .uri("/oauth/token")
@@ -137,26 +95,21 @@ pub(crate) async fn token(
         .header("user-agent", USER_AGENT)
         .header("hardware_id", hardware_id)
         .header("2fa-support", "true")
-        .header("2fa-code", grant.code())
-        .body(Full::new(Bytes::from(
-            grant.body().to_string().into_bytes(),
-        )))?;
+        .body(Full::new(Bytes::from(body.to_string().into_bytes())))?;
     let (status, body) = net.send(OAUTH_HOST, request).await?;
     Ok(interpret(
         status,
         &serde_json::from_slice(&body).unwrap_or(Json::Null),
-        matches!(grant, Grant::Refresh(_)),
     ))
 }
 
-/// Ring's answer, read. `refreshing`: the grant was a refresh token.
-pub(crate) fn interpret(status: StatusCode, body: &Json, refreshing: bool) -> Answer {
+/// Ring's answer, read. Never quotes the request (a token lives in it).
+pub(crate) fn interpret(status: StatusCode, body: &Json) -> Answer {
     let description = body["error_description"]
         .as_str()
         .or_else(|| body["err_msg"].as_str())
         .unwrap_or_default();
     let error = body["error"].as_str().unwrap_or_default();
-    let lower = description.to_lowercase();
     match status.as_u16() {
         200 => match (
             body["access_token"].as_str(),
@@ -171,16 +124,11 @@ pub(crate) fn interpret(status: StatusCode, body: &Json, refreshing: bool) -> An
             }
             _ => Answer::Other("no tokens in Ring's answer".into()),
         },
-        412 => Answer::Code {
-            by: body["tsv_state"].as_str().unwrap_or("sms").to_owned(),
-        },
         429 => Answer::TooMany,
-        _ if lower.contains("too many") => Answer::TooMany,
-        400 if lower.contains("verification code") => Answer::BadCode,
-        400 | 401 if refreshing => Answer::Revoked,
-        400 | 401 if error == "invalid_grant" || error == "access_denied" || status == 401 => {
-            Answer::BadPassword
-        }
+        _ if description.to_lowercase().contains("too many") => Answer::TooMany,
+        // 412 (a verification code wanted) never comes with a refresh token
+        // that Ring still accepts: the person makes a new one.
+        400 | 401 | 412 => Answer::Revoked,
         code => Answer::Other(format!(
             "HTTP {code} {}",
             if description.is_empty() {
@@ -195,15 +143,11 @@ pub(crate) fn interpret(status: StatusCode, body: &Json, refreshing: bool) -> An
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::net::replay::Replay;
 
     fn fixture(name: &str) -> Json {
         let text = match name {
             "token" => include_str!("../../../integrations/ring/fixtures/oauth-token.json"),
-            "2fa" => include_str!("../../../integrations/ring/fixtures/oauth-2fa.json"),
-            "bad-code" => include_str!("../../../integrations/ring/fixtures/oauth-bad-code.json"),
-            "bad-password" => {
-                include_str!("../../../integrations/ring/fixtures/oauth-bad-password.json")
-            }
             "bad-refresh" => {
                 include_str!("../../../integrations/ring/fixtures/oauth-bad-refresh.json")
             }
@@ -214,38 +158,37 @@ mod tests {
 
     #[test]
     fn ring_s_answers_read() {
-        let Answer::Tokens(t) = interpret(StatusCode::OK, &fixture("token"), false) else {
+        let Answer::Tokens(t) = interpret(StatusCode::OK, &fixture("token")) else {
             panic!()
         };
         assert_eq!(t.lasts, Duration::from_secs(3600));
         assert!(t.refresh.starts_with("fake-refresh"));
         assert!(!format!("{t:?}").contains("fake"), "{t:?}");
         assert_eq!(
-            interpret(StatusCode::PRECONDITION_FAILED, &fixture("2fa"), false),
-            Answer::Code { by: "sms".into() }
-        );
-        assert_eq!(
-            interpret(StatusCode::BAD_REQUEST, &fixture("bad-code"), false),
-            Answer::BadCode
-        );
-        assert_eq!(
-            interpret(StatusCode::UNAUTHORIZED, &fixture("bad-password"), false),
-            Answer::BadPassword
-        );
-        assert_eq!(
-            interpret(StatusCode::UNAUTHORIZED, &fixture("bad-refresh"), true),
+            interpret(StatusCode::UNAUTHORIZED, &fixture("bad-refresh")),
             Answer::Revoked
         );
         assert_eq!(
-            interpret(StatusCode::TOO_MANY_REQUESTS, &Json::Null, false),
+            interpret(StatusCode::BAD_REQUEST, &fixture("bad-refresh")),
+            Answer::Revoked
+        );
+        assert_eq!(
+            interpret(
+                StatusCode::PRECONDITION_FAILED,
+                &json!({ "tsv_state": "sms" })
+            ),
+            Answer::Revoked
+        );
+        assert_eq!(
+            interpret(StatusCode::TOO_MANY_REQUESTS, &Json::Null),
             Answer::TooMany
         );
         assert!(matches!(
-            interpret(StatusCode::OK, &json!({ "access_token": "a" }), false),
+            interpret(StatusCode::OK, &json!({ "access_token": "a" })),
             Answer::Other(_)
         ));
         assert!(matches!(
-            interpret(StatusCode::BAD_GATEWAY, &Json::Null, true),
+            interpret(StatusCode::BAD_GATEWAY, &Json::Null),
             Answer::Other(_)
         ));
     }
@@ -259,19 +202,24 @@ mod tests {
         assert_eq!(a.matches('-').count(), 4);
     }
 
-    #[test]
-    fn the_code_rides_in_a_header_and_never_with_a_refresh() {
-        let grant = Grant::Password {
-            email: "user@example.com",
-            password: "x",
-            code: Some("123456"),
-        };
-        assert_eq!(grant.code(), "123456");
-        assert_eq!(grant.body()["grant_type"], "password");
-        assert_eq!(grant.body()["username"], "user@example.com");
-        let refresh = Grant::Refresh("r");
-        assert_eq!(refresh.code(), "");
-        assert_eq!(refresh.body()["refresh_token"], "r");
-        assert!(refresh.body().get("password").is_none());
+    #[tokio::test]
+    async fn only_a_refresh_token_ever_goes_to_ring() {
+        let net = Replay::default().then(
+            "/oauth/token",
+            200,
+            include_str!("../../../integrations/ring/fixtures/oauth-token.json"),
+        );
+        assert!(matches!(
+            token(&net, "hw-test", "fake-refresh-0").await.unwrap(),
+            Answer::Tokens(_)
+        ));
+        let (path, headers, body) = net.asked(0);
+        assert_eq!(path, "/oauth/token");
+        assert_eq!(net.host(0), OAUTH_HOST);
+        assert_eq!(body["grant_type"], "refresh_token");
+        assert_eq!(body["refresh_token"], "fake-refresh-0");
+        assert!(body.get("password").is_none() && body.get("username").is_none());
+        assert_eq!(headers["hardware_id"], "hw-test");
+        assert!(headers.get("2fa-code").is_none());
     }
 }

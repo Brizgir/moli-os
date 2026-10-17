@@ -11,13 +11,21 @@ ring-client-api (Homebridge) : elle peut changer ou cesser sans préavis.
 
 ## Connexion
 
-Depuis le tableau de bord (Système, carte Ring) : l'e-mail et le mot de passe du compte Ring,
-puis le code de vérification que Ring envoie (SMS, e-mail ou appli d'authentification). Moli
-les transmet à Ring et ne les garde pas : ni fichier, ni coffre, ni journal (ils n'existent
-qu'en mémoire le temps de la saisie du code, 10 minutes au plus). Il garde seulement le jeton
-que Ring lui donne, chiffré dans son coffre, et le remplace à chaque fois que Ring en donne un
-nouveau. Moli apparaît alors dans le Centre de contrôle de l'appli Ring, parmi les appareils
-clients autorisés : on peut l'y retirer, et il faudra se reconnecter.
+Le mot de passe Ring ne passe **jamais** par Moli. Ring n'offre pas de page de connexion pour
+une autre application : le jeton se fait sur l'ordinateur de la personne, avec le client de
+Ring lui-même, puis se colle dans Moli.
+
+1. Sur un ordinateur où Node.js est installé : `npx -p ring-client-api ring-auth-cli`. Ring y
+   demande l'e-mail, le mot de passe et le code de vérification (SMS, e-mail ou appli) ; la
+   commande affiche à la fin un jeton (une longue ligne).
+2. Depuis le tableau de bord (Système, carte Ring), coller ce jeton. Moli l'envoie une fois à
+   Ring pour le vérifier ; Ring le remplace aussitôt par un nouveau, que Moli garde chiffré
+   dans son coffre et renouvelle lui-même ensuite. Ce qui a été collé n'est ni affiché, ni
+   journalisé, ni gardé.
+
+Moli apparaît alors dans le Centre de contrôle de l'appli Ring, parmi les appareils clients
+autorisés (le même que l'ordinateur qui a fait le jeton) : on peut l'y retirer, et il faudra
+refaire un jeton.
 
 ## Configuration
 
@@ -39,7 +47,9 @@ kind = "ring"
 | tous | `wifi_signal` | dBm |
 | carillon | `volume` | 0 à 11, en lecture |
 
-En ligne ou non : la disponibilité de chaque appareil, telle que Ring la donne.
+En ligne ou non : la disponibilité de chaque appareil, telle que Ring la donne ; quand les
+serveurs de Ring sont injoignables, tous les appareils passent indisponibles et `doorbell`
+et `motion` retombent à faux.
 
 ## Limites
 
@@ -49,5 +59,5 @@ En ligne ou non : la disponibilité de chaque appareil, telle que Ring la donne.
   démarrage de Moli : jamais de « on sonne » périmé.
 - Lecture seule : rien n'est commandé (volume du carillon, sirène, lumière : une suite).
 - Pas d'image pour l'instant (l'instantané Ring est une suite).
-- Un changement de mot de passe Ring, ou Moli retiré du Centre de contrôle, oblige à refaire la
-  connexion.
+- Un changement de mot de passe Ring, ou Moli retiré du Centre de contrôle, oblige à refaire
+  un jeton.

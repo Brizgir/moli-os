@@ -1,167 +1,140 @@
-//! The sign-in a person makes from the dashboard: the account's e-mail and
-//! password, then the code Ring sends. Moli passes them to Ring and keeps
-//! them in memory only while it waits for the code (Ring wants the password
-//! again along with it); they are never stored, journaled or shown.
-
-use std::time::Duration;
+//! The sign-in a person makes from the dashboard: they paste a Ring
+//! refresh token made on their own computer (`ring-auth-cli`, where Ring
+//! itself asks the e-mail, the password and the one-time code). Moli never
+//! sees the password; it checks the token with Ring once, keeps what Ring
+//! gives back, and never logs, journals or shows what was pasted.
+//!
+//! Two shapes are accepted: the bare refresh token, or what `ring-auth-cli`
+//! prints, a base64 `{"rt": <refresh token>, "hid": <hardware id>}`: then
+//! Moli takes that hardware id too, so it is the same « authorized client
+//! device » of the account as the computer that made the token.
 
 use serde::Deserialize;
-use tokio::time::Instant;
 
-use crate::auth::{self, Answer, Grant, Tokens};
+use crate::auth::{self, Answer, Tokens};
 use crate::net::Transport;
 
-/// How long Moli waits for the code before forgetting the password.
-pub(crate) const CODE_WAIT: Duration = Duration::from_secs(10 * 60);
+/// A pasted text longer than this is not a token.
+const MAX_PASTED: usize = 8 * 1024;
 
-#[derive(Deserialize)]
-struct Typed {
-    email: String,
-    password: String,
-}
-
-/// The e-mail and the password, in memory only.
-struct Credentials {
-    email: String,
-    password: String,
-}
-
-impl std::fmt::Debug for Credentials {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Credentials").finish_non_exhaustive()
-    }
-}
-
-/// Why a step did not sign in: a key of the `pilotes.ring` catalogue, and
-/// Ring's words when they help.
+/// Why a pasted text did not sign in: a key of the `pilotes.ring` catalogue,
+/// and Ring's words when they help.
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) enum Refusal {
-    /// Not an e-mail and a password.
-    Typed,
-    BadPassword,
-    BadCode,
-    /// A code, but no e-mail and password before it (or they were forgotten).
-    NoCredentials,
+    /// Not a Ring token.
+    Pasted,
+    /// Ring does not accept it (revoked, used up, made for another account
+    /// client): a new one is needed.
+    Refused,
     TooMany,
     Other(String),
 }
 
-#[derive(Debug)]
-pub(crate) struct SignIn {
+/// The account, signed in with the pasted token.
+pub(crate) struct Connected {
+    /// The hardware id the tokens are tied to: the pasted one, else `ours`.
     pub hardware_id: String,
-    waiting: Option<(Credentials, String, Instant)>,
+    pub tokens: Tokens,
 }
 
-impl SignIn {
-    pub(crate) fn new(hardware_id: String) -> Self {
-        Self {
-            hardware_id,
-            waiting: None,
-        }
-    }
-
-    /// How Ring sent the code it waits for (`sms`, `email`, `totp`).
-    pub(crate) fn code_by(&self) -> Option<&str> {
-        self.waiting.as_ref().map(|(_, by, _)| by.as_str())
-    }
-
-    /// When the password is forgotten, if Moli waits for a code.
-    pub(crate) fn deadline(&self) -> Option<Instant> {
-        self.waiting
-            .as_ref()
-            .map(|(_, _, since)| *since + CODE_WAIT)
-    }
-
-    pub(crate) fn forget(&mut self) {
-        self.waiting = None;
-    }
-
-    /// The e-mail and password typed (`{"email": …, "password": …}`).
-    /// `Ok(None)`: Ring wants a code now.
-    pub(crate) async fn credentials(
-        &mut self,
-        net: &dyn Transport,
-        typed: &str,
-    ) -> Result<Option<Tokens>, Refusal> {
-        self.waiting = None;
-        let typed: Typed = serde_json::from_str(typed).map_err(|_| Refusal::Typed)?;
-        let email = typed.email.trim();
-        if !email.contains('@') || typed.password.is_empty() {
-            return Err(Refusal::Typed);
-        }
-        let credentials = Credentials {
-            email: email.to_owned(),
-            password: typed.password,
-        };
-        let answer = self.ask(net, &credentials, None).await?;
-        match answer {
-            Answer::Tokens(t) => Ok(Some(t)),
-            Answer::Code { by } => {
-                self.waiting = Some((credentials, by, Instant::now()));
-                Ok(None)
-            }
-            Answer::BadPassword | Answer::Revoked => Err(Refusal::BadPassword),
-            other => Err(refusal(other)),
-        }
-    }
-
-    /// The code Ring sent.
-    pub(crate) async fn code(
-        &mut self,
-        net: &dyn Transport,
-        code: &str,
-    ) -> Result<Tokens, Refusal> {
-        let code: String = code.chars().filter(|c| !c.is_whitespace()).collect();
-        if code.is_empty() || code.len() > 10 || !code.chars().all(|c| c.is_ascii_digit()) {
-            return Err(Refusal::BadCode);
-        }
-        let Some((credentials, by, since)) = self.waiting.take() else {
-            return Err(Refusal::NoCredentials);
-        };
-        let answer = self.ask(net, &credentials, Some(&code)).await;
-        let keep = |me: &mut Self, credentials| me.waiting = Some((credentials, by, since));
-        match answer {
-            Ok(Answer::Tokens(t)) => Ok(t),
-            Ok(Answer::BadCode | Answer::Code { .. }) => {
-                keep(self, credentials);
-                Err(Refusal::BadCode)
-            }
-            Ok(Answer::BadPassword | Answer::Revoked) => Err(Refusal::BadPassword),
-            Ok(other) => {
-                keep(self, credentials);
-                Err(refusal(other))
-            }
-            Err(e) => {
-                keep(self, credentials);
-                Err(e)
-            }
-        }
-    }
-
-    async fn ask(
-        &self,
-        net: &dyn Transport,
-        credentials: &Credentials,
-        code: Option<&str>,
-    ) -> Result<Answer, Refusal> {
-        let grant = Grant::Password {
-            email: &credentials.email,
-            password: &credentials.password,
-            code,
-        };
-        auth::token(net, &self.hardware_id, &grant)
-            .await
-            .map_err(|e| Refusal::Other(format!("{e:#}")))
+impl std::fmt::Debug for Connected {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Connected").finish_non_exhaustive()
     }
 }
 
-fn refusal(answer: Answer) -> Refusal {
+#[derive(Deserialize)]
+struct Wrapped {
+    rt: String,
+    #[serde(default)]
+    hid: Option<String>,
+}
+
+/// What `ring-auth-cli` prints, or a bare token: (refresh token, hardware
+/// id if the text names one). `None`: not a token at all (nothing is
+/// sent to Ring).
+fn parse(pasted: &str) -> Option<(String, Option<String>)> {
+    let pasted = pasted.trim();
+    if pasted.is_empty() || pasted.len() > MAX_PASTED || !pasted.is_ascii() {
+        return None;
+    }
+    // A token is one word; a pasted terminal line may be trimmed of quotes.
+    let pasted = pasted.trim_matches(|c| c == '"' || c == '\'');
+    if pasted.chars().any(|c| c.is_whitespace() || c.is_control()) {
+        return None;
+    }
+    if let Some(wrapped) = base64(pasted)
+        .and_then(|bytes| serde_json::from_slice::<Wrapped>(&bytes).ok())
+        .filter(|w| token_like(&w.rt))
+    {
+        let hid = wrapped.hid.filter(|h| {
+            (8..=64).contains(&h.len())
+                && h.chars()
+                    .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == ':')
+        });
+        return Some((wrapped.rt, hid));
+    }
+    token_like(pasted).then(|| (pasted.to_owned(), None))
+}
+
+fn token_like(s: &str) -> bool {
+    s.len() >= 16
+        && s.len() <= MAX_PASTED
+        && s.chars()
+            .all(|c| c.is_ascii_graphic() && !matches!(c, '"' | '\'' | '<' | '>' | '\\'))
+}
+
+/// Standard or URL-safe base64, padding optional; `None` if not base64.
+fn base64(text: &str) -> Option<Vec<u8>> {
+    let text = text.trim_end_matches('=');
+    let mut out = Vec::with_capacity(text.len() * 3 / 4);
+    let (mut acc, mut bits) = (0u32, 0u32);
+    for c in text.bytes() {
+        let v = match c {
+            b'A'..=b'Z' => c - b'A',
+            b'a'..=b'z' => c - b'a' + 26,
+            b'0'..=b'9' => c - b'0' + 52,
+            b'+' | b'-' => 62,
+            b'/' | b'_' => 63,
+            _ => return None,
+        };
+        acc = (acc << 6) | u32::from(v);
+        bits += 6;
+        if bits >= 8 {
+            bits -= 8;
+            out.push(u8::try_from((acc >> bits) & 0xff).ok()?);
+        }
+    }
+    Some(out)
+}
+
+/// The pasted token, checked with Ring: the tokens Ring gives for it (the
+/// refresh token is replaced at once: the pasted one is spent). `ours`:
+/// the hardware id kept from an earlier sign-in, if any.
+pub(crate) async fn connect(
+    net: &dyn Transport,
+    pasted: &str,
+    ours: Option<&str>,
+) -> Result<Connected, Refusal> {
+    let Some((refresh, hid)) = parse(pasted) else {
+        return Err(Refusal::Pasted);
+    };
+    let hardware_id = match (hid, ours) {
+        (Some(hid), _) => hid,
+        (None, Some(ours)) => ours.to_owned(),
+        (None, None) => auth::hardware_id().map_err(|e| Refusal::Other(format!("{e:#}")))?,
+    };
+    let answer = auth::token(net, &hardware_id, &refresh)
+        .await
+        .map_err(|e| Refusal::Other(format!("{e:#}")))?;
     match answer {
-        Answer::TooMany => Refusal::TooMany,
-        Answer::BadCode => Refusal::BadCode,
-        Answer::BadPassword | Answer::Revoked => Refusal::BadPassword,
-        Answer::Other(why) => Refusal::Other(why),
-        Answer::Tokens(_) | Answer::Code { .. } => Refusal::Other("unexpected answer".into()),
+        Answer::Tokens(tokens) => Ok(Connected {
+            hardware_id,
+            tokens,
+        }),
+        Answer::Revoked => Err(Refusal::Refused),
+        Answer::TooMany => Err(Refusal::TooMany),
+        Answer::Other(why) => Err(Refusal::Other(why)),
     }
 }
 
@@ -170,75 +143,117 @@ mod tests {
     use super::*;
     use crate::net::replay::Replay;
 
-    const TYPED: &str = r#"{"email":" user@example.com ","password":"not-a-real-one"}"#;
     const TOKEN: &str = include_str!("../../../integrations/ring/fixtures/oauth-token.json");
-    const TWO_FA: &str = include_str!("../../../integrations/ring/fixtures/oauth-2fa.json");
-    const BAD_CODE: &str = include_str!("../../../integrations/ring/fixtures/oauth-bad-code.json");
+    const BAD: &str = include_str!("../../../integrations/ring/fixtures/oauth-bad-refresh.json");
 
-    #[tokio::test]
-    async fn the_code_ring_asks_for_then_the_tokens() {
-        let net = Replay::default()
-            .then("/oauth/token", 412, TWO_FA)
-            .then("/oauth/token", 400, BAD_CODE)
-            .then("/oauth/token", 200, TOKEN);
-        let mut sign_in = SignIn::new("hw-test".into());
-        assert_eq!(sign_in.credentials(&net, TYPED).await, Ok(None));
-        assert_eq!(sign_in.code_by(), Some("sms"));
-        assert!(sign_in.deadline().is_some());
-        assert_eq!(
-            sign_in.code(&net, "000000").await,
-            Err(Refusal::BadCode),
-            "a wrong code: try again"
-        );
-        assert_eq!(sign_in.code_by(), Some("sms"), "still waiting");
-        let tokens = sign_in.code(&net, " 123 456 ").await.unwrap();
-        assert_eq!(tokens.refresh, "fake-refresh-token");
-        assert_eq!(sign_in.code_by(), None, "the password is forgotten");
-        // Each time the e-mail and password go to Ring, with the code after.
-        let (_, first, body) = net.asked(0);
-        assert_eq!(body["username"], "user@example.com");
-        assert_eq!(body["grant_type"], "password");
-        assert_eq!(first["2fa-code"], "");
-        assert_eq!(first["2fa-support"], "true");
-        assert_eq!(first["hardware_id"], "hw-test");
-        let (_, last, body) = net.asked(2);
-        assert_eq!(last["2fa-code"], "123456");
-        assert_eq!(body["password"], "not-a-real-one");
-        assert!(!format!("{sign_in:?}").contains("not-a-real-one"));
-    }
-
-    #[tokio::test]
-    async fn a_wrong_password_or_odd_typing_is_refused() {
-        let net = Replay::default().then(
-            "/oauth/token",
-            401,
-            include_str!("../../../integrations/ring/fixtures/oauth-bad-password.json"),
-        );
-        let mut sign_in = SignIn::new("hw-test".into());
-        assert_eq!(
-            sign_in.credentials(&net, TYPED).await,
-            Err(Refusal::BadPassword)
-        );
-        for odd in ["", "x", r#"{"email":"nobody","password":"x"}"#] {
-            assert_eq!(sign_in.credentials(&net, odd).await, Err(Refusal::Typed));
+    /// What `ring-auth-cli` prints: base64 of `{"rt": …, "hid": …}`.
+    fn wrapped(rt: &str, hid: Option<&str>) -> String {
+        let json = match hid {
+            Some(hid) => format!(r#"{{"rt":"{rt}","hid":"{hid}"}}"#),
+            None => format!(r#"{{"rt":"{rt}"}}"#),
+        };
+        let alphabet = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+        let mut out = String::new();
+        for chunk in json.as_bytes().chunks(3) {
+            let n = chunk
+                .iter()
+                .enumerate()
+                .fold(0u32, |n, (i, b)| n | (u32::from(*b) << (16 - 8 * i)));
+            for i in 0..4 {
+                if i <= chunk.len() {
+                    out.push(alphabet[((n >> (18 - 6 * i)) & 63) as usize] as char);
+                } else {
+                    out.push('=');
+                }
+            }
         }
-        assert_eq!(net.left(), 0, "nothing odd sent to Ring");
+        out
+    }
+
+    #[test]
+    fn a_pasted_text_is_a_bare_token_or_what_the_cli_prints() {
         assert_eq!(
-            sign_in.code(&net, "123456").await,
-            Err(Refusal::NoCredentials)
+            parse("  fake-refresh-token-pasted-0\n"),
+            Some(("fake-refresh-token-pasted-0".into(), None))
         );
-        assert_eq!(sign_in.code(&net, "12a456").await, Err(Refusal::BadCode));
+        assert_eq!(
+            parse(&wrapped(
+                "fake-refresh-token-pasted-1",
+                Some("hw-from-the-cli")
+            )),
+            Some((
+                "fake-refresh-token-pasted-1".into(),
+                Some("hw-from-the-cli".into())
+            ))
+        );
+        let no_hid = wrapped("fake-refresh-token-pasted-2", None);
+        assert_eq!(
+            parse(&format!("\"{no_hid}\"")),
+            Some(("fake-refresh-token-pasted-2".into(), None))
+        );
+        // A hardware id that is not one is left out, the token kept.
+        assert_eq!(
+            parse(&wrapped("fake-refresh-token-pasted-3", Some("x"))),
+            Some(("fake-refresh-token-pasted-3".into(), None))
+        );
+        for odd in [
+            "",
+            "short",
+            "two words here are not a token",
+            "user@example.com\npassword",
+            &"x".repeat(MAX_PASTED + 1),
+            "<script>alert(1)</script>xx",
+            "jeton-avec-accent-é-non-ascii",
+        ] {
+            assert_eq!(parse(odd), None, "{odd:?}");
+        }
     }
 
     #[tokio::test]
-    async fn without_two_steps_the_password_gives_the_tokens() {
+    async fn the_pasted_token_is_checked_with_ring_and_its_hardware_id_taken() {
         let net = Replay::default().then("/oauth/token", 200, TOKEN);
-        let mut sign_in = SignIn::new("hw-test".into());
-        assert!(sign_in.credentials(&net, TYPED).await.unwrap().is_some());
+        let pasted = wrapped("fake-refresh-token-pasted-1", Some("hw-from-the-cli"));
+        let c = connect(&net, &pasted, Some("hw-ours")).await.unwrap();
+        assert_eq!(c.hardware_id, "hw-from-the-cli");
+        assert_eq!(c.tokens.refresh, "fake-refresh-token");
+        assert!(!format!("{c:?}").contains("fake"));
+        let (_, headers, body) = net.asked(0);
+        assert_eq!(headers["hardware_id"], "hw-from-the-cli");
+        assert_eq!(body["refresh_token"], "fake-refresh-token-pasted-1");
+        assert_eq!(body["grant_type"], "refresh_token");
+        assert!(body.get("password").is_none());
+        // A bare token: the hardware id kept from before, else a new one.
+        let net = Replay::default().then("/oauth/token", 200, TOKEN);
+        let c = connect(&net, "fake-refresh-token-pasted-2", Some("hw-ours"))
+            .await
+            .unwrap();
+        assert_eq!(c.hardware_id, "hw-ours");
+        let net = Replay::default().then("/oauth/token", 200, TOKEN);
+        let c = connect(&net, "fake-refresh-token-pasted-2", None)
+            .await
+            .unwrap();
+        assert_eq!(c.hardware_id.len(), 36);
+    }
+
+    #[tokio::test]
+    async fn what_is_not_a_token_never_reaches_ring_and_a_refused_one_says_so() {
+        let net = Replay::default().then("/oauth/token", 401, BAD);
+        for odd in ["", "x", r#"{"email":"nobody","password":"x"}"#] {
+            assert_eq!(connect(&net, odd, None).await.unwrap_err(), Refusal::Pasted);
+        }
+        assert_eq!(net.left(), 1, "nothing odd sent to Ring");
+        assert_eq!(
+            connect(&net, "fake-refresh-token-revoked", None)
+                .await
+                .unwrap_err(),
+            Refusal::Refused
+        );
         let net = Replay::default().then("/oauth/token", 429, "");
         assert_eq!(
-            sign_in.credentials(&net, TYPED).await,
-            Err(Refusal::TooMany)
+            connect(&net, "fake-refresh-token-pasted-9", None)
+                .await
+                .unwrap_err(),
+            Refusal::TooMany
         );
     }
 }

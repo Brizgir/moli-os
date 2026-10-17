@@ -97,9 +97,10 @@ l'exige).
 - Seuls `z2m` (`password_env`) et, en option, `hue` (`app_key_env`) lisent un secret dans une
   variable d'environnement ; la config ne contient que le **nom** de la variable.
 - Aucune surface ne sert jamais un secret.
-- Un compte cloud que la personne connecte depuis le tableau de bord (Ring) : ses identifiants
-  arrivent au pilote par un point d'écriture de sémantique `Semantic::Secret` (personne seulement,
-  jamais journalisé ni gardé, voir [coeur.md](coeur.md)) ; le pilote ne range que le jeton obtenu.
+- Un compte cloud que la personne connecte depuis le tableau de bord (Ring) : un jeton fait sur
+  son ordinateur (jamais un mot de passe : il ne transite pas par Moli) arrive au pilote par un
+  point d'écriture de sémantique `Semantic::Secret` (personne seulement, jamais journalisé ni
+  gardé, voir [coeur.md](coeur.md)) ; le pilote ne range que le jeton que le service lui rend.
 
 ## Briques réseau partagées : `moli-net`
 
@@ -227,17 +228,24 @@ host = "192.168.1.x"
 - **Couvre** : les sonnettes, caméras (`stickup_cams`) et carillons d'un compte Ring. **Lecture
   seule**, pas d'image. Interface **non officielle** (celle de l'appli Android), le seul chemin :
   un appareil Ring n'ouvre aucun port sur le réseau local.
-- **Connexion** (Système, carte Ring, `web/src/maison/ui/RingAccount.svelte`) : l'appareil
-  `ring:account` a deux points d'écriture `Semantic::Secret`, `sign_in` (`{"email", "password"}`)
-  et `code`. `POST oauth.ring.com/oauth/token`, client `ring_official_android`, en-têtes
-  `2fa-support: true`, `2fa-code`, `hardware_id` ; 412 = code demandé (`tsv_state` : `sms`,
-  `email`, `totp`, publié sur `code_by`), puis la même demande avec le code. L'e-mail et le mot
-  de passe restent en mémoire le temps du code (10 min au plus), jamais écrits. `status` :
-  `sign_in`, `code`, `connecting`, `connected`, `error`, `slow_down`.
+- **Connexion** (Système, carte Ring, `web/src/maison/ui/RingAccount.svelte`) : Ring n'offre
+  aucune page de connexion pour une autre application, et **le mot de passe ne passe jamais par
+  Moli**. La personne fait un jeton sur son ordinateur avec le client de Ring (`npx -p
+  ring-client-api ring-auth-cli` : e-mail, mot de passe et code 2FA y sont demandés par Ring,
+  rien n'arrive à Moli), puis le colle dans la carte : l'appareil `ring:account` a un point
+  d'écriture `Semantic::Secret`, `sign_in`, qui reçoit le jeton tel quel (brut, ou la forme
+  base64 `{"rt", "hid"}` de ring-auth-cli : `hid` devient alors le `hardware_id` de Moli, le
+  même « appareil client autorisé » que l'ordinateur). Moli le vérifie par un `POST
+  oauth.ring.com/oauth/token` (`grant_type = refresh_token`, client `ring_official_android`,
+  en-tête `hardware_id`) ; Ring le remplace aussitôt. Ce qui est collé n'est ni journalisé
+  (`null` au journal), ni gardé comme état, ni affiché (`src/signin.rs`). `status` :
+  `sign_in`, `connecting`, `connected`, `error`, `slow_down`.
 - **Secrets** (écrits par le pilote) : `refresh_token`, **réécrit à chaque renouvellement** (Ring
-  le remplace ; un jeton qui n'a pas pu être rangé n'est pas utilisé), et `hardware_id` (UUID tiré
-  une fois, gardé pour toujours : Moli reste un seul « appareil client autorisé » du compte).
-  Jeton refusé (400/401 sur le renouvellement) : oublié, retour à la connexion.
+  le remplace ; un jeton qui n'a pas pu être rangé n'est pas utilisé ; sans coffre, rien n'est
+  envoyé à Ring : un jeton collé est consommé par sa première vérification), et `hardware_id`
+  (celui du jeton collé, sinon un UUID tiré une fois, gardé pour toujours : Moli reste un seul
+  « appareil client autorisé » du compte). Jeton refusé (400/401 sur le renouvellement) :
+  oublié, retour à la connexion.
 - **Protocole** : `api.ring.com/clients_api`, `Authorization: Bearer` (une heure, renouvelé 5 min
   avant ou sur un 401, une fois). `POST /session` à la connexion ; `ring_devices` toutes les
   5 min (appareils, en ligne par `alerts.connection`, batterie `battery_life`, volume du
@@ -252,11 +260,14 @@ host = "192.168.1.x"
 - **Pièges** : pas de notifications push (FCM) dans cette version, d'où le sondage. Un événement
   est dit **une fois**, s'il a moins de 90 s, et **jamais** depuis la première lecture après un
   démarrage ou une reconnexion (elle ne fait qu'apprendre ce qui est là) : jamais de « on sonne »
-  périmé. `doorbell` et `motion` repartent à faux à chaque démarrage.
+  périmé. `doorbell` et `motion` repartent à faux à chaque démarrage, et dès que Ring devient
+  injoignable (les appareils passent alors indisponibles jusqu'à la reconnexion).
 - **Tests** : réponses capturées anonymisées (`integrations/ring/fixtures/`) rejouées par un faux
-  transport (`src/net.rs`) : 2FA demandée, code faux puis bon, mot de passe refusé, rotation du
-  jeton rangée avant usage, expiration (temps simulé), 401 puis renouvellement, jeton révoqué,
-  429 ; lecture des appareils, santé, événements des deux adresses ; fraîcheur des événements.
+  transport (`src/net.rs`) : jeton collé (brut ou forme ring-auth-cli) vérifié et son
+  `hardware_id` adopté, texte qui n'est pas un jeton jamais envoyé à Ring, jeton refusé, jamais
+  de mot de passe dans une requête, rotation du jeton rangée avant usage, expiration (temps
+  simulé), 401 puis renouvellement, jeton révoqué, 429 ; lecture des appareils, santé,
+  événements des deux adresses ; fraîcheur des événements.
 - **Non vérifié** (jamais tourné contre les serveurs Ring) : `POST /session` (non bloquant si
   refusé), la forme exacte de `locations/<loc>/devices/<id>/events` (d'où le repli sur
   `history`), `chimes/<id>/health`. Marche à suivre au premier essai :

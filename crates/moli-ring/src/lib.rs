@@ -2,9 +2,11 @@
 //! (unofficial: Ring publishes nothing, and its devices answer nothing on
 //! the home network): a press at the door, motion, battery, Wi-Fi, a
 //! chime's volume, read only. The account is connected once from the
-//! dashboard: e-mail and password, then the code Ring sends; Moli keeps
-//! only the refresh token Ring gives, in the encrypted secret store, and
-//! writes it again each time Ring replaces it.
+//! dashboard: the person pastes a refresh token made on their own computer
+//! (Ring itself takes the e-mail, the password and the one-time code
+//! there: none of them ever reaches Moli); Moli keeps only the refresh
+//! token Ring gives, in the encrypted secret store, and writes it again
+//! each time Ring replaces it.
 //!
 //! Presses and motion are read from the devices' latest events every few
 //! seconds (not Ring's push notifications): an event is told once, only if
@@ -29,7 +31,7 @@ use tokio::time::{Instant, MissedTickBehavior};
 use crate::api::{Client, Failure};
 use crate::model::{Family, Happened, RingDevice, Watch};
 use crate::net::{Transport, Web};
-use crate::signin::{Refusal, SignIn};
+use crate::signin::Refusal;
 
 const REFRESH: &str = "refresh_token";
 const HARDWARE_ID: &str = "hardware_id";
@@ -108,7 +110,7 @@ fn text_point(key: &str, label: &str, write: bool, semantic: Semantic) -> PointS
     }
 }
 
-/// The account: its state, and what the dashboard sends to sign it in.
+/// The account: its state, and what the dashboard pastes to sign it in.
 fn account_device(ctx: &DriverCtx, id: &DeviceId) -> Device {
     Device {
         id: id.clone(),
@@ -126,22 +128,10 @@ fn account_device(ctx: &DriverCtx, id: &DeviceId) -> Device {
                 false,
                 Semantic::Config,
             ),
-            text_point(
-                "code_by",
-                &moli_i18n::tr!("pilotes.ring.code_par"),
-                false,
-                Semantic::Config,
-            ),
-            // What a person types: never journaled nor kept (`Secret`).
+            // What a person pastes: never journaled nor kept (`Secret`).
             text_point(
                 "sign_in",
-                &moli_i18n::tr!("pilotes.ring.identifiants"),
-                true,
-                Semantic::Secret,
-            ),
-            text_point(
-                "code",
-                &moli_i18n::tr!("pilotes.ring.code"),
+                &moli_i18n::tr!("pilotes.ring.jeton"),
                 true,
                 Semantic::Secret,
             ),
@@ -158,7 +148,6 @@ async fn run(config: &Config, ctx: &mut DriverCtx) -> anyhow::Result<()> {
     let account = ctx.device_id("account");
     ctx.upsert_device(account_device(ctx, &account));
     ctx.set_availability(&account, true);
-    set_text(ctx, &account, "code_by", "");
     let mut pause = RETRY_MIN;
     loop {
         let client = if let (Some(refresh), Some(hardware_id)) =
@@ -204,99 +193,62 @@ async fn run(config: &Config, ctx: &mut DriverCtx) -> anyhow::Result<()> {
 
 fn refusal(r: &Refusal) -> String {
     match r {
-        Refusal::Typed => moli_i18n::tr!("pilotes.ring.identifiants_faux"),
-        Refusal::BadPassword => moli_i18n::tr!("pilotes.ring.mauvais_identifiants"),
-        Refusal::BadCode => moli_i18n::tr!("pilotes.ring.code_faux"),
-        Refusal::NoCredentials => moli_i18n::tr!("pilotes.ring.code_attendu"),
+        Refusal::Pasted => moli_i18n::tr!("pilotes.ring.jeton_faux"),
+        Refusal::Refused => moli_i18n::tr!("pilotes.ring.jeton_refuse"),
         Refusal::TooMany => moli_i18n::tr!("pilotes.ring.trop"),
         Refusal::Other(why) => moli_i18n::tr!("pilotes.ring.refuse", why = why),
     }
 }
 
-/// Waits for the person to sign in from the dashboard; the client, signed
-/// in and kept. `None`: stopped.
+/// Waits for the person to paste a token from the dashboard; the client,
+/// signed in and kept. `None`: stopped.
 async fn sign_in(
     ctx: &mut DriverCtx,
     account: &DeviceId,
     net: &Arc<dyn Transport>,
 ) -> anyhow::Result<Option<Client>> {
-    let hardware_id = match ctx.secret(HARDWARE_ID) {
-        Some(id) => id,
-        None => auth::hardware_id()?,
-    };
-    let mut pending = SignIn::new(hardware_id);
-    let show = |ctx: &DriverCtx, pending: &SignIn| {
-        let by = pending.code_by().unwrap_or_default();
-        set_text(ctx, account, "code_by", by);
-        set_text(
-            ctx,
-            account,
-            "status",
-            if by.is_empty() { "sign_in" } else { "code" },
-        );
-        ctx.wait_for(if by.is_empty() {
-            moli_i18n::tr!("pilotes.ring.a_connecter")
-        } else {
-            moli_i18n::tr!("pilotes.ring.a_confirmer")
-        });
-    };
-    show(ctx, &pending);
+    set_text(ctx, account, "status", "sign_in");
+    ctx.wait_for(moli_i18n::tr!("pilotes.ring.a_connecter"));
     loop {
-        let forget_at = pending.deadline();
-        let command = tokio::select! {
-            command = ctx.next_command() => command,
-            () = async {
-                match forget_at {
-                    Some(at) => tokio::time::sleep_until(at).await,
-                    None => std::future::pending().await,
-                }
-            } => {
-                pending.forget();
-                show(ctx, &pending);
-                continue;
-            }
-        };
         // `None` once Moli stops.
-        let Some(command) = command else {
+        let Some(command) = ctx.next_command().await else {
             return Ok(None);
         };
-        let (Value::Text(typed), true) = (&command.value, command.device.id == *account) else {
+        if command.device.id != *account || &*command.key != "sign_in" {
             command.reply(Err(moli_i18n::tr!("pilotes.ring.pas_connecte")));
             continue;
+        }
+        let Value::Text(pasted) = &command.value else {
+            command.reply(Err(moli_i18n::tr!("pilotes.ring.jeton_faux")));
+            continue;
         };
-        let typed = typed.clone();
-        let tokens = match &*command.key {
-            "sign_in" => pending.credentials(&**net, &typed).await,
-            "code" => pending.code(&**net, &typed).await.map(Some),
-            _ => {
-                command.reply(Err(moli_i18n::tr!("pilotes.ring.pas_connecte")));
-                continue;
-            }
-        };
-        drop(typed);
-        match tokens {
-            Ok(Some(tokens)) => {
+        // A pasted token is spent by its first use: not without a store.
+        if let Some(why) = ctx.secrets_problem() {
+            command.reply(Err(moli_i18n::tr!("pilotes.ring.coffre", why = why)));
+            continue;
+        }
+        let ours = ctx.secret(HARDWARE_ID);
+        let connected = signin::connect(&**net, pasted, ours.as_deref()).await;
+        match connected {
+            Ok(c) => {
                 let kept = async {
-                    ctx.store_secret(HARDWARE_ID, &pending.hardware_id).await?;
-                    ctx.store_secret(REFRESH, &tokens.refresh).await
+                    if ours.as_deref() != Some(c.hardware_id.as_str()) {
+                        ctx.store_secret(HARDWARE_ID, &c.hardware_id).await?;
+                    }
+                    ctx.store_secret(REFRESH, &c.tokens.refresh).await
                 };
                 if let Err(e) = kept.await {
                     command.reply(Err(moli_i18n::tr!("pilotes.ring.coffre", why = e)));
                     return Err(e.into());
                 }
-                set_text(ctx, account, "code_by", "");
                 command.reply(Ok(()));
                 tracing::info!(instance = %ctx.instance(), "ring account connected");
                 ctx.ready();
                 return Ok(Some(Client::signed_in(
                     Arc::clone(net),
-                    &pending.hardware_id,
-                    &tokens,
+                    &c.hardware_id,
+                    &c.tokens,
                 )));
-            }
-            Ok(None) => {
-                tracing::info!(instance = %ctx.instance(), by = ?pending.code_by(), "ring asks for a code");
-                command.reply(Ok(()));
             }
             Err(r) => {
                 if let Refusal::Other(why) = &r {
@@ -305,7 +257,6 @@ async fn sign_in(
                 command.reply(Err(refusal(&r)));
             }
         }
-        show(ctx, &pending);
     }
 }
 
@@ -347,6 +298,35 @@ async fn connected(
     set_text(ctx, account, "status", "connected");
     ctx.ready();
     tracing::info!(instance = %ctx.instance(), devices = tracked.len(), "ring connected");
+    let result = watch(config, ctx, account, &mut client, &mut tracked).await;
+    if result.is_err() {
+        lost(ctx, &tracked);
+    }
+    result.map_err(fail)
+}
+
+/// Ring out of reach: nothing is known of the door any more. No press, no
+/// motion stays shown, and each device is out of reach until Ring says
+/// otherwise (never a stale « someone at the door »).
+fn lost(ctx: &DriverCtx, tracked: &HashMap<DeviceId, Tracked>) {
+    for (id, t) in tracked {
+        if t.device.family != Family::Chime {
+            for key in ["doorbell", "motion"] {
+                ctx.set_state(id, key, Value::Bool(false));
+            }
+        }
+        ctx.set_availability(id, false);
+    }
+}
+
+/// The events, devices and health, read until stopped or Ring fails.
+async fn watch(
+    config: &Config,
+    ctx: &mut DriverCtx,
+    account: &DeviceId,
+    client: &mut Client,
+    tracked: &mut HashMap<DeviceId, Tracked>,
+) -> Result<(), Failure> {
     let mut poll = tokio::time::interval(config.poll());
     let mut devices = tokio::time::interval(DEVICES);
     let mut healths = tokio::time::interval(HEALTH);
@@ -369,9 +349,9 @@ async fn connected(
                 };
                 command.reply(Err(why));
             }
-            _ = poll.tick() => events(ctx, &mut client, &mut tracked, &mut resets).await.map_err(fail)?,
-            _ = devices.tick() => discover(ctx, &mut client, &mut tracked).await.map_err(fail)?,
-            _ = healths.tick() => health(ctx, &mut client, &tracked).await.map_err(fail)?,
+            _ = poll.tick() => events(ctx, client, tracked, &mut resets).await?,
+            _ = devices.tick() => discover(ctx, client, tracked).await?,
+            _ = healths.tick() => health(ctx, client, tracked).await?,
             () = async {
                 match next_reset {
                     Some(at) => tokio::time::sleep_until(at).await,

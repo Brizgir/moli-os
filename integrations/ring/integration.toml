@@ -16,7 +16,9 @@ ssdp = []
 ports = []
 
 [needs]
-# Given by the dashboard's sign-in, never typed into a file.
+# Given by the dashboard's sign-in (a token pasted by the person, made on
+# their own computer: no password ever goes through Moli), never typed into
+# a file. Both are rewritten by the driver.
 secrets = ["refresh_token", "hardware_id"]
 vars = []
 options = []
@@ -40,15 +42,6 @@ file = "fixtures/history.json"
 
 [[fixture]]
 file = "fixtures/oauth-token.json"
-
-[[fixture]]
-file = "fixtures/oauth-2fa.json"
-
-[[fixture]]
-file = "fixtures/oauth-bad-code.json"
-
-[[fixture]]
-file = "fixtures/oauth-bad-password.json"
 
 [[fixture]]
 file = "fixtures/oauth-bad-refresh.json"
