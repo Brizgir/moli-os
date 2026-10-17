@@ -371,7 +371,7 @@
   "systeme.netatmo.coller": "Address of the return page",
   "systeme.netatmo.connecter": "Connect",
   "systeme.netatmo.verification": "Connecting…",
-  "systeme.netatmo.aide": "Moli keeps an encrypted token in its store; you can revoke it at any time from your Netatmo account."
+  "systeme.netatmo.aide": "Moli keeps an encrypted token in its store; you can revoke it at any time from your Netatmo account.",
   "systeme.ring.titre": "Ring doorbell and chime",
   "systeme.ring.connecte": "Ring account connected: {n} devices read by Moli.",
   "systeme.ring.a_connecter": "Connect your Ring account so that Moli knows when someone rings (and sees motion, battery, Wi-Fi). Your password never goes through Moli.",

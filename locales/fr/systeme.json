@@ -371,7 +371,7 @@
   "systeme.netatmo.coller": "Adresse de la page de retour",
   "systeme.netatmo.connecter": "Connecter",
   "systeme.netatmo.verification": "Connexion…",
-  "systeme.netatmo.aide": "Moli garde un jeton chiffré dans son coffre ; tu peux le révoquer à tout moment depuis ton compte Netatmo."
+  "systeme.netatmo.aide": "Moli garde un jeton chiffré dans son coffre ; tu peux le révoquer à tout moment depuis ton compte Netatmo.",
   "systeme.ring.titre": "Sonnette et carillon Ring",
   "systeme.ring.connecte": "Compte Ring connecté : {n} appareils lus par Moli.",
   "systeme.ring.a_connecter": "Connecte ton compte Ring pour que Moli sache quand on sonne (et voie mouvement, batterie, Wi-Fi). Ton mot de passe ne passe jamais par Moli.",
