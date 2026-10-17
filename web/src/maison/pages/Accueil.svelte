@@ -13,6 +13,13 @@
   import SkyHero from '../ui/SkyHero.svelte';
 
   const cfg = $derived(home.config ?? {});
+  // The climate section is named after what it lists: radiators and
+  // thermostats (a `heating` point), air conditioners, or both.
+  const heaters = $derived((cfg.favorites?.climate ?? []).map((c) => hub.devices[c.id]).filter(Boolean).map((d) => d.points.some((p) => p.key === 'heating')));
+  const climateTitle = $derived(
+    heaters.length && heaters.every(Boolean) ? 'maison.accueil.chauffage' : heaters.some(Boolean) ? 'maison.accueil.temperature' : 'maison.accueil.clim',
+  );
+  const climateIcon = $derived(heaters.length && heaters.every(Boolean) ? 'radiator' : 'air-conditioner');
   const out = $derived(cfg.outdoor ?? {});
 
   const lights = $derived(cfg.favorites?.lights ?? []);
@@ -206,7 +213,7 @@
     </div>
 
     <section class="card climate">
-      <div class="card-head"><h2><Icon name="air-conditioner" size={18} />{t('maison.accueil.clim')}</h2></div>
+      <div class="card-head"><h2><Icon name={climateIcon} size={18} />{t(climateTitle)}</h2></div>
       <div class="clims">
         {#each cfg.favorites?.climate ?? [] as c (c.id)}
           <ClimateCard id={c.id} name={c.name} />
