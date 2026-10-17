@@ -106,6 +106,8 @@
   "maison.pieces.icones": "Icônes seules",
   "maison.pieces.allumees_one": "{count} lumière allumée",
   "maison.pieces.allumees_other": "{count} lumières allumées",
+  "maison.pieces.toute_la_maison": "Toute la maison",
+  "maison.pieces.toute_la_maison_note": "Les enceintes qui ne sont dans aucune pièce",
 
   "maison.plan.titre": "Plan",
   "maison.plan.sous_titre": "La maison telle qu’elle est, en ce moment. Touche une lumière pour l’allumer.",

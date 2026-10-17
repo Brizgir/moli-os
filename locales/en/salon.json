@@ -29,12 +29,6 @@
   "salon.sourdine": "Mute",
   "salon.couper_son": "Mute",
 
-  "salon.enceinte.lecture": "Playing",
-  "salon.enceinte.en_pause": "Paused",
-  "salon.enceinte.arret": "Stopped",
-  "salon.enceinte.son_tele": "TV sound",
-  "salon.enceinte.rien": "Nothing playing",
-
   "salon.tele.label": "Remote",
   "salon.tele.eteindre": "Turn the TV off",
   "salon.tele.allumer": "Turn the TV on",

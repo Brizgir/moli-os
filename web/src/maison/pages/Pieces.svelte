@@ -5,7 +5,7 @@
 
 <script>
   import { onMount } from 'svelte';
-  import { roomList, roomNamed, savePref } from '../lib/home.svelte.js';
+  import { roomList, roomNamed, savePref, roamingSpeakers } from '../lib/home.svelte.js';
   import Icon from '../ui/Icon.svelte';
   import RoomCard from '../ui/RoomCard.svelte';
   import FilterChips from '../ui/FilterChips.svelte';
@@ -38,9 +38,27 @@
     savePref('pieces-look', v);
   }
 
+  // Speakers in no room (an Alexa group, « Partout »): one card of their own.
+  const everywhere = $derived.by(() => {
+    const media = roamingSpeakers();
+    if (!media.length) return null;
+    return {
+      name: t('maison.pieces.toute_la_maison'),
+      note: t('maison.pieces.toute_la_maison_note'),
+      icon: 'speaker-multiple',
+      group: null,
+      lights: [],
+      plugs: [],
+      covers: [],
+      climates: [],
+      media,
+      sensors: [],
+      lit: 0,
+    };
+  });
   const all = $derived(roomList());
   const devices = $derived(
-    all.flatMap((r) => [r.group, ...r.lights, ...r.plugs, ...r.covers, ...r.climates, ...r.media, ...r.sensors].filter(Boolean)),
+    [...all, everywhere].filter(Boolean).flatMap((r) => [r.group, ...r.lights, ...r.plugs, ...r.covers, ...r.climates, ...r.media, ...r.sensors].filter(Boolean)),
   );
 
   /** A room with only what the filter keeps; null when nothing is left. */
@@ -103,6 +121,14 @@
       </div>
     </section>
   {/each}
+
+  {#if everywhere && only(everywhere)}
+    <section class="floor" aria-label={everywhere.name}>
+      <div class="rooms">
+        <div class="slot"><RoomCard room={only(everywhere)} icons={look === 'icons'} /></div>
+      </div>
+    </section>
+  {/if}
 </div>
 
 <style>

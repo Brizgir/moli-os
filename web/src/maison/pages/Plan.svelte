@@ -8,6 +8,7 @@
   import { SKINS, SKIN_IDS, ITEMS } from '../plan/skins.js';
   import { spread } from '../plan/geometry.js';
   import FilterChips from '../ui/FilterChips.svelte';
+  import SpeakerCard from '../ui/SpeakerCard.svelte';
   import { keeps, loadFilter } from '../lib/filters.js';
   import { t, locale } from '../../lib/i18n.svelte.js';
 
@@ -71,6 +72,10 @@
     if (!d) return;
     if (['light', 'group', 'plug'].includes(deviceKind(d))) {
       if (!switchOf(d)) toggle(id);
+      return;
+    }
+    if (deviceKind(d) === 'speaker') {
+      opened = opened === id ? null : id;
       return;
     }
     const row = details(id)[0];
@@ -196,7 +201,7 @@
       return;
     }
     if (kind === 'camera') location.hash = '#/cameras';
-    else if (kind === 'tv' || kind === 'speaker') location.hash = '#/salon';
+    else if (kind === 'tv') location.hash = '#/salon';
     else opened = opened === d.id ? null : d.id;
   }
 
@@ -425,7 +430,7 @@
   {#if editing}
     <button class="unplace" onclick={(e) => { e.stopPropagation(); unplace(spot); }} aria-label={t('maison.plan.retirer_du_plan', { name: nameOf(d.id) })}><Icon name="close" size={12} /></button>
   {/if}
-  {#if opened === d.id}
+  {#if opened === d.id && deviceKind(d) !== 'speaker'}
     <div class="card" role="dialog" aria-label={nameOf(d.id)}>
       <b>{nameOf(d.id)}</b>
       {#if roomOf(d)}<small class="muted">{roomOf(d)}</small>{/if}
@@ -564,6 +569,11 @@
           {/if}
         {/each}
       </div>
+      {/if}
+
+      <!-- A speaker's controls open under the plan (a tap on the plan closes them). -->
+      {#if !editing && opened && hub.devices[opened] && deviceKind(hub.devices[opened]) === 'speaker'}
+        <SpeakerCard id={opened} />
       {/if}
 
       {#if editing}
