@@ -1,16 +1,18 @@
 <script>
-  import { hub, value, act, isOn, powerKey, protectedRoom, num, nameOf, deviceKind, lampsOf, doorOpen, leak, motion, lowBattery, unpowered, isFixture, note, reachable, quiet, outletsOf } from '../lib/home.svelte.js';
+  import { hub, value, act, isOn, powerKey, protectedRoom, num, nameOf, deviceKind, lampsOf, doorOpen, leak, motion, lowBattery, unpowered, isFixture, note, reachable, quiet, outletsOf, speakerState, speakerGroup } from '../lib/home.svelte.js';
   import { t } from '../../lib/i18n.svelte.js';
   import Icon from './Icon.svelte';
   import LightTile from './LightTile.svelte';
   import ClimateCard from './ClimateCard.svelte';
   import CoverTile from './CoverTile.svelte';
+  import SpeakerCard from './SpeakerCard.svelte';
   import AmbiancePicker from './AmbiancePicker.svelte';
   import { phase, PHASES } from '../lib/printers.js';
 
   /** One room, compact: its temperature and a switch for its lights in the
    *  head, its lights and plugs as small pads (a ⚙ opens a lamp's dimmer,
-   *  colours, fan), its clims as one line each (a tap opens the dial), and
+   *  colours, fan; a speaker's pad opens its card: what plays, play/pause,
+   *  volume, « Mets… »), its clims as one line each (a tap opens the dial), and
    *  what it senses as chips. `icons`: pads show an icon only (names on
    *  hover and for screen readers). `every`: each sensor shows, even
    *  silent (filtered view). */
@@ -98,7 +100,7 @@
     const kind = deviceKind(d);
     const name = (d.label?.name || d.native_name || '').toLowerCase();
     if (kind === 'tv') return 'tv';
-    if (kind === 'speaker') return 'speaker';
+    if (kind === 'speaker') return speakerGroup(d) ? 'speaker-multiple' : 'speaker';
     if (kind === 'plug') return /vmc|ventil|\bfan\b|exhaust/.test(name) ? 'fan' : 'socket';
     if (hasFan(d.id) || (isFixture(d) && d.members?.some(hasFan))) return 'ceiling-fan-light';
     if (/spot/.test(name)) return 'spotlight';
@@ -123,7 +125,7 @@
   /** The pads: lights, then TV and speakers, then plugs. */
   const pads = $derived([
     ...room.lights.map((d) => ({ d, point: null })),
-    ...room.media.map((d) => ({ d, point: deviceKind(d) === 'tv' ? 'power' : null, link: deviceKind(d) === 'speaker' ? '#/salon' : null })),
+    ...room.media.map((d) => ({ d, point: deviceKind(d) === 'tv' ? 'power' : null, speaker: deviceKind(d) === 'speaker' })),
     ...room.plugs.flatMap(plugPads),
   ]);
 
@@ -133,7 +135,7 @@
     if (unpowered(d.id) && !isFixture(d)) return t('commun.piece.coupee');
     if (!reachable(d.id)) return t('commun.piece.injoignable');
     if (outlets) return t('commun.piece.prises_allumees', { on: litCount(outlets, d.id), count: outlets.length });
-    if (deviceKind(d) === 'speaker') return value(d.id, 'playing') === true ? t('commun.piece.lecture_en_cours') : t('commun.piece.a_l_arret');
+    if (deviceKind(d) === 'speaker') return t(`commun.enceinte.${speakerState(d.id)}`);
     if (!isOn(d.id, point)) return t('commun.piece.eteinte');
     const b = value(d.id, 'brightness');
     return typeof b === 'number' && fine(d) ? t('commun.pourcent', { n: Math.round(b) }) : t('commun.piece.allumee');
@@ -176,7 +178,7 @@
     <span class="room-icon" class:lit={room.lit}><Icon name={room.icon} size={22} /></span>
     <div class="title">
       <h2>{room.name}{#if locked}<span class="lock" title={t('commun.piece.protegee_titre')}><Icon name="lock" size={13} /></span>{/if}</h2>
-      <span class="muted">{room.lit ? t('commun.piece.allumees', { count: room.lit }) : t('commun.piece.tout_eteint')}</span>
+      <span class="muted">{room.note ?? (room.lit ? t('commun.piece.allumees', { count: room.lit }) : t('commun.piece.tout_eteint'))}</span>
     </div>
     {#if temp != null}
       <span class="temp {tone(temp)}" title={t('commun.piece.temperature')}><b class="num">{num(temp, 1)}°</b><i class="gauge"><i style="left:{gaugeAt(temp)}%"></i></i></span>
@@ -197,17 +199,17 @@
 
   {#if pads.length}
     <div class="pads" class:icons>
-      {#each pads as { d, point, link, outlets, name } (`${d.id}/${point}`)}
-        {@const lit = link ? value(d.id, 'playing') === true : outlets ? litCount(outlets, d.id) > 0 : isOn(d.id, point)}
+      {#each pads as { d, point, speaker, outlets, name } (`${d.id}/${point}`)}
+        {@const lit = speaker ? speakerState(d.id) === 'playing' : outlets ? litCount(outlets, d.id) > 0 : isOn(d.id, point)}
         {@const cut = unpowered(d.id) && !isFixture(d)}
-        {@const more = !link && !point && !cut && (fine(d) || hasFan(d.id) || (isFixture(d) && d.members?.some(hasFan)))}
+        {@const more = !speaker && !point && !cut && (fine(d) || hasFan(d.id) || (isFixture(d) && d.members?.some(hasFan)))}
         {@const label = name ?? nameOf(d.id)}
         <div class="pad-wrap">
-          {#if link}
-            <a class="pad" class:on={lit} href={link} title={label} aria-label={t('commun.action', { label, action: stateOf(d, point) })}>
+          {#if speaker}
+            <button class="pad" class:on={lit} class:open={open === d.id} class:off-grid={!reachable(d.id)} onclick={() => (open = open === d.id ? null : d.id)} title={label} aria-expanded={open === d.id} aria-label={t('commun.action', { label, action: stateOf(d, point) })}>
               <span class="ico"><Icon name={padIcon(d)} size={icons ? 22 : 18} /></span>
               {#if !icons}<b>{label}</b><small>{stateOf(d, point)}</small>{/if}
-            </a>
+            </button>
           {:else}
             <button class="pad" class:on={lit} class:cut class:off-grid={!reachable(d.id) && !cut} onclick={() => tap(d, point, outlets, name)} title={label} aria-pressed={lit} aria-label={t('commun.action', { label, action: stateOf(d, point, outlets) })}>
               <span class="ico"><Icon name={outlets ? 'power' : padIcon(d)} size={icons ? 22 : 18} /></span>
@@ -222,7 +224,9 @@
         </div>
       {/each}
     </div>
-    {#if open && pads.some((p) => p.d.id === open)}
+    {#if open && pads.some((p) => p.d.id === open && p.speaker)}
+      <SpeakerCard id={open} inline />
+    {:else if open && pads.some((p) => p.d.id === open)}
       <LightTile id={open} dimmer />
     {/if}
   {/if}
@@ -463,6 +467,10 @@
   .pad.on {
     background: linear-gradient(155deg, var(--warm-soft) 0%, var(--surface) 85%);
     box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--warm) 30%, transparent);
+  }
+
+  .pad.open {
+    box-shadow: inset 0 0 0 2px var(--ink-3);
   }
 
   .pad.cut,

@@ -106,6 +106,8 @@
   "maison.pieces.icones": "Icons only",
   "maison.pieces.allumees_one": "{count} light on",
   "maison.pieces.allumees_other": "{count} lights on",
+  "maison.pieces.toute_la_maison": "Whole house",
+  "maison.pieces.toute_la_maison_note": "Speakers that are in no room",
 
   "maison.plan.titre": "Plan",
   "maison.plan.sous_titre": "The house as it is right now. Tap a light to turn it on.",

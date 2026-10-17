@@ -216,7 +216,9 @@ export function deviceKind(d) {
   if (d.camera) return 'camera';
   if (has(d, 'target_temperature')) return 'climate';
   if (has(d, 'key', true)) return 'tv';
-  if (has(d, 'playing', true) && has(d, 'volume')) return 'speaker';
+  // A speaker sets its volume; a multi-room group (Alexa) has none, but
+  // takes music by name.
+  if (has(d, 'playing', true) && (has(d, 'volume') || has(d, 'play', true))) return 'speaker';
   if (has(d, 'percent_control') || (has(d, 'control', true) && d.points.find((p) => p.key === 'control')?.kind.values?.includes('open')))
     return 'cover';
   if (powerKey(d)) {
@@ -228,6 +230,22 @@ export function deviceKind(d) {
     return 'plug';
   }
   return 'sensor';
+}
+
+/** What a speaker does: `playing`, `paused` (Alexa `paused`, Sonos
+ *  `paused_playback`) or `stopped`. */
+export function speakerState(id) {
+  if (value(id, 'playing') === true) return 'playing';
+  return /^paused/.test(String(value(id, 'state') ?? '')) ? 'paused' : 'stopped';
+}
+
+/** A multi-room group of speakers (Alexa « Partout »): no volume of its own. */
+export const speakerGroup = (d) => deviceKind(d) === 'speaker' && !has(d, 'volume');
+
+/** Speakers and groups in no room (an Alexa group is in none): shown
+ *  together, « dans toute la maison ». */
+export function roamingSpeakers() {
+  return Object.values(hub.devices).filter((d) => !hidden(d.id) && !roomOf(d) && deviceKind(d) === 'speaker');
 }
 
 /** Rooms with their devices sorted by kind, the layout's order first. */

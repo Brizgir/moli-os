@@ -29,12 +29,6 @@
   "salon.sourdine": "Sourdine",
   "salon.couper_son": "Couper le son",
 
-  "salon.enceinte.lecture": "Lecture",
-  "salon.enceinte.en_pause": "En pause",
-  "salon.enceinte.arret": "À l’arrêt",
-  "salon.enceinte.son_tele": "Le son de la télé",
-  "salon.enceinte.rien": "Rien en cours",
-
   "salon.tele.label": "Télécommande",
   "salon.tele.eteindre": "Éteindre la TV",
   "salon.tele.allumer": "Allumer la TV",
