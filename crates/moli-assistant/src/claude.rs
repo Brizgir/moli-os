@@ -96,8 +96,20 @@ pub(crate) fn request(ask: &Ask, fallbacks: bool) -> (Json, Vec<&'static str>) {
         body["tool_choice"] = json!({ "type": if ask.last { "none" } else { "auto" } });
     }
     if let Some(schema) = ask.schema {
-        body["output_config"]["format"] =
-            json!({ "type": "json_schema", "schema": strict_schema(schema) });
+        let strict = strict_schema(schema);
+        if fits_strict(&strict) {
+            body["output_config"]["format"] = json!({ "type": "json_schema", "schema": strict });
+        } else {
+            // Too rich for strict mode (an automation draft): the schema
+            // goes in words, and Moli checks the answer as it does anyway.
+            let words = format!(
+                "Answer with one JSON object only, no text around it and no code fence, \
+                 following this JSON schema (a field you would set to null may be left out):\n{schema}"
+            );
+            let mut system = body["system"].as_array().cloned().unwrap_or_default();
+            system.push(json!({ "type": "text", "text": words }));
+            body["system"] = Json::Array(system);
+        }
     }
     let mut betas = Vec::new();
     if fallbacks && has_fallbacks(ask.model) {
@@ -240,8 +252,8 @@ fn tool(function: &Json) -> Json {
     json!({
         "name": f["name"],
         "description": f["description"],
+        "strict": fits_strict(&schema),
         "input_schema": schema,
-        "strict": true,
     })
 }
 
@@ -303,6 +315,37 @@ pub(crate) fn strict_schema(schema: &Json) -> Json {
         }
         other => other.clone(),
     }
+}
+
+/// Strict mode's own limits (Anthropic, 2026): 16 union-typed parameters,
+/// 24 optional ones; past either the request is refused (400).
+const STRICT_UNIONS: usize = 16;
+const STRICT_OPTIONAL: usize = 24;
+
+/// Whether Anthropic's strict mode takes this (already strict) schema.
+pub(crate) fn fits_strict(schema: &Json) -> bool {
+    fn count(s: &Json, unions: &mut usize, optional: &mut usize) {
+        match s {
+            Json::Object(m) => {
+                if m.contains_key("anyOf") || m.get("type").is_some_and(Json::is_array) {
+                    *unions += 1;
+                }
+                if let Some(Json::Object(props)) = m.get("properties") {
+                    let required = m.get("required").and_then(Json::as_array);
+                    *optional += props
+                        .keys()
+                        .filter(|k| !required.is_some_and(|r| r.iter().any(|x| x == *k)))
+                        .count();
+                }
+                m.values().for_each(|v| count(v, unions, optional));
+            }
+            Json::Array(a) => a.iter().for_each(|v| count(v, unions, optional)),
+            _ => {}
+        }
+    }
+    let (mut unions, mut optional) = (0, 0);
+    count(schema, &mut unions, &mut optional);
+    unions <= STRICT_UNIONS && optional <= STRICT_OPTIONAL
 }
 
 /// Strict mode takes at most 16 union-typed parameters, and the schemas
