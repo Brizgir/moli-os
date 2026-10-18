@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   toGrid, snapValue, snapPoint, snapSpan, clampPoint, clampBox,
   straight, unturned, ends, wallGuides, roomGuides, mergeGuides, newWall, moveWall, stretchWall, setThickness, setLength,
-  distance, nearestWall, fitOpening, widthOf, placeOpening, resizeOpening, openingsOn, carryOpening,
+  distance, nearestWall, fitOpening, wallOf, offsetOf, openingAt, widthOf, placeOpening, resizeOpening, openingsOn, carryOpening,
   rectRoom, insertVertex, removeVertex, freshId,
   history, remember, settle, undo, redo,
 } from './editing.js';
@@ -60,8 +60,8 @@ test('a wall grows or shrinks by its ends, the other end stays', () => {
   assert.deepEqual(stretchWall(wall, 0, [900, 0], guides, 6), { x: 290, y: 200, w: 10, h: 20 }, 'never shorter than 10 cm');
   const upright = { x: 200, y: 50, w: 20, h: 100 };
   assert.deepEqual(stretchWall(upright, 1, [0, 383], guides, 6), { x: 200, y: 50, w: 20, h: 330 });
-  assert.deepEqual(setThickness(wall, 10), { x: 100, y: 205, w: 200, h: 10 });
-  assert.deepEqual(setThickness(upright, 30), { x: 195, y: 50, w: 30, h: 100 });
+  assert.deepEqual(setThickness(wall, 10), { x: 100, y: 200, w: 200, h: 10 });
+  assert.deepEqual(setThickness(upright, 30), { x: 200, y: 50, w: 30, h: 100 });
   assert.deepEqual(setLength(upright, 250), { x: 200, y: 50, w: 20, h: 250 });
 });
 
@@ -139,4 +139,14 @@ test('undo and redo the last changes', () => {
   for (const s of ['1', '2', '3', '4']) remember(h, s);
   assert.equal(h.past.length, 3);
   assert.equal(undo(h, '5'), '4');
+});
+
+test('an opening is placed by its distance from the start of its wall', () => {
+  const door = { kind: 'door', x: 580, y: 155, w: 20, h: 90 };
+  assert.deepEqual(wallOf(door, walls), walls[3]);
+  assert.equal(offsetOf(door, walls[3]), 155);
+  assert.deepEqual(openingAt(walls[3], 90, 40), { x: 580, y: 40, w: 20, h: 90 });
+  assert.deepEqual(openingAt(walls[0], 120, 100), { x: 100, y: 0, w: 120, h: 20 });
+  assert.deepEqual(openingAt(walls[0], 120, 550), { x: 480, y: 0, w: 120, h: 20 }, 'never past the end of its wall');
+  assert.equal(wallOf({ kind: 'door', x: 250, y: 250, w: 90, h: 20 }, walls), null);
 });

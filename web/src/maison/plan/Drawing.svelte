@@ -195,7 +195,11 @@
 
   function grab(e, apply = () => {}) {
     e.stopPropagation();
-    box.setPointerCapture?.(e.pointerId);
+    try {
+      box.setPointerCapture?.(e.pointerId);
+    } catch {
+      // A pointer already gone: the drag ends with it.
+    }
     onbegin();
     hold = { id: e.pointerId, sx: e.clientX, sy: e.clientY, apply, moved: false };
     return hold;

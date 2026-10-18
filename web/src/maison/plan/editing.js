@@ -171,15 +171,10 @@ export function stretchWall(b, end, [px, py], guides, tol) {
   return out;
 }
 
-/** A wall as thick as `t`, on the same middle line. */
+/** A wall as thick as `t`, from the same corner (X and Y typed stay). */
 export function setThickness(b, t) {
   const v = Math.max(1, t);
-  if (horizontal(b)) {
-    const cy = b.y + b.h / 2;
-    return { ...b, y: round(cy - v / 2), h: v };
-  }
-  const cx = b.x + b.w / 2;
-  return { ...b, x: round(cx - v / 2), w: v };
+  return horizontal(b) ? { ...b, h: v } : { ...b, w: v };
 }
 
 /** A wall as long as `len`, from the same start. */
@@ -252,6 +247,25 @@ export function resizeOpening(walls, o, width) {
   const near = nearestWall(walls, cx, cy);
   if (!near) return horizontal(o) ? { ...o, x: round(cx - width / 2), w: width } : { ...o, y: round(cy - width / 2), h: width };
   return { ...o, ...fitOpening(near.box, width, horizontal(near.box) ? cx : cy) };
+}
+
+/** The wall an opening sits in (its plain box), or `null`. */
+export function wallOf(o, walls) {
+  const [cx, cy] = centerOf(o);
+  const near = nearestWall(walls, cx, cy);
+  return near && near.d <= thicknessOf(near.box) ? near.box : null;
+}
+
+/** How far an opening starts from its wall's start (the left end of a wall
+ *  along x, the top end otherwise), cm. */
+export function offsetOf(o, wall) {
+  return horizontal(wall) ? o.x - wall.x : o.y - wall.y;
+}
+
+/** An opening `width` wide starting `offset` cm from its wall's start (kept
+ *  inside the wall). */
+export function openingAt(wall, width, offset) {
+  return fitOpening(wall, width, (horizontal(wall) ? wall.x : wall.y) + offset + width / 2);
 }
 
 /** The openings that sit in a wall (their middle in it). */
