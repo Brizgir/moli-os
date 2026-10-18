@@ -56,13 +56,11 @@
   "maison.accueil.air": "Air",
   "maison.accueil.humidite": "Humidité",
   "maison.accueil.piscine": "Piscine",
-
   "maison.air.tres_bon": "Très bon",
   "maison.air.bon": "Bon",
   "maison.air.moyen": "Moyen",
   "maison.air.mediocre": "Médiocre",
   "maison.air.mauvais": "Mauvais",
-
   "maison.dehors.titre": "Dehors",
   "maison.dehors.sous_titre": "Le temps qu’il fait, l’air, la piscine et le jardin.",
   "maison.dehors.ressenti": "Ressenti {feels}° · max {max}° · min {min}°",
@@ -100,7 +98,6 @@
   "maison.dehors.eclaire": "Éclairé",
   "maison.dehors.noir": "Dans le noir",
   "maison.dehors.credit": "Météo et qualité de l’air :",
-
   "maison.pieces.titre": "Pièces",
   "maison.pieces.sous_titre": "Chaque pièce, ses lumières et ce qu’elle sent.",
   "maison.pieces.affichage": "Affichage des boutons",
@@ -110,7 +107,6 @@
   "maison.pieces.allumees_other": "{count} lumières allumées",
   "maison.pieces.toute_la_maison": "Toute la maison",
   "maison.pieces.toute_la_maison_note": "Les enceintes qui ne sont dans aucune pièce",
-
   "maison.plan.titre": "Plan",
   "maison.plan.sous_titre": "La maison telle qu’elle est, en ce moment. Touche une lumière pour l’allumer.",
   "maison.plan.sous_titre_edition": "Touche un appareil dans la liste, puis l’endroit où il est. Glisse pour déplacer.",
@@ -157,17 +153,14 @@
   "maison.plan.zoom_avant": "Zoomer",
   "maison.plan.zoom_arriere": "Dézoomer",
   "maison.plan.tout_le_plan": "Tout le plan",
-
   "maison.plan3d.indisponible": "3D indisponible sur cet appareil : {reason}",
   "maison.plan3d.pas_demarre": "la 3D n’a pas pu démarrer",
   "maison.plan3d.construction": "Construction de la maison…",
   "maison.plan3d.vue_ensemble": "Revenir à la vue d'ensemble",
-
   "maison.skin.plan": "Plan",
   "maison.skin.blueprint": "Blueprint",
   "maison.skin.nuit": "Nuit",
   "maison.skin.aquarelle": "Aquarelle",
-
   "maison.meuble.bed": "Lit",
   "maison.meuble.bunk": "Lits superposés",
   "maison.meuble.sofa": "Canapé",
@@ -192,7 +185,6 @@
   "maison.meuble.stairs": "Escalier",
   "maison.meuble.stairs_u": "Escalier en U",
   "maison.meuble.other": "Autre",
-
   "maison.meteo.previsions": "Prévisions",
   "maison.meteo.heures": "Heures",
   "maison.meteo.jours": "7 jours",
@@ -216,5 +208,20 @@
   "maison.meteo.legende_pluie": "Pluie",
   "maison.meteo.legende_nuages": "Nuages",
   "maison.meteo.legende_vent": "Vent (faible → fort)",
-  "maison.meteo.credit": "Prévisions Open-Meteo. Le point orange, c’est la maison."
+  "maison.meteo.credit": "Prévisions Open-Meteo. Le point orange, c’est la maison.",
+  "maison.pieces.nouvelle": "Nouvelle pièce",
+  "maison.pieces.fiche_modifier": "Modifier « {name} »",
+  "maison.pieces.nom": "Son nom",
+  "maison.pieces.nom_exemple": "Chambre des enfants",
+  "maison.pieces.icone": "Son icône",
+  "maison.pieces.alias": "Ses autres noms",
+  "maison.pieces.alias_exemple": "Chambre 2, Kids room",
+  "maison.pieces.alias_aide": "Les noms que Hue, Alexa ou le plan donnent à cette même pièce, séparés par des virgules.",
+  "maison.pieces.protegee_aide": "Pour qu'une pièce soit protégée (personne n'y agit sans toi), c'est dans le fichier moli.toml, section [guard].",
+  "maison.pieces.enregistrer": "Enregistrer",
+  "maison.pieces.enregistree": "{name} : enregistrée",
+  "maison.pieces.retirer": "Retirer de la liste",
+  "maison.pieces.retirer_confirmer": "Retirer « {name} » de la liste ? Ses appareils gardent leur pièce.",
+  "maison.pieces.retiree": "{name} : retirée de la liste",
+  "maison.pieces.aucune": "Aucune pièce encore : crée la première, puis range tes appareils dedans."
 }

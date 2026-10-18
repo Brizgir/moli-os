@@ -2,24 +2,20 @@
   "serveur.acces.refuse": "accès refusé : réseau de la maison, ou Cloudflare Access",
   "serveur.limite.trop_de_demandes": "trop de demandes à la suite : réessaie dans quelques secondes",
   "serveur.limite.trop_de_flux": "trop de flux en direct ouverts : ferme un onglet ou réessaie plus tard",
-
   "serveur.pilote.absent": "pas de pilote {pilote} dans moli.toml",
   "serveur.cle.assistant_humain": "seule une personne (code) donne une clé",
   "serveur.enregistrement.humain": "seule une personne (code) allume les enregistrements des boîtiers et les écoute",
   "serveur.cle.tuya_humain": "seule une personne (code) donne des clés",
   "serveur.cle.tuya_pilote_inconnu": "pas de pilote tuya de ce nom",
   "serveur.cle.tuya_invalide": "ce ne sont pas des clés Tuya (lettres et chiffres : Access ID, puis Access Secret de 32 caractères)",
-
   "serveur.machine.jeton_refuse": "jeton refusé",
   "serveur.machine.foyer_seulement": "réservé au foyer",
   "serveur.machine.sans_agent": "machine sans agent Moli",
   "serveur.machine.distance_humain": "seule une personne (code PIN) ouvre le PC à distance",
-
   "serveur.telephone.foyer_seulement": "seul le foyer appaire un téléphone",
   "serveur.telephone.retrait_humain": "seule une personne (code) retire un téléphone",
   "serveur.telephone.inconnu": "téléphone inconnu",
   "serveur.telephone.jeton_refuse": "téléphone inconnu ou jeton refusé : réappairer l'appli",
-
   "serveur.plan.fichier_illisible": "plan.json : {error}",
   "serveur.plan.humain_arrange": "seule une personne (code) arrange le plan",
   "serveur.plan.humain_ajoute": "seule une personne (code) ajoute un plan",
@@ -46,7 +42,6 @@
   "serveur.plan.trop_d_appareils": "{max} appareils au plus par étage",
   "serveur.plan.etage_sans_taille": "« {name} » : un étage dessiné a une taille (size, en cm)",
   "serveur.plan.placement_invalide": "placement invalide pour {id}",
-
   "serveur.code.proprietaire_seul": "seul le propriétaire de la maison (connecté par Cloudflare Access) choisit le code",
   "serveur.code.actuel_d_abord": "le code actuel d'abord",
   "serveur.code.actuel_incorrect": "code actuel incorrect",
@@ -67,13 +62,11 @@
   "serveur.code.notice_suspendu_internet": "{max} mots de passe ou codes faux depuis Internet en moins d'une heure : la connexion depuis Internet est suspendue une heure. À la maison, le code marche toujours.",
   "serveur.code.journal_installation": "première mise en route : ouvrez le tableau de bord (http://<adresse de cette machine>:8790) et tapez ce code d'installation",
   "serveur.session.humain_seulement": "seule une personne (code) envoie ceci",
-
   "serveur.camera.piece_protegee": "pièce protégée « {room} » : image réservée à une session humaine",
   "serveur.impression.tableau_seulement": "imprimer : depuis le tableau de bord de la maison seulement",
   "serveur.impression.type_manquant": "type du document manquant (content-type)",
   "serveur.impression.trop_lourde": "page trop lourde (16 Mo au plus)",
   "serveur.impression.refusee": "l'imprimante ne prend pas le document",
-
   "serveur.systeme.brique.guard": "Garde",
   "serveur.systeme.brique.history": "Historique",
   "serveur.systeme.brique.energy": "Énergie",
@@ -85,7 +78,6 @@
   "serveur.systeme.surface.atelier.quoi": "tous les appareils, pour bricoler",
   "serveur.systeme.surface.mcp.quoi": "Claude, Codex… pilotent par outils",
   "serveur.systeme.surface.rest.quoi": "scripts et applications",
-
   "serveur.garde.piece_protegee": "pièce protégée ({room})",
   "serveur.garde.sans_piece_connue": "appareil sans pièce connue",
   "serveur.garde.heures_calmes": "heures calmes ({from} → {to})",
@@ -102,14 +94,11 @@
   "serveur.garde.changer_piece_humain": "seul un humain peut changer la pièce de cet appareil ({why})",
   "serveur.garde.heure_invalide": "heure invalide {heure} : {error}",
   "serveur.garde.fuseau_inconnu": "fuseau inconnu {fuseau} : {error}",
-
   "serveur.coffre.illisible": "coffre de secrets illisible : {error}",
   "serveur.coffre.cle_absente": "clé maître absente (MOLI_MASTER_KEY)",
   "serveur.coffre.nouvelle_cle": "nouvelle clé maître : gardez-en une copie hors de cette machine (les sauvegardes ne la contiennent pas, et sans elle le coffre est illisible)",
-
   "serveur.config.depart_ecrite": "première mise en route : configuration de départ écrite",
   "serveur.config.depart_non_ecrite": "configuration de départ non écrite : réglages par défaut, en mémoire",
-
   "serveur.energie.lecture_seule": "lecture seule",
   "serveur.energie.appareil": "Énergie",
   "serveur.energie.modele": "Compteurs",
@@ -123,7 +112,6 @@
   "serveur.energie.point.bill_projection": "Facture du mois au rythme actuel (abonnement compris)",
   "serveur.energie.point.over_budget": "Facture estimée au-dessus du budget",
   "serveur.demo.reserve": "pas dans la démo : ce changement resterait pour les visiteurs suivants",
-
   "serveur.personnes.mot_de_passe_court": "un mot de passe de {min} caractères au moins",
   "serveur.personnes.trop": "trop de personnes dans la maison",
   "serveur.personnes.zones_trop": "trop de zones",
@@ -153,5 +141,15 @@
   "serveur.personnes.point_tous_partis": "Tout le monde est parti",
   "serveur.cle.netatmo_humain": "seule une personne (code) donne les clés de l'app Netatmo",
   "serveur.cle.netatmo_pilote_inconnu": "pas de pilote netatmo de ce nom",
-  "serveur.cle.netatmo_invalide": "ce ne sont pas des clés d'app Netatmo (client ID puis client secret, tels que dev.netatmo.com les affiche)"
+  "serveur.cle.netatmo_invalide": "ce ne sont pas des clés d'app Netatmo (client ID puis client secret, tels que dev.netatmo.com les affiche)",
+  "serveur.maison.humain": "seule une personne (code) change les pièces de la maison",
+  "serveur.maison.pas_de_dossier": "pas de dossier de données",
+  "serveur.maison.fichier_illisible": "home.json : {error}",
+  "serveur.maison.nom_vide": "la pièce a besoin d'un nom",
+  "serveur.maison.nom_trop_long": "{max} caractères au plus pour un nom de pièce",
+  "serveur.maison.doublon": "« {name} » désigne déjà la pièce « {other} »",
+  "serveur.maison.icone_inconnue": "icône inconnue : {icon}",
+  "serveur.maison.trop_d_alias": "{max} autres noms au plus pour une pièce",
+  "serveur.maison.trop_de_pieces": "{max} pièces au plus",
+  "serveur.maison.inconnue": "pas de pièce « {name} » dans la liste"
 }

@@ -354,8 +354,10 @@ export const api = {
 };
 
 /** What a person does (approve, run, delete) needs « c'est moi »: asks the
- *  code once, then does it. */
-export async function asHuman(label, action) {
+ *  code once, then does it. `reason`: what the code sheet says it is for
+ *  (an automation by default; anything else: « la maison demande que ce
+ *  soit bien toi »). */
+export async function asHuman(label, action, reason = 'automatisme') {
   if (hub.session?.human) {
     try {
       return await action();
@@ -366,7 +368,7 @@ export async function asHuman(label, action) {
   return new Promise((resolve, reject) => {
     home.held = {
       label,
-      reason: 'automatisme',
+      reason,
       custom: async () => {
         try {
           resolve(await action());

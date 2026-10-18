@@ -555,7 +555,7 @@ pièces ; il commande ensuite les membres en origine `system` (journal : `lumina
   coffre avant tout usage. `invalid_grant` → refresh token oublié, nouvelle autorisation
   demandée ; `invalid_client` → statut `app_refused`, attente de nouvelles clés.
 - **Quotas** : `homestatus` toutes les `poll_seconds` (300, 120 au moins), `homesdata` au
-  démarrage puis toutes les 6 h ; jamais deux requêtes à moins de 1 s ; quota atteint
+  démarrage puis toutes les 15 min (une pièce ou un module renommé dans l'appli suit) ; jamais deux requêtes à moins de 1 s ; quota atteint
   (code 26 ou HTTP 429) : silence de 1 min doublé jusqu'à 30 min, rien ne part pendant ;
   erreur réseau : relecture espacée (×2 jusqu'à 30 min).
 - **Appareils** : le compte (`status` : `app_missing`, `sign_in`, `connecting`, `connected`,

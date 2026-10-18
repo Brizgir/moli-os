@@ -35,8 +35,11 @@ const VOLUMES: Duration = Duration::from_secs(120);
 /// The volumes again, this soon after an order on one (the slider would
 /// otherwise go back to the old value until the next reading).
 const VOLUMES_AFTER_ORDER: Duration = Duration::from_secs(5);
-/// The account's speakers (one added, renamed…).
-const DEVICES: Duration = Duration::from_secs(30 * 60);
+/// The account's speakers (one added, renamed in the Alexa app…): one
+/// cheap call, so a new name shows in the house within minutes.
+const DEVICES: Duration = Duration::from_secs(3 * 60);
+/// Amazon asked to slow down (429): the next listing waits this long.
+const DEVICES_THROTTLED: Duration = Duration::from_secs(15 * 60);
 /// The site's cookies are good two weeks: renewed well before.
 const SESSION: Duration = Duration::from_secs(4 * 24 * 3600);
 const RETRY_MIN: Duration = Duration::from_secs(30);
@@ -313,7 +316,9 @@ async fn connected(
         shape: String::new(),
         queue: Queue::default(),
     };
-    discover(ctx, &mut home).await?;
+    discover(ctx, &mut home)
+        .await
+        .map_err(|e| anyhow::anyhow!("{e}"))?;
     set_text(ctx, account, "status", "connected");
     ctx.ready();
     tracing::info!(
@@ -365,7 +370,19 @@ async fn connected(
                 }
                 Err(e) => tracing::warn!(instance = %ctx.instance(), error = %e, "alexa volumes"),
             },
-            _ = devices.tick() => discover(ctx, &mut home).await?,
+            _ = devices.tick() => match discover(ctx, &mut home).await {
+                Ok(()) => {}
+                Err(Failure::Expired) => anyhow::bail!("{RENEW}"),
+                // The speakers already known keep working: the list is
+                // read again next time, later if Amazon asked for a pause.
+                Err(Failure::Other(e)) => {
+                    let throttled = throttled(&e);
+                    tracing::warn!(instance = %ctx.instance(), error = %format!("{e:#}"), throttled, "alexa devices");
+                    if throttled {
+                        devices.reset_after(DEVICES_THROTTLED);
+                    }
+                }
+            },
             () = tokio::time::sleep_until(renew_at) => {
                 // New cookies: `connected` starts again.
                 anyhow::bail!("{RENEW}");
@@ -395,25 +412,38 @@ fn confirm(
     volumes.reset_after(VOLUMES_AFTER_ORDER);
 }
 
-/// The account's speakers and groups, shown in the house.
-async fn discover(ctx: &DriverCtx, home: &mut Home) -> anyhow::Result<()> {
-    let answer = home
-        .session
-        .devices()
-        .await
-        .map_err(|e| anyhow::anyhow!("{e}"))?;
-    home.speakers.clear();
+/// Whether Amazon answered 429 (too many requests).
+fn throttled(e: &anyhow::Error) -> bool {
+    format!("{e:#}").contains(": HTTP 429")
+}
+
+/// The account's speakers and groups, shown in the house. Read again
+/// every few minutes: a speaker renamed in the Alexa app is published
+/// again under its new name (same device, its points and history kept).
+async fn discover(ctx: &DriverCtx, home: &mut Home) -> Result<(), Failure> {
+    let answer = home.session.devices().await?;
+    let before = std::mem::take(&mut home.speakers);
     for e in echo::speakers(&answer) {
-        tracing::info!(
-            instance = %ctx.instance(),
-            name = %e.name,
-            family = %e.family,
-            device_type = %e.device_type,
-            group = e.group,
-            online = e.online,
-            "alexa speaker"
-        );
         let id = ctx.device_id(&e.serial);
+        match before.get(&id) {
+            None => tracing::info!(
+                instance = %ctx.instance(),
+                name = %e.name,
+                family = %e.family,
+                device_type = %e.device_type,
+                group = e.group,
+                online = e.online,
+                "alexa speaker"
+            ),
+            Some(known) if known.name != e.name => tracing::info!(
+                instance = %ctx.instance(),
+                from = %known.name,
+                to = %e.name,
+                "alexa speaker renamed"
+            ),
+            Some(_) => {}
+        }
+        // The hub keeps the device as it is when nothing changed.
         ctx.upsert_device(echo::device(ctx, &id, &e));
         ctx.set_availability(&id, e.online);
         home.speakers.insert(id, e);

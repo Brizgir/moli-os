@@ -261,5 +261,9 @@
   "commun.code.saisis_one": "{count} chiffre saisi",
   "commun.code.saisis_other": "{count} chiffres saisis",
   "commun.code.effacer": "Effacer",
-  "commun.code.nouveau_choisir": "Choisir un nouveau code"
+  "commun.code.nouveau_choisir": "Choisir un nouveau code",
+  "commun.piece.modifier": "Modifier la pièce",
+  "commun.piece.modifier_nom": "Modifier {name}",
+  "commun.piece.vide": "Aucun appareil ici pour l'instant.",
+  "commun.piece.vide_invitation": "Ranger un appareil dans cette pièce (Atelier)"
 }

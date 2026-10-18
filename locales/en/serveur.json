@@ -2,24 +2,20 @@
   "serveur.acces.refuse": "access denied: home network or Cloudflare Access only",
   "serveur.limite.trop_de_demandes": "too many requests in a row: try again in a few seconds",
   "serveur.limite.trop_de_flux": "too many live streams open: close a tab or try again later",
-
   "serveur.pilote.absent": "no {pilote} driver in moli.toml",
   "serveur.cle.assistant_humain": "only a person (with the code) can give a key",
   "serveur.enregistrement.humain": "only a person (with the code) can switch the satellites’ recordings on and listen to them",
   "serveur.cle.tuya_humain": "only a person (with the code) can give keys",
   "serveur.cle.tuya_pilote_inconnu": "no tuya driver with that name",
   "serveur.cle.tuya_invalide": "these are not Tuya keys (letters and digits: the Access ID, then the 32-character Access Secret)",
-
   "serveur.machine.jeton_refuse": "token refused",
   "serveur.machine.foyer_seulement": "household only",
   "serveur.machine.sans_agent": "machine without a Moli agent",
   "serveur.machine.distance_humain": "only a person (with the house code) can open the PC remotely",
-
   "serveur.telephone.foyer_seulement": "only the household can pair a phone",
   "serveur.telephone.retrait_humain": "only a person (with the code) can remove a phone",
   "serveur.telephone.inconnu": "unknown phone",
   "serveur.telephone.jeton_refuse": "unknown phone or token refused: pair the app again",
-
   "serveur.plan.fichier_illisible": "plan.json: {error}",
   "serveur.plan.humain_arrange": "only a person (with the code) can rearrange the plan",
   "serveur.plan.humain_ajoute": "only a person (with the code) can add a plan",
@@ -46,7 +42,6 @@
   "serveur.plan.trop_d_appareils": "at most {max} devices per floor",
   "serveur.plan.etage_sans_taille": "“{name}”: a drawn floor needs a size (size, in cm)",
   "serveur.plan.placement_invalide": "invalid placement for {id}",
-
   "serveur.code.proprietaire_seul": "only the owner of the house (signed in through Cloudflare Access) can choose the code",
   "serveur.code.actuel_d_abord": "the current code first",
   "serveur.code.actuel_incorrect": "incorrect current code",
@@ -67,13 +62,11 @@
   "serveur.code.notice_suspendu_internet": "{max} wrong passwords or codes from the Internet in under an hour: signing in from the Internet is suspended for an hour. At home, the code still works.",
   "serveur.code.journal_installation": "first start: open the dashboard (http://<this machine’s address>:8790) and type this setup code",
   "serveur.session.humain_seulement": "only a person (with the code) can send this",
-
   "serveur.camera.piece_protegee": "protected room “{room}”: images are for a human session only",
   "serveur.impression.tableau_seulement": "printing: from the house’s dashboard only",
   "serveur.impression.type_manquant": "document type missing (content-type)",
   "serveur.impression.trop_lourde": "page too large (16 MB at most)",
   "serveur.impression.refusee": "the printer won’t accept the document",
-
   "serveur.systeme.brique.guard": "Guard",
   "serveur.systeme.brique.history": "History",
   "serveur.systeme.brique.energy": "Energy",
@@ -85,7 +78,6 @@
   "serveur.systeme.surface.atelier.quoi": "every device, for tinkering",
   "serveur.systeme.surface.mcp.quoi": "Claude, Codex… control it through tools",
   "serveur.systeme.surface.rest.quoi": "scripts and apps",
-
   "serveur.garde.piece_protegee": "protected room ({room})",
   "serveur.garde.sans_piece_connue": "device with no known room",
   "serveur.garde.heures_calmes": "quiet hours ({from} → {to})",
@@ -102,14 +94,11 @@
   "serveur.garde.changer_piece_humain": "only a human can change this device’s room ({why})",
   "serveur.garde.heure_invalide": "invalid time {heure}: {error}",
   "serveur.garde.fuseau_inconnu": "unknown time zone {fuseau}: {error}",
-
   "serveur.coffre.illisible": "vault unreadable: {error}",
   "serveur.coffre.cle_absente": "master key missing (MOLI_MASTER_KEY)",
   "serveur.coffre.nouvelle_cle": "new master key: keep a copy off this machine (backups don’t include it, and without it the vault can’t be read)",
-
   "serveur.config.depart_ecrite": "first start: starter configuration written",
   "serveur.config.depart_non_ecrite": "starter configuration not written: default settings, in memory",
-
   "serveur.energie.lecture_seule": "read-only",
   "serveur.energie.appareil": "Energy",
   "serveur.energie.modele": "Meters",
@@ -123,7 +112,6 @@
   "serveur.energie.point.bill_projection": "Bill this month at the current pace (plan fee included)",
   "serveur.energie.point.over_budget": "Estimated bill over budget",
   "serveur.demo.reserve": "not in the demo: this change would stay for the next visitors",
-
   "serveur.personnes.mot_de_passe_court": "a password of {min} characters at least",
   "serveur.personnes.trop": "too many people in the house",
   "serveur.personnes.zones_trop": "too many zones",
@@ -153,5 +141,15 @@
   "serveur.personnes.point_tous_partis": "Everyone has left",
   "serveur.cle.netatmo_humain": "only a person (code) gives the Netatmo app’s keys",
   "serveur.cle.netatmo_pilote_inconnu": "no netatmo driver of this name",
-  "serveur.cle.netatmo_invalide": "these are not Netatmo app keys (client ID, then client secret, as dev.netatmo.com shows them)"
+  "serveur.cle.netatmo_invalide": "these are not Netatmo app keys (client ID, then client secret, as dev.netatmo.com shows them)",
+  "serveur.maison.humain": "only a person (code) changes the house's rooms",
+  "serveur.maison.pas_de_dossier": "no data folder",
+  "serveur.maison.fichier_illisible": "home.json: {error}",
+  "serveur.maison.nom_vide": "the room needs a name",
+  "serveur.maison.nom_trop_long": "{max} characters at most for a room's name",
+  "serveur.maison.doublon": "“{name}” already names the room “{other}”",
+  "serveur.maison.icone_inconnue": "unknown icon: {icon}",
+  "serveur.maison.trop_d_alias": "{max} other names at most for a room",
+  "serveur.maison.trop_de_pieces": "{max} rooms at most",
+  "serveur.maison.inconnue": "no room “{name}” in the list"
 }
