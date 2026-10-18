@@ -20,7 +20,8 @@ use serde_json::Value as Json;
 use crate::echo::Echo;
 
 pub(crate) const PLAYING: &str = "PLAYING";
-const PAUSED: &str = "PAUSED";
+pub(crate) const PAUSED: &str = "PAUSED";
+pub(crate) const IDLE: &str = "IDLE";
 /// No source said anything of the speaker.
 pub(crate) const UNKNOWN: &str = "UNKNOWN";
 /// Where a sessions' answer may keep its list.
@@ -38,6 +39,11 @@ pub(crate) struct Playing {
     pub volume: Option<f64>,
     /// A group's members' volumes while it plays: (serial, 0-100).
     pub members: Vec<(String, f64)>,
+    /// How far into what plays, in seconds, when the answer says it.
+    pub progress: Option<f64>,
+    /// What plays, by Amazon's id (`mediaId`) when it gives one: a new id
+    /// is a new track.
+    pub track: String,
 }
 
 impl Playing {
@@ -89,6 +95,10 @@ pub(crate) fn now_playing(p: &Json) -> Playing {
             .flatten()
             .filter_map(|(serial, v)| Some((serial.clone(), v.as_f64().or(v["volume"].as_f64())?)))
             .collect(),
+        progress: p["progress"]["mediaProgress"]
+            .as_f64()
+            .or(p["mediaProgress"].as_f64()),
+        track: p["mediaId"].as_str().unwrap_or_default().to_owned(),
     }
 }
 
@@ -123,6 +133,8 @@ pub(crate) fn media_state(answer: &Json) -> Playing {
             .as_f64()
             .or(answer["volume"]["volume"].as_f64()),
         members: Vec::new(),
+        progress: answer["progressSeconds"].as_f64(),
+        track: answer["contentId"].as_str().unwrap_or_default().to_owned(),
     }
 }
 
@@ -268,13 +280,15 @@ pub(crate) fn sessions_shape(answer: &Json) -> String {
             &n["playerState"]
         };
         let found = endpoints(s).into_iter().filter_map(endpoint).count();
+        let p = now_playing(n);
         let _ = write!(
             out,
-            " {{keys=[{}] now=[{}] endpoints={found} state={} title={}}}",
+            " {{keys=[{}] now=[{}] endpoints={found} state={} title={} progress={}}}",
             keys(s),
             keys(n),
             word(state),
-            !now_playing(n).title.is_empty(),
+            !p.title.is_empty(),
+            p.progress.is_some(),
         );
     }
     out
@@ -506,7 +520,8 @@ mod tests {
             }
         }
         assert!(sessions.starts_with("keys=[mediaSessionList] sessions=3 "));
-        assert!(sessions.contains("endpoints=1 state=PLAYING title=true"));
+        assert!(sessions.contains("endpoints=1 state=PLAYING title=true progress=true"));
+        assert!(sessions.contains("state=PAUSED title=true progress=false"));
         assert!(group.contains("state=PLAYING title=true lemur=yes members=2"));
         assert_eq!(word(&json!("Playing now")), "?");
         assert_eq!(keys(&json!({ "G0911ABC": 1, "infoText": 2 })), "infoText");

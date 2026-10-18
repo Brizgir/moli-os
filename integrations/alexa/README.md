@@ -56,6 +56,18 @@ regarde les groupes : quand un groupe multi-pièces joue, Amazon répond « inac
 de ses membres. Moli affiche alors chaque membre en lecture, avec le titre du groupe et le
 volume de ce membre quand Amazon le donne.
 
+Une session « en lecture » n'est pas crue sur parole (voir les pièges) : Moli la croit tant
+qu'elle **avance** (sa progression a bougé d'au moins 1 s depuis la relecture précédente, ou
+la piste a changé), ou tant que l'enceinte elle-même (`np/player`, sinon `media/state`) dit
+aussi « en lecture ». Une session qui reste figée alors que l'enceinte ne confirme pas montre
+l'enceinte **en pause**, titre gardé ; figée depuis 10 min, **inactive**. Une session vue pour
+la première fois est crue, sauf si l'enceinte dit franchement le contraire (inactive, en
+pause) ; une session sans progression du tout (une radio en direct) aussi, tant que
+l'enceinte ne la dément pas. Un ordre lecture ou pause (ou une musique lancée) envoyé par
+Moli remet ce suivi à zéro pour l'enceinte et, pour un groupe, pour ses membres : pas de
+faux « figé » juste après une reprise. Les groupes multi-pièces gardent ce que dit leur
+session ; un membre figé qu'un groupe fait jouer est montré en lecture avec le groupe.
+
 Une enceinte dont **aucune** source ne dit rien est **inconnue** : `playing` est nul, `state`
 vaut `unknown`, le tableau de bord écrit « État inconnu ». Moli n'affirme jamais « à l'arrêt »
 sur une simple absence de réponse : sur un vrai compte, un Echo Dot qui joue répond 400 ou
@@ -71,7 +83,11 @@ exemple `info,moli_alexa=debug`). À chaque changement, une ligne `alexa playing
 **forme** des réponses : la forme de requête qui a répondu (`form=device`, `plain`,
 `routines`), les champs présents, le nombre de sessions, les états, et pour chaque enceinte
 son type, son état et la source de cet état (`sessions`, `sessions(device)`, `player`,
-`media`, `group`, `error`). Chaque réponse refusée (400, 429…) donne une ligne `alexa:
+`media`, `group`, `error`). Pour une session « en lecture », la source dit aussi ce qu'en
+pense Moli : `progress=advances` (elle avance), `confirmed` (figée, mais l'enceinte dit
+qu'elle joue), `new` (vue pour la première fois), `none` (pas de progression donnée),
+`frozen` (figée : montrée en pause, puis inactive). Chaque session y dit aussi si elle donne
+une progression (`progress=true`). Chaque réponse refusée (400, 429…) donne une ligne `alexa:
 refused` avec le chemin sans ses paramètres, le statut et le message d'Amazon. Une enceinte
 y est désignée par son rang et son type, jamais par son nom, son numéro de série ou le titre
 joué. Ces lignes peuvent donc être copiées telles quelles dans un rapport de bug.
@@ -88,6 +104,14 @@ joué. Ces lignes peuvent donc être copiées telles quelles dans un rapport de 
 - **`np/player` répond 400 ou `state: null` pour un Echo Dot**, même en lecture. Moli lit
   alors `/api/media/state?deviceSerialNumber=…&deviceType=…` ; si lui aussi refuse, l'enceinte
   est inconnue (ci-dessus), jamais « à l'arrêt ».
+- **Une session reste « PLAYING » après la fin de la musique.** Sur un vrai compte, après
+  un « Alexa, stop », `list-media-sessions` a continué à donner pour un Echo Dot une session
+  `PLAYING`, titre compris, alors que rien ne sortait plus ; l'appli Alexa montrait la même
+  session bloquée. Moli ne la croit donc que si sa progression
+  (`nowPlayingData.progress.mediaProgress`) avance ou si l'état propre de l'enceinte la
+  confirme (ci-dessus). Après un redémarrage de Moli, une telle session est vue en pause dès
+  la première relecture si l'enceinte se dit inactive, sinon à la suivante (30 s) ; elle
+  passe inactive 10 min plus tard.
 - **Amazon refuse les ordres rapprochés** (`HTTP 429 Rate exceeded` sur `behaviors/preview`,
   trois volumes en quelques secondes). Les ordres partent un par un, au moins 1 s d'écart
   (file par compte) ; plusieurs valeurs en attente pour un même point ne gardent que la

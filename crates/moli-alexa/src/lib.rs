@@ -12,6 +12,7 @@ mod echo;
 mod encode;
 mod media;
 mod queue;
+mod watch;
 
 use std::collections::HashMap;
 use std::time::Duration;
@@ -25,6 +26,7 @@ use crate::api::{Failure, Session, SessionsForm};
 use crate::echo::Echo;
 use crate::media::Playing;
 use crate::queue::Queue;
+use crate::watch::{Motion, Watch};
 
 const REFRESH: &str = "refresh_token";
 const SERIAL: &str = "device_serial";
@@ -265,6 +267,8 @@ struct Home {
     shape: String,
     /// The orders that wait their turn (one at a time, a second apart).
     queue: Queue<CommandRequest>,
+    /// Whether the sessions that say « PLAYING » still move.
+    watch: Watch,
 }
 
 impl Home {
@@ -315,6 +319,7 @@ async fn connected(
         no_media_state: std::collections::HashSet::new(),
         shape: String::new(),
         queue: Queue::default(),
+        watch: Watch::default(),
     };
     discover(ctx, &mut home)
         .await
@@ -354,6 +359,7 @@ async fn connected(
                 let result = order(config, &mut home, refresh, &command).await;
                 home.queue.sent(Instant::now());
                 if result.is_ok() {
+                    ordered(&mut home, &command);
                     confirm(ctx, &home, &command, &mut volumes);
                 }
                 command.reply(result.map_err(|e| moli_i18n::tr!("pilotes.alexa.echec", why = e)));
@@ -410,6 +416,21 @@ fn confirm(
         ctx.set_state(&command.device.id, "volume", Value::Float(level.round()));
     }
     volumes.reset_after(VOLUMES_AFTER_ORDER);
+}
+
+/// A play or pause order Amazon accepted: what the speaker's session (and
+/// its members', for a group) did before says nothing of what comes next.
+fn ordered(home: &mut Home, command: &CommandRequest) {
+    if !matches!(&*command.key, "playing" | "play") {
+        return;
+    }
+    let Some(e) = home.speakers.get(&command.device.id) else {
+        return;
+    };
+    let now = std::time::Instant::now();
+    for serial in std::iter::once(&e.serial).chain(&e.members) {
+        home.watch.reset(serial, now);
+    }
 }
 
 /// Whether Amazon answered 429 (too many requests).
@@ -498,6 +519,7 @@ async fn playing(ctx: &DriverCtx, home: &mut Home) -> anyhow::Result<()> {
         sources.insert(e.serial.clone(), source);
         states.insert(e.serial.clone(), p);
     }
+    stand_still(home, &online, &mut states, &mut sources).await?;
     for m in media::through_groups(&online, &mut states) {
         sources.insert(m, "group".into());
     }
@@ -541,6 +563,54 @@ async fn playing(ctx: &DriverCtx, home: &mut Home) -> anyhow::Result<()> {
         tracing::debug!(instance = %ctx.instance(), shape = %now, "alexa playing");
         home.shape = now;
     }
+    Ok(())
+}
+
+/// A session that says « PLAYING » is believed while it moves, or while
+/// the speaker's own state says it plays too; else the speaker shows paused
+/// (idle once still 10 min). Groups keep what their session says. The
+/// verdict goes to the log's source (`progress=advances`, `frozen`…).
+async fn stand_still(
+    home: &mut Home,
+    online: &[&Echo],
+    states: &mut HashMap<String, Playing>,
+    sources: &mut HashMap<String, String>,
+) -> anyhow::Result<()> {
+    let now = std::time::Instant::now();
+    let mut watched = Vec::new();
+    for e in online.iter().filter(|e| !e.group) {
+        let from_sessions = sources
+            .get(&e.serial)
+            .is_some_and(|s| s.starts_with("sessions"));
+        let Some(p) = states
+            .get(&e.serial)
+            .filter(|p| from_sessions && p.state == media::PLAYING)
+            .cloned()
+        else {
+            continue;
+        };
+        watched.push(e.serial.as_str());
+        let (motion, still) = home.watch.judge(&e.serial, &p, now);
+        let own = if matches!(motion, Motion::New | Motion::Still | Motion::NoProgress) {
+            match speaker_state(home, e).await {
+                Ok((own, _)) => Some(own),
+                Err(Failure::Expired) => anyhow::bail!("{RENEW}"),
+                Err(Failure::Other(_)) => None,
+            }
+        } else {
+            None
+        };
+        let (shown, word) = watch::judged(&p, motion, still, own.as_ref());
+        if word == "confirmed" {
+            home.watch.confirm(&e.serial, now);
+        }
+        if let Some(source) = sources.get_mut(&e.serial) {
+            source.push_str(" progress=");
+            source.push_str(word);
+        }
+        states.insert(e.serial.clone(), shown);
+    }
+    home.watch.keep(&watched);
     Ok(())
 }
 

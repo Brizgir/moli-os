@@ -1,0 +1,22 @@
+{
+  "mediaSessionList": [
+    {
+      "endpointList": [
+        {
+          "id": { "deviceSerialNumber": "G0000000000000A1", "deviceType": "A1RABVCI4QCIKC" },
+          "friendlyName": "Echo fictif",
+          "encryptedDeviceAccountId": "AXXXXXXXXXXXXX"
+        }
+      ],
+      "mediaSessionId": "amzn1.media-session.fictif-1",
+      "nowPlayingData": {
+        "playerState": "PLAYING",
+        "infoText": { "title": "Un titre", "subText1": "Un artiste", "subText2": "Un album" },
+        "provider": { "providerName": "Deezer" },
+        "mediaId": "fictif-piste-1",
+        "progress": { "mediaProgress": 97, "mediaLength": 214 },
+        "volume": { "volume": 30, "muted": false }
+      }
+    }
+  ]
+}
