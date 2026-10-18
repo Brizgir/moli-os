@@ -204,9 +204,9 @@ Retirer `provider = "anthropic"` (ou choisir OpenAI dans Système) : Moli repart
 
 ## Vérifié sur une installation réelle
 
-Le 18 octobre 2026, sur une installation Moli en service dans une maison habitée
-<!-- À COMPLÉTER : la machine (ex. « mini-PC x86_64, Linux, Docker »), sans rien d'identifiant -->,
-image construite depuis ces commits :
+Le 18 octobre 2026, sur une installation Moli en service dans une maison habitée (un serveur
+Linux, Moli en conteneur Docker sur le réseau de l'hôte, Whisper et Piper à côté), image
+construite depuis ces commits :
 
 - conversation écrite et parlée avec **`claude-haiku-5-5`** (lecture de l'inventaire, ordres
   sous la garde, réponses courtes à l'oral) ;
@@ -227,8 +227,10 @@ leurs limites), le choix du fournisseur, les clés et les coûts.
 - **Pas de streaming** : la réponse arrive entière (comme aujourd'hui avec OpenAI).
 - **L'effort ne se règle pas depuis Système**, seulement dans `moli.toml` (le modèle, lui, se
   choisit dans Système).
-- **Le barème est écrit en dur** dans `pricing.rs` (tarifs publics d'octobre 2026) : les coûts
-  affichés sont des estimations, la facture exacte est sur la console d'Anthropic.
+- **Le barème est écrit en dur** dans `pricing.rs` (tarifs publics d'Anthropic relus en octobre
+  2026 : Opus 5.5 4 $ / 20 $, Sonnet 5.5 2 $ / 10 $, Haiku 5.5 0,10 $ / 0,50 $, Fable 5.1
+  10 $ / 50 $ par million de jetons) : les coûts affichés sont des estimations, la facture exacte
+  est sur la console d'Anthropic.
 - **La liste des modèles proposés dans Système** est celle des modèles Claude actuels (plus
   celui de `moli.toml`) ; un nouveau modèle se met dans `moli.toml` en attendant.
 - **Le brouillon d'automatisme** dépasse les limites du mode strict d'Anthropic : son schéma va
