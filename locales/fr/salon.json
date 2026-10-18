@@ -184,5 +184,6 @@
   "salon.papier.partiel_other": "{count} pages envoyées sur {total}, la suite non : {message}",
   "salon.papier.page_impossible": "page impossible à préparer",
   "salon.papier.choisir": "Choisis une photo ou un PDF.",
-  "salon.papier.erreur": "erreur {status}"
+  "salon.papier.erreur": "erreur {status}",
+  "salon.cameras.mouvement": "Dernier mouvement {when}"
 }

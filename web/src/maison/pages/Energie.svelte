@@ -1,6 +1,7 @@
 <script>
   import { onMount } from 'svelte';
-  import { home, hub, value, isOn, nameOf, deviceKind, doorOpen, act } from '../lib/home.svelte.js';
+  import { home, hub, value, isOn, nameOf, deviceKind, doorOpen, act, visiblePages, pageChoices } from '../lib/home.svelte.js';
+  import { menuFacts } from '../lib/menu.svelte.js';
   import { energy, useEnergy, euros, kwh, watts, power, liveLook, billOf } from '../lib/energy-live.svelte.js';
   import { offPeak, nextChange, clockText, minutesText, windowText, baseload, typicalDay, todayByHour, prices, advise } from '../lib/energy-advice.js';
   import { t } from '../../lib/i18n.svelte.js';
@@ -8,6 +9,9 @@
   import EnergyChart from '../ui/EnergyChart.svelte';
   import TariffPie from '../ui/TariffPie.svelte';
   import DayProfile from '../ui/DayProfile.svelte';
+
+  // The solar simulation, offered where there is production (or asked for).
+  const solarShown = $derived(visiblePages(menuFacts(), pageChoices()).solaire);
 
   onMount(useEnergy);
 
@@ -230,7 +234,7 @@
       <h1 class="page-title">{t('energie.titre')}</h1>
       <p class="page-sub">{t('energie.sous_titre')}</p>
     </div>
-    <a class="demo" href="#/energie/solaire"><Icon name="sun" size={16} />{t('energie.demo_solaire')}</a>
+    {#if solarShown}<a class="demo" href="#/energie/solaire"><Icon name="sun" size={16} />{t('energie.demo_solaire')}</a>{/if}
   </header>
 
   {#if !s}

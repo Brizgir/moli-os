@@ -26,10 +26,89 @@ Le flux SSE `/api/events` est ouvert **une seule fois** et partagé (`web/src/li
 | Impression 3D | `#/impression` | une carte par imprimante (Klipper, Bambu) : état, vignette du travail, progression, couche, temps restant et heure de fin, buse / plateau / enceinte, têtes et filaments (couleurs ; AMS pour Bambu), lumière, **pause / reprise / annulation** (annuler demande une confirmation) ; totaux (impressions, heures, km de filament). Sur l'Accueil, une pastille tant qu'une impression tourne, est en pause ou en erreur ; dans Pièces, une pastille sur la carte de la pièce |
 | Dehors | `#/dehors` | météo (soleil calculé), air/UV, piscine (pH, chlore, filtration), jardin, caméras extérieures |
 | Automatismes | `#/automatismes`, `#/automatismes/<id>` | liste, idées, éditeur à canevas (voir [automatismes.md](automatismes.md)) |
-| Système | `#/systeme` | **carte vivante** du système et comparaison avec HA (voir plus bas) |
+| Système | `#/systeme` | accès à l'**Atelier**, **Pages affichées** (voir « Ce qui s'affiche selon la maison »), **carte vivante** du système et comparaison avec HA (voir plus bas) |
 
-Navigation : rail à gauche (bas de l'écran sur téléphone, défilable) ; pied de rail : thème,
-Système, Atelier. Bulle « Demander à Moli » sur toutes les pages sauf Moli.
+Navigation (refonte d'octobre 2026, maquette `docs/design/maquette-2026-10/`) : menu latéral
+avec le nom de chaque page sur grand écran (≥ 1100 px), rail étroit icône + nom sur tablette,
+et sur téléphone (< 768 px) une **barre d'onglets en bas** : Accueil, Pièces, Moli au centre,
+Chauffage (ou la page suivante du menu s'il n'y en a pas), **Plus** (une feuille avec le reste
+du menu, Système, Atelier et le thème ; cibles ≥ 44 px). Pied du menu : thème, Système.
+L'Atelier s'ouvre depuis Système (sa première carte). Bulle « Demander à Moli » sur toutes les
+pages sauf Moli (sur téléphone, Moli est au centre de la barre).
+
+## Ce qui s'affiche selon la maison
+
+Principe : **rien n'est supprimé, ce qui ne sert pas est masqué, et revient de lui-même** dès
+qu'un appareil de ce type arrive. Le code des pages et des cartes reste ; seule leur condition
+d'affichage change.
+
+**Le menu.** Chaque page déclare ce qui la justifie (`web/src/maison/lib/pages.js`,
+`justified`, fonction pure testée par `pages.test.js`, `npm test`), calculé depuis
+`hub.devices` (sans les appareils `hidden`), `home.json`, `/api/plan`, `/api/energy`, les
+zones et téléphones (`/api/people`) et la voix de Moli :
+
+| Page | Apparaît quand… |
+|---|---|
+| Pièces, Automatismes, Demander à Moli | toujours |
+| Chauffage | une maison Netatmo à plannings, ou une pièce chauffée (`setpoint` + `setpoint_mode`) |
+| Salon | une télé (`deviceKind` `tv`) ou `home.json` `salon` |
+| Plan | `data/plan.json` a au moins un étage |
+| Carte | une zone ou un téléphone déclaré |
+| Caméras | une caméra (`camera`), une caméra favorite, ou une sonnette / caméra Ring ; s'appelle **« Sonnette et caméras »** quand il n'y a que des événements Ring sans image (`camerasOnlyRing`) |
+| Parler | un boîtier vocal (ESPHome, point `state` à `listening`) ou la voix de Moli (`/api/assistant` `speak`/`listen`) ; une Echo qui sait dire une phrase ne suffit pas |
+| Énergie | `/api/energy` répond (section `[energy]`) |
+| Solaire (lien de la page Énergie) | une production (point de puissance ou d'énergie `solar`, `pv_`, `production`) |
+| Impression 3D | une imprimante 3D ou papier |
+| Dehors | la météo (`outdoor.weather`, ou un point `weather_code`) |
+| Infra | jamais d'elle-même : c'est l'affaire de l'Atelier |
+
+Sans justification, la page sort du menu **mais sa route reste servie** (`#/energie` tapé
+affiche la page avec son état vide). Réglage humain dans Système, carte **« Pages
+affichées »** : trois états par page (Automatique / Toujours / Jamais), rangés dans
+`data/home.json` :
+
+```json
+{ "pages": { "energie": "never", "infra": "always" } }
+```
+
+écrits par `PUT /api/home/pages` (`crates/moli-api/src/home.rs`, comme les pièces : session
+humaine, code demandé au besoin, écriture atomique, `home_changed`). Le corps ne contient que
+les pages à changer ; `auto` efface le choix ; une page ou un choix inconnu est refusé (422).
+Les pages acceptées (`PAGES` côté Rust) sont celles de `PAGE_IDS` (`pages.js`), vérifié par un
+test.
+
+**Les cartes des pages gardées.** Une carte ne s'affiche que si sa donnée existe :
+
+- Accueil : télécommande (une télé `salon.tv`), électricité (`/api/energy`), clims (les
+  favorites `climate` qui existent et ne sont pas une pièce Netatmo), dehors en bref (qualité
+  de l'air, UV ou piscine ; l'humidité s'y ajoute si elle est là), caméra de la sonnette (une
+  caméra favorite). Lumières : les favorites, ou à défaut une tuile par pièce qui a des
+  lumières (sa pièce Hue sinon ses lampes ensemble). Sans alerte, une bande verte
+  **« Tout va bien : N services en marche, rien à surveiller »** (N : les pilotes dont un
+  appareil répond) remplace la zone d'alertes.
+- **Chauffage** (`ui/HeatingCard.svelte`, dès qu'une pièce chauffée existe) : chaque pièce
+  avec sa température et sa consigne (« Consigne 18° », « … jusqu'à 14:00 » ou « … en
+  permanence » si elle est manuelle, « Hors-gel », « Arrêté ») et le cadenas d'une pièce
+  protégée ; en tête le **prochain changement** d'après les automatismes horaires actifs
+  (approuvés, en marche, déclencheur `at_time` du jour, qui règlent un point du chauffage :
+  `lib/today.js` `nextHeating`, sinon le premier de demain) ; boutons **« Voir le planning »**
+  (`#/chauffage`) et **« Mode absence »** (point `mode` de la maison Netatmo : `away` ↔
+  `schedule`).
+- **Sonnette sans image** (`ui/DoorbellEvents.svelte`, Ring) : dernier appui et dernier
+  mouvement lus dans l'historique (7 jours), batteries ; un espace réservé tient la place de
+  l'image tant que le pilote Ring n'en donne pas. La page Caméras montre la même chose
+  appareil par appareil.
+- **Musique** (`ui/MusicCard.svelte`, dès qu'une enceinte existe) : celle qui joue (sinon en
+  pause, sinon la première), lecture/pause, le nombre d'enceintes et de groupes.
+- **Aujourd'hui** (`ui/Today.svelte`) : les automatismes horaires du jour, cochés une fois
+  passés ; aucun : pas de carte. Les automatismes sont lus une fois toutes les deux minutes
+  pour toutes les cartes (`lib/timed.svelte.js`).
+- Dehors : la carte du ciel seulement avec la météo, l'air seulement s'il est mesuré, la
+  piscine seulement si elle est déclarée.
+- Pièces : en tête de carte, « 20,2° → 18° » (température, et consigne d'une pièce Netatmo),
+  « sans thermomètre » dans la ligne d'état d'une pièce qui n'en a pas ; une pièce protégée
+  dit « Protégée : un automatisme ou Moli y attend ton code » ; une carte en pointillés
+  **« Nouvelle pièce »** en fin de liste ouvre la fiche (`ui/RoomForm.svelte`).
 
 ## La mise en page de la maison : `data/home.json`
 

@@ -2,7 +2,9 @@
   import '@fontsource-variable/figtree';
   import './maison.css';
   import { onMount } from 'svelte';
-  import { home, hub, start, value, savePref } from './lib/home.svelte.js';
+  import { home, hub, start, value, savePref, visiblePages, pageChoices, camerasAsDoorbell } from './lib/home.svelte.js';
+  import { loadPeople } from './lib/people.svelte.js';
+  import { menuFacts } from './lib/menu.svelte.js';
   import { t } from '../lib/i18n.svelte.js';
   import Icon from './ui/Icon.svelte';
   import PinSheet from './ui/PinSheet.svelte';
@@ -22,7 +24,7 @@
   import Systeme from './pages/Systeme.svelte';
   import Parler from './pages/Parler.svelte';
   import Orb from './moli/Orb.svelte';
-  import { moli } from './lib/moli.svelte.js';
+  import { moli, loadStatus } from './lib/moli.svelte.js';
 
   let { route } = $props();
 
@@ -37,28 +39,49 @@
     return () => clearTimeout(timer);
   });
 
-  // `label` is a catalogue key, said where it is shown; Moli is a name.
+  // `label` is a catalogue key. `id`: a page the menu shows only when the
+  // house justifies it (`lib/pages.js`) or a person asks (Système, « Pages
+  // affichées »); its route answers either way.
   const NAV = [
     { path: '', label: 'commun.nav.accueil', icon: 'home' },
-    { path: 'moli', name: 'Moli', orb: true },
-    { path: 'salon', label: 'commun.nav.salon', icon: 'remote' },
-    { path: 'pieces', label: 'commun.nav.pieces', icon: 'light-group' },
-    { path: 'plan', label: 'commun.nav.plan', icon: 'home-roof' },
-    { path: 'carte', label: 'commun.nav.carte', icon: 'map' },
-    { path: 'cameras', label: 'commun.nav.cameras', icon: 'cctv' },
-    { path: 'parler', label: 'commun.nav.parler', icon: 'talk' },
-    { path: 'energie', label: 'commun.nav.energie', icon: 'bolt' },
-    { path: 'impression', label: 'commun.nav.impression', icon: 'printer3d' },
-    { path: 'dehors', label: 'commun.nav.dehors', icon: 'flower-outline' },
-    { path: 'automatismes', label: 'commun.nav.automatismes', icon: 'robot' },
-    { path: 'infra', label: 'commun.nav.infra', icon: 'server' },
+    { path: 'pieces', id: 'pieces', label: 'commun.nav.pieces', icon: 'light-group' },
+    { path: 'chauffage', id: 'chauffage', label: 'commun.nav.chauffage', icon: 'radiator' },
+    { path: 'salon', id: 'salon', label: 'commun.nav.salon', icon: 'remote' },
+    { path: 'plan', id: 'plan', label: 'commun.nav.plan', icon: 'home-roof' },
+    { path: 'carte', id: 'carte', label: 'commun.nav.carte', icon: 'map' },
+    { path: 'cameras', id: 'cameras', label: 'commun.nav.cameras', icon: 'cctv' },
+    { path: 'parler', id: 'parler', label: 'commun.nav.parler', icon: 'talk' },
+    { path: 'energie', id: 'energie', label: 'commun.nav.energie', icon: 'bolt' },
+    { path: 'impression', id: 'impression', label: 'commun.nav.impression', icon: 'printer3d' },
+    { path: 'dehors', id: 'dehors', label: 'commun.nav.dehors', icon: 'flower-outline' },
+    { path: 'automatismes', id: 'automatismes', label: 'commun.nav.automatismes', icon: 'robot' },
+    { path: 'infra', id: 'infra', label: 'commun.nav.infra', icon: 'server' },
+    { path: 'moli', id: 'moli', label: 'commun.demander_moli', orb: true },
   ];
+
+  const visible = $derived(visiblePages(menuFacts(), pageChoices()));
+  // Until the layout is read, the pages every house has (no menu that jumps).
+  const items = $derived(
+    NAV.filter((i) => !i.id || (home.config ? visible[i.id] : ['pieces', 'automatismes', 'moli'].includes(i.id))).map((i) =>
+      i.id === 'cameras' && camerasAsDoorbell() ? { ...i, label: 'commun.nav.sonnette_cameras', icon: 'bell' } : i,
+    ),
+  );
+
+  // The phone's tab bar: home, rooms, Moli in the middle, the heating (or
+  // the next page the house has), and « Plus » for the rest of the menu.
+  const fourth = $derived(items.find((i) => i.path === 'chauffage') ?? items.find((i) => !['', 'pieces', 'moli'].includes(i.path)) ?? null);
+  const tabs = $derived(['', 'pieces'].map((p) => items.find((i) => i.path === p)).filter(Boolean));
+  const rest = $derived(items.filter((i) => !['', 'pieces', 'moli'].includes(i.path) && i !== fourth));
+  let moreOpen = $state(false);
+  const inMore = $derived(page === 'systeme' || rest.some((i) => i.path === page));
 
   let moliOpen = $state(false);
   let prefersDark = $state(false);
 
   onMount(() => {
     start();
+    loadPeople();
+    loadStatus();
     const media = matchMedia('(prefers-color-scheme: dark)');
     prefersDark = media.matches;
     const update = (e) => (prefersDark = e.matches);
@@ -104,7 +127,14 @@
   }
 
   const page = $derived(route.split('/')[0] ?? '');
+  // A tap in « Plus » goes somewhere: the sheet closes behind it.
+  $effect(() => {
+    void route;
+    moreOpen = false;
+  });
 </script>
+
+<svelte:window onkeydown={(e) => e.key === 'Escape' && (moreOpen = false)} />
 
 <div class="maison" data-theme={theme}>
   <nav class="rail" aria-label={t('commun.nav.aria')}>
@@ -113,34 +143,81 @@
         <circle cx="16" cy="16" r="15" fill="var(--sun)" />
         <circle cx="16" cy="16" r="8.5" fill="none" stroke="#161512" stroke-width="4.3" />
       </svg>
+      <span class="brand-name">Moli</span>
     </a>
     <ul>
-      {#each NAV as item (item.path)}
+      {#each items as item (item.path)}
         <li>
           <a href="#/{item.path}" class:active={page === item.path} aria-current={page === item.path ? 'page' : undefined}>
             <span class="glyph">
-              {#if item.orb}<Orb size={22} state={moli.busy ? 'thinking' : 'idle'} />{:else}<Icon name={item.icon} size={24} />{/if}
+              {#if item.orb}<Orb size={22} state={moli.busy ? 'thinking' : 'idle'} />{:else}<Icon name={item.icon} size={22} />{/if}
             </span>
-            <span class="label">{item.name ?? t(item.label)}</span>
+            <span class="label">{t(item.label)}</span>
           </a>
         </li>
       {/each}
     </ul>
     <div class="rail-foot">
       <button class="theme" onclick={cycleTheme} title={themeTitle}>
-        <Icon name={theme === 'night' ? 'moon' : 'sun'} size={20} />
+        <span class="glyph"><Icon name={theme === 'night' ? 'moon' : 'sun'} size={20} /></span>
         <span class="label">{themeName}</span>
       </button>
-      <a href="#/systeme" class:active={page === 'systeme'} title={t('commun.nav.systeme_titre')}>
-        <Icon name="branch" size={20} />
+      <!-- The Atelier is reached from Système (its first card). -->
+      <a href="#/systeme" class:active={page === 'systeme'} aria-current={page === 'systeme' ? 'page' : undefined} title={t('commun.nav.systeme_titre')}>
+        <span class="glyph"><Icon name="branch" size={20} /></span>
         <span class="label">{t('commun.nav.systeme')}</span>
-      </a>
-      <a class="atelier" href="#/atelier" title={t('commun.nav.atelier_titre')}>
-        <Icon name="atelier" size={20} />
-        <span class="label">{t('commun.nav.atelier')}</span>
       </a>
     </div>
   </nav>
+
+  <!-- Phones: a tab bar at the bottom instead of the side menu. -->
+  <nav class="tabbar" aria-label={t('commun.nav.aria')}>
+    {#each tabs as item (item.path)}
+      <a href="#/{item.path}" class:active={page === item.path} aria-current={page === item.path ? 'page' : undefined}>
+        <Icon name={item.icon} size={22} /><span>{t(item.label)}</span>
+      </a>
+    {/each}
+    <a class="tab-moli" href="#/moli" class:active={page === 'moli'} aria-current={page === 'moli' ? 'page' : undefined} aria-label={t('commun.demander_moli')}>
+      <Orb size={44} state={moli.busy ? 'thinking' : 'idle'} />
+    </a>
+    {#if fourth}
+      <a href="#/{fourth.path}" class:active={page === fourth.path} aria-current={page === fourth.path ? 'page' : undefined}>
+        <Icon name={fourth.icon} size={22} /><span>{t(fourth.label)}</span>
+      </a>
+    {/if}
+    <button class:active={inMore || moreOpen} aria-expanded={moreOpen} aria-haspopup="dialog" onclick={() => (moreOpen = !moreOpen)}>
+      <Icon name="dots" size={22} /><span>{t('commun.nav.plus')}</span>
+    </button>
+  </nav>
+
+  {#if moreOpen}
+    <div class="more-sheet" role="presentation" onclick={(e) => e.target === e.currentTarget && (moreOpen = false)}>
+      <div class="more-panel" role="dialog" aria-modal="true" aria-label={t('commun.nav.plus_titre')}>
+        <ul>
+          {#each rest as item (item.path)}
+            <li>
+              <a href="#/{item.path}" class:active={page === item.path} aria-current={page === item.path ? 'page' : undefined}>
+                <Icon name={item.icon} size={22} /><span>{t(item.label)}</span>
+              </a>
+            </li>
+          {/each}
+          <li>
+            <a href="#/systeme" class:active={page === 'systeme'} aria-current={page === 'systeme' ? 'page' : undefined}>
+              <Icon name="branch" size={22} /><span>{t('commun.nav.systeme')}</span>
+            </a>
+          </li>
+          <li>
+            <a href="#/atelier"><Icon name="atelier" size={22} /><span>{t('commun.nav.atelier')}</span></a>
+          </li>
+          <li>
+            <button onclick={cycleTheme} title={themeTitle}>
+              <Icon name={theme === 'night' ? 'moon' : 'sun'} size={22} /><span>{home.theme === 'auto' ? t('commun.theme.auto_pied') : themeName}</span>
+            </button>
+          </li>
+        </ul>
+      </div>
+    </div>
+  {/if}
 
   <main class="content">
     {#if page === 'salon'}
@@ -179,12 +256,6 @@
     {:else}
       <Accueil />
     {/if}
-    <!-- On a phone the rail's foot is hidden: the same three, at the bottom. -->
-    <footer class="phone-foot">
-      <a href="#/systeme"><Icon name="branch" size={16} />{t('commun.nav.comment_ca_marche')}</a>
-      <a href="#/atelier"><Icon name="atelier" size={16} />{t('commun.nav.atelier')}</a>
-      <button onclick={cycleTheme}><Icon name={theme === 'night' ? 'moon' : 'sun'} size={16} />{home.theme === 'auto' ? t('commun.theme.auto_pied') : themeName}</button>
-    </footer>
   </main>
 
   {#if page !== 'moli'}
@@ -237,87 +308,120 @@
 </div>
 
 <style>
+  /* Large screens: the menu at the side, each page by its name. */
   .maison {
     display: grid;
-    grid-template-columns: 104px minmax(0, 1fr);
+    grid-template-columns: 248px minmax(0, 1fr);
   }
 
   .rail {
     position: sticky;
     top: 0;
     height: 100dvh;
+    box-sizing: border-box;
     display: flex;
     flex-direction: column;
+    gap: 4px;
+    padding: 26px 16px 18px;
+    overflow-y: auto;
+    scrollbar-width: none;
+  }
+
+  .brand {
+    display: flex;
     align-items: center;
-    padding: 22px 0 18px;
-    gap: 18px;
+    gap: 10px;
+    padding: 4px 12px 20px;
+    color: var(--ink);
+    text-decoration: none;
   }
 
   .brand svg {
-    width: 40px;
-    height: 40px;
+    width: 34px;
+    height: 34px;
     display: block;
+    flex: none;
+  }
+
+  .brand-name {
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
   }
 
   .rail ul {
     list-style: none;
-    margin: 12px 0 0;
+    margin: 0;
     padding: 0;
     display: grid;
-    gap: 6px;
+    gap: 4px;
   }
 
-  .rail a,
-  .rail button {
-    display: grid;
-    justify-items: center;
-    gap: 4px;
-    width: 80px;
-    padding: 10px 0 8px;
-    border-radius: 20px;
+  .rail ul a,
+  .rail-foot a,
+  .rail-foot button {
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    min-height: 46px;
+    padding: 0 14px;
     border: 0;
+    border-radius: 14px;
     background: none;
-    color: var(--ink-3);
+    color: var(--ink-2);
+    font: inherit;
+    text-align: left;
     text-decoration: none;
+    cursor: pointer;
     transition: color 0.2s var(--ease), background 0.2s var(--ease);
   }
 
   .rail .glyph {
-    width: 52px;
-    height: 34px;
-    border-radius: 999px;
+    flex: none;
+    width: 24px;
+    height: 24px;
     display: grid;
     place-items: center;
-    transition: background 0.25s var(--ease);
   }
 
   .rail a.active {
-    color: var(--ink);
-  }
-
-  .rail a.active .glyph {
     background: var(--surface);
+    color: var(--ink);
     box-shadow: var(--shadow);
   }
 
-  .rail a:hover {
-    color: var(--ink-2);
+  .rail a:hover,
+  .rail button:hover {
+    color: var(--ink);
   }
 
   .label {
-    font-size: 12px;
-    font-weight: 600;
+    font-size: 15px;
+    font-weight: 550;
+    line-height: 1.2;
+  }
+
+  .rail a.active .label {
+    font-weight: 650;
   }
 
   .rail-foot {
     margin-top: auto;
+    padding-top: 18px;
     display: grid;
-    gap: 4px;
+    gap: 2px;
   }
 
   .rail-foot a,
   .rail-foot button {
-    padding: 8px 0;
+    color: var(--ink-3);
+  }
+
+  .tabbar,
+  .more-sheet {
+    display: none;
   }
 
   .content {
@@ -378,10 +482,6 @@
     font-size: 13.5px;
     font-weight: 600;
     box-shadow: var(--shadow);
-  }
-
-  .phone-foot {
-    display: none;
   }
 
   .notices {
@@ -460,8 +560,47 @@
     color: #fff;
   }
 
-  /* Phones: the rail becomes a bottom bar. */
-  @media (max-width: 760px) {
+  /* Tablets: a narrow rail, the name under each icon. */
+  @media (max-width: 1099.98px) {
+    .maison {
+      grid-template-columns: 104px minmax(0, 1fr);
+    }
+
+    .rail {
+      align-items: center;
+      padding: 22px 0 18px;
+    }
+
+    .brand {
+      padding: 0 0 14px;
+    }
+
+    .brand-name {
+      display: none;
+    }
+
+    .rail ul a,
+    .rail-foot a,
+    .rail-foot button {
+      flex-direction: column;
+      justify-content: center;
+      gap: 4px;
+      width: 84px;
+      min-height: 56px;
+      padding: 8px 2px;
+      border-radius: 18px;
+      text-align: center;
+    }
+
+    .label {
+      font-size: 11.5px;
+      font-weight: 600;
+      overflow-wrap: anywhere;
+    }
+  }
+
+  /* Phones: a tab bar at the bottom (home, rooms, Moli, heating, more). */
+  @media (max-width: 767.98px) {
     /* minmax(0, …): a `1fr` column grows to the widest page content and
        pushes every page sideways on a phone. */
     .maison {
@@ -469,90 +608,137 @@
     }
 
     .rail {
-      position: fixed;
-      inset: auto 0 0 0;
-      height: auto;
-      flex-direction: row;
-      justify-content: center;
-      padding: 6px 8px calc(6px + env(safe-area-inset-bottom));
-      background: var(--surface);
-      box-shadow: var(--shadow-lift);
-      z-index: 25;
-    }
-
-    .rail .brand,
-    .rail-foot {
       display: none;
     }
 
-    .rail ul {
-      grid-auto-flow: column;
-      grid-auto-columns: 62px;
-      width: 100%;
-      margin: 0;
-      gap: 0;
-      overflow-x: auto;
-      scrollbar-width: none;
-      justify-content: safe center;
+    .tabbar {
+      position: fixed;
+      left: 12px;
+      right: 12px;
+      bottom: calc(12px + env(safe-area-inset-bottom));
+      z-index: 25;
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 4px;
+      padding: 8px;
+      border-radius: 24px;
+      background: var(--surface);
+      box-shadow: var(--shadow-lift);
     }
 
-    .rail a {
-      width: auto;
-      padding: 4px 0;
+    .tabbar a,
+    .tabbar button {
+      min-width: 0;
+      min-height: 56px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 3px;
+      border: 0;
+      border-radius: 16px;
+      background: none;
+      color: var(--ink-2);
+      font: inherit;
+      font-size: 11px;
+      font-weight: 550;
+      text-decoration: none;
+      cursor: pointer;
     }
 
-    .label {
-      font-size: 10.5px;
-      max-width: 60px;
+    .tabbar span {
+      max-width: 100%;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
     }
 
-    .rail .glyph {
-      width: 44px;
-      height: 30px;
+    .tabbar .active {
+      background: var(--bg);
+      color: var(--ink);
+      font-weight: 650;
     }
 
-    .content {
-      padding: 20px 16px 140px;
-    }
-
-    .phone-foot {
-      display: flex;
-      flex-wrap: wrap;
-      justify-content: center;
-      gap: 8px 18px;
-      margin-top: 28px;
-      font-size: 13px;
-    }
-
-    .phone-foot a,
-    .phone-foot button {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      border: none;
+    .tabbar .tab-moli,
+    .tabbar .tab-moli.active {
       background: none;
-      color: var(--ink-3);
+    }
+
+    .more-sheet {
+      display: block;
+      position: fixed;
+      inset: 0;
+      z-index: 24;
+      background: rgb(10 14 22 / 35%);
+      animation: fade 0.2s var(--ease) both;
+    }
+
+    .more-panel {
+      position: absolute;
+      left: 12px;
+      right: 12px;
+      bottom: calc(96px + env(safe-area-inset-bottom));
+      max-height: calc(100dvh - 140px);
+      overflow-y: auto;
+      padding: 10px;
+      border-radius: 24px;
+      background: var(--surface);
+      box-shadow: var(--shadow-lift);
+    }
+
+    .more-panel ul {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 6px;
+    }
+
+    .more-panel a,
+    .more-panel button {
+      box-sizing: border-box;
+      width: 100%;
+      min-height: 52px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 0 14px;
+      border: 0;
+      border-radius: 16px;
+      background: var(--surface-2);
+      color: var(--ink);
       font: inherit;
+      font-size: 14.5px;
+      font-weight: 600;
+      text-align: left;
       text-decoration: none;
       cursor: pointer;
     }
 
-    .orb {
-      right: 16px;
-      bottom: 86px;
-      padding: 8px;
+    .more-panel .active {
+      background: var(--warm-soft);
+      color: var(--warm-ink);
     }
 
-    .orb-text {
+    .content {
+      padding: 20px 16px 120px;
+    }
+
+    /* Moli is the tab bar's middle. */
+    .orb {
       display: none;
     }
 
     .notes {
-      bottom: 150px;
+      bottom: calc(100px + env(safe-area-inset-bottom));
       width: calc(100% - 32px);
+    }
+  }
+
+  @keyframes fade {
+    from {
+      opacity: 0;
     }
   }
 </style>

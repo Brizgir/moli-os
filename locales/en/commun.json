@@ -265,5 +265,17 @@
   "commun.piece.modifier": "Edit the room",
   "commun.piece.modifier_nom": "Edit {name}",
   "commun.piece.vide": "No device here yet.",
-  "commun.piece.vide_invitation": "Put a device in this room (Workshop)"
+  "commun.piece.vide_invitation": "Put a device in this room (Workshop)",
+  "commun.nav.chauffage": "Heating",
+  "commun.nav.sonnette_cameras": "Doorbell and cameras",
+  "commun.nav.solaire": "Solar",
+  "commun.nav.plus": "More",
+  "commun.nav.plus_titre": "The rest of the menu",
+  "commun.quand.aujourdhui": "today at {time}",
+  "commun.quand.hier": "yesterday at {time}",
+  "commun.quand.le": "on {date} at {time}",
+  "commun.piece.sans_thermometre": "no thermometer",
+  "commun.piece.temperature_consigne": "{temp}° in the room, set to {aim}°",
+  "commun.piece.consigne": "set to {aim}°",
+  "commun.piece.protegee_phrase": "Protected: an automation or Moli waits for your code here."
 }

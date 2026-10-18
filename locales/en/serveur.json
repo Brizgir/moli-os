@@ -161,5 +161,7 @@
   "serveur.tls.notice_ouvert": "HTTPS open again for {names} (certificate valid until {date}).",
   "serveur.tls.raison.illisible": "certificate or key unreadable ({error})",
   "serveur.tls.raison.expire": "certificate expired on {date}",
-  "serveur.tls.raison.pas_encore": "certificate not valid yet (before {date})"
+  "serveur.tls.raison.pas_encore": "certificate not valid yet (before {date})",
+  "serveur.maison.page_inconnue": "no page “{page}” in the menu",
+  "serveur.maison.choix_inconnu": "“{choice}”: automatic (auto), always or never"
 }

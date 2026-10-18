@@ -161,5 +161,7 @@
   "serveur.tls.notice_ouvert": "HTTPS de nouveau ouvert pour {names} (certificat valable jusqu'au {date}).",
   "serveur.tls.raison.illisible": "certificat ou clé illisible ({error})",
   "serveur.tls.raison.expire": "certificat expiré le {date}",
-  "serveur.tls.raison.pas_encore": "certificat pas encore valable (avant le {date})"
+  "serveur.tls.raison.pas_encore": "certificat pas encore valable (avant le {date})",
+  "serveur.maison.page_inconnue": "pas de page « {page} » dans le menu",
+  "serveur.maison.choix_inconnu": "« {choice} » : automatique (auto), toujours (always) ou jamais (never)"
 }
