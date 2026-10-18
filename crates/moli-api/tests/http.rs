@@ -410,6 +410,19 @@ async fn only_a_person_gives_the_assistant_a_key() {
     assert_eq!(status, 503);
 }
 
+#[tokio::test]
+async fn only_a_person_chooses_the_assistants_model() {
+    let (addr, _hub) = server().await;
+    let (status, body) = request(
+        &addr,
+        "PUT",
+        "/api/assistant/brain",
+        Some(&json!({ "provider": "anthropic", "model": "claude-opus-5-5" })),
+    )
+    .await;
+    assert_eq!(status, 403, "{body}");
+}
+
 /// The response's `Set-Cookie` value for `name`, and the body.
 async fn request_cookie(
     addr: &str,

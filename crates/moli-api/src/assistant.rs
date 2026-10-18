@@ -264,6 +264,9 @@ pub(crate) async fn set_settings(
 #[derive(serde::Deserialize)]
 pub(crate) struct Key {
     api_key: String,
+    /// `anthropic` or `openai`; none: whoever thinks.
+    #[serde(default)]
+    provider: Option<String>,
 }
 
 /// The API key, given by a person (code): tested, then filed encrypted.
@@ -284,8 +287,43 @@ pub(crate) async fn set_key(
     let Some(moli) = moli else {
         return not_configured();
     };
-    match moli.set_key(&key.api_key).await {
+    match moli.set_key(&key.api_key, key.provider.as_deref()).await {
         Ok(()) => axum::Json(json!({ "stored": true })).into_response(),
+        Err(e) => failure(&e),
+    }
+}
+
+#[derive(serde::Deserialize)]
+pub(crate) struct Brain {
+    provider: String,
+    #[serde(default)]
+    model: Option<String>,
+}
+
+/// Who thinks and with which model: a person (code), since it changes
+/// what Moli costs.
+pub(crate) async fn set_brain(
+    Extension(Moli(moli)): Extension<Moli>,
+    Extension(humans): Extension<Arc<Sessions>>,
+    caller: Caller,
+    headers: HeaderMap,
+    axum::Json(brain): axum::Json<Brain>,
+) -> Response {
+    if !humans.is_human(&headers, &caller.key) {
+        return (
+            StatusCode::FORBIDDEN,
+            axum::Json(json!({ "error": moli_i18n::tr!("serveur.cle.assistant_modele") })),
+        )
+            .into_response();
+    }
+    let Some(moli) = moli else {
+        return not_configured();
+    };
+    match moli
+        .set_brain(&brain.provider, brain.model.as_deref())
+        .await
+    {
+        Ok(settings) => axum::Json(settings).into_response(),
         Err(e) => failure(&e),
     }
 }

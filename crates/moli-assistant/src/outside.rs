@@ -1,6 +1,7 @@
 //! What the house does not know: the weather to come (Open-Meteo, free and
 //! keyless, the service the weather driver already reads) and the web (the
-//! provider's own search: `/responses` with its `web_search` tool).
+//! provider's own search: OpenAI's `/responses` with its `web_search` tool
+//! here, Anthropic's server-side search in `claude.rs`).
 
 use std::time::Duration;
 
@@ -117,6 +118,11 @@ pub(crate) async fn search(
     Ok((json!({ "answer": text }), answer["usage"].clone()))
 }
 
+/// The question as the search model reads it: the house's style after it.
+pub(crate) fn question(query: &str) -> String {
+    format!("{query}\n\n{}", moli_i18n::tr("assistant.search.style"))
+}
+
 fn request(model: &str, timezone: &str, query: &str) -> Json {
     json!({
         "model": model,
@@ -125,7 +131,7 @@ fn request(model: &str, timezone: &str, query: &str) -> Json {
             "search_context_size": "low",
             "user_location": { "type": "approximate", "timezone": timezone },
         }],
-        "input": format!("{query}\n\n{}", moli_i18n::tr("assistant.search.style")),
+        "input": question(query),
         "max_output_tokens": 500,
     })
 }

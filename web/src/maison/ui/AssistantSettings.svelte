@@ -7,13 +7,38 @@
   import { fetchSpeech } from '../lib/voice/speech.js';
   import Icon from './Icon.svelte';
 
-  /** Moli's settings: the OpenAI key (given by a person, code asked;
-   *  tested, filed encrypted in Moli, never shown again) and the voice. */
+  /** Moli's settings: who thinks (Claude by Anthropic, or OpenAI) and with which model, the keys
+   *  (given by a person, code asked; tested, filed encrypted in Moli, never shown again), today's
+   *  cost and the voice. Anthropic has no voice: OpenAI's key gives it one, or Whisper and Piper. */
   let s = $state(null);
-  let open = $state(false);
+  /** Which key's form is open: `anthropic`, `openai` or none. */
+  let open = $state(null);
   let key = $state('');
   let busy = $state(false);
   let playing = $state(null);
+
+  const NAMES = { anthropic: 'Anthropic', openai: 'OpenAI' };
+  // Where each provider's key is made: sign-up, credit, spending limit, keys, and how a key starts.
+  const HOW = {
+    anthropic: {
+      signup: ['https://console.anthropic.com/', 'console.anthropic.com'],
+      billing: ['https://console.anthropic.com/settings/billing', 'Billing'],
+      limits: ['https://console.anthropic.com/settings/limits', 'Limits'],
+      keys: ['https://console.anthropic.com/settings/keys', 'API keys'],
+      step4: 'moli.reglages.anthropic_etape4',
+      prefix: 'sk-ant-',
+    },
+    openai: {
+      signup: ['https://platform.openai.com/signup', 'platform.openai.com'],
+      billing: ['https://platform.openai.com/settings/organization/billing/overview', 'Billing'],
+      limits: ['https://platform.openai.com/settings/organization/limits', 'Limits'],
+      keys: ['https://platform.openai.com/api-keys', 'API keys'],
+      step4: 'moli.reglages.etape4',
+      prefix: 'sk-',
+    },
+  };
+  const how = $derived(open ? HOW[open] : null);
+  const models = $derived(s?.providers?.find((p) => p.id === s.provider)?.models ?? []);
 
   async function load() {
     try {
@@ -31,7 +56,7 @@
       const res = await fetch('/api/assistant/key', {
         method: 'PUT',
         headers: { 'content-type': 'application/json', 'x-moli-origin': 'ui' },
-        body: JSON.stringify({ api_key: key.trim() }),
+        body: JSON.stringify({ api_key: key.trim(), provider: open }),
       });
       if (res.status === 403) {
         // A person's gesture: the code first, then the same request again.
@@ -41,7 +66,7 @@
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(body.error ?? res.statusText);
       key = '';
-      open = false;
+      open = null;
       note(t('moli.reglages.cle_enregistree'), 'info');
       moli.status = null;
       await Promise.all([load(), fetch('/api/assistant').then((r) => r.json()).then((j) => (moli.status = j))]);
@@ -51,6 +76,36 @@
       busy = false;
     }
   }
+
+  /** Who thinks and with which model: it changes what Moli costs, so a person's code is asked. */
+  async function think(change) {
+    const before = s;
+    const wanted = { provider: s.provider, ...change };
+    s = { ...s, ...change };
+    try {
+      const res = await fetch('/api/assistant/brain', {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json', 'x-moli-origin': 'ui' },
+        body: JSON.stringify(wanted),
+      });
+      if (res.status === 403) {
+        s = before;
+        home.held = { label: t('moli.reglages.modele_titre'), reason: 'ton code', custom: () => think(change) };
+        return;
+      }
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.error ?? res.statusText);
+      s = body;
+      note(t('moli.reglages.modele_choisi', { model: s.model }), 'info');
+      moli.status = null;
+      await fetch('/api/assistant').then((r) => r.json()).then((j) => (moli.status = j));
+    } catch (e) {
+      s = before;
+      note(t('moli.reglages.modele_erreur', { message: e.message.replace(/^invalid request: /, '') }), 'error');
+    }
+  }
+
+  const price = (n) => (n < 1 ? n.toFixed(2) : String(n));
 
   async function choose(change) {
     const before = s;
@@ -98,13 +153,13 @@
   };
 
   // A step of the key's how-to: the sentence is whole in the catalogue, `{link}` and `{code}` mark the
-  // link to OpenAI and the key's start.
+  // link to the provider and the key's start.
   const SPLIT = /(\{link\}|\{code\})/;
 </script>
 
-{#snippet step(sentence, href, name)}
+{#snippet step(sentence, [href, name], prefix)}
   {#each t(sentence).split(SPLIT) as piece, i (i)}
-    {#if piece === '{link}'}<a {href} target="_blank" rel="noopener">{name}</a>{:else if piece === '{code}'}<code>sk-</code>{:else}{piece}{/if}
+    {#if piece === '{link}'}<a {href} target="_blank" rel="noopener">{name}</a>{:else if piece === '{code}'}<code>{prefix}</code>{:else}{piece}{/if}
   {/each}
 {/snippet}
 
@@ -118,36 +173,76 @@
           {#if s.local_model}
             {t('moli.reglages.local', { model: s.model })}
           {:else if s.key}
-            {t('moli.reglages.cle_ok')}
+            {t('moli.reglages.cle_ok', { provider: NAMES[s.provider] })}
           {:else}
-            {t('moli.reglages.cle_manque')}
+            {t('moli.reglages.cle_manque', { provider: NAMES[s.provider] })}
           {/if}
         </span>
       </div>
       {#if !s.local_model}
-        <button class="btn" onclick={() => (open = !open)}>{s.key ? t('moli.reglages.remplacer') : t('moli.reglages.ajouter')}</button>
+        <button class="btn" onclick={() => (open = open === s.provider ? null : s.provider)}>{s.key ? t('moli.reglages.remplacer') : t('moli.reglages.ajouter')}</button>
       {/if}
     </div>
 
-    {#if open}
+    <div class="brain">
+      <div class="head">
+        <b>{t('moli.reglages.cerveau')}</b>
+        <div class="tones" role="radiogroup" aria-label={t('moli.reglages.cerveau_aria')}>
+          {#each s.providers ?? [] as p (p.id)}
+            <button role="radio" aria-checked={s.provider === p.id} class:on={s.provider === p.id} onclick={() => s.provider !== p.id && think({ provider: p.id, model: null })}>{t(`moli.reglages.fournisseur_${p.id}`)}</button>
+          {/each}
+        </div>
+      </div>
+      {#if models.length > 1}
+        <div class="tones models" role="radiogroup" aria-label={t('moli.reglages.modele_aria')}>
+          {#each models as m (m)}
+            <button role="radio" aria-checked={s.model === m} class:on={s.model === m} onclick={() => s.model !== m && think({ model: m })}>{m}</button>
+          {/each}
+        </div>
+      {/if}
+      <small class="muted">
+        {#if s.rates}{t('moli.reglages.bareme', { model: s.model, input: price(s.rates.input), cached: price(s.rates.cached), output: price(s.rates.output) })}{/if}
+        {#if s.today}{' '}{t('moli.reglages.aujourdhui', { n: s.today.exchanges, dollars: s.today.dollars.toFixed(2) })}{/if}
+      </small>
+    </div>
+
+    {#if open && how}
       <div class="how">
-        <b>{t('moli.reglages.comment')}</b>
+        <b>{t('moli.reglages.comment', { provider: NAMES[open] })}</b>
         <ol>
-          <li>{@render step('moli.reglages.etape1', 'https://platform.openai.com/signup', 'platform.openai.com')}</li>
-          <li>{@render step('moli.reglages.etape2', 'https://platform.openai.com/settings/organization/billing/overview', 'Billing')}</li>
-          <li>{@render step('moli.reglages.etape3', 'https://platform.openai.com/settings/organization/limits', 'Limits')}</li>
-          <li>{@render step('moli.reglages.etape4', 'https://platform.openai.com/api-keys', 'API keys')}</li>
-          <li>{t('moli.reglages.etape5')}</li>
+          <li>{@render step('moli.reglages.etape1', how.signup, how.prefix)}</li>
+          <li>{@render step('moli.reglages.etape2', how.billing, how.prefix)}</li>
+          <li>{@render step('moli.reglages.etape3', how.limits, how.prefix)}</li>
+          <li>{@render step(how.step4, how.keys, how.prefix)}</li>
+          <li>{t('moli.reglages.etape5', { provider: NAMES[open] })}</li>
         </ol>
       </div>
       <form class="form" onsubmit={(e) => (e.preventDefault(), saveKey())} autocomplete="off">
-        <label>{t('moli.reglages.cle_champ')}<input bind:value={key} type="password" placeholder="sk-…" spellcheck="false" autocomplete="new-password" /></label>
+        <label>{t('moli.reglages.cle_champ', { provider: NAMES[open] })}<input bind:value={key} type="password" placeholder={`${how.prefix}…`} spellcheck="false" autocomplete="new-password" /></label>
         <button class="btn primary" disabled={busy || key.trim().length < 20}>{busy ? t('moli.reglages.verification') : t('moli.reglages.enregistrer')}</button>
         <small class="muted">{t('moli.reglages.confidentialite')}</small>
       </form>
     {/if}
 
-    {#if s.cloud_voice && (s.key || s.local_model)}
+    {#if s.provider === 'anthropic'}
+      <div class="row voice-key">
+        <div class="text">
+          <b>{t('moli.reglages.cle_voix')}</b>
+          <span class="muted">
+            {#if s.voice_cloud}
+              {t('moli.reglages.voix_openai')}
+            {:else if s.local_voice || s.local_listen}
+              {t('moli.reglages.voix_locale')}
+            {:else}
+              {t('moli.reglages.voix_aucune')}
+            {/if}
+          </span>
+        </div>
+        <button class="btn" onclick={() => (open = open === 'openai' ? null : 'openai')}>{s.keys?.openai ? t('moli.reglages.remplacer') : t('moli.reglages.ajouter')}</button>
+      </div>
+    {/if}
+
+    {#if s.voice_cloud && (s.key || s.local_model)}
       <div class="voice">
         <div class="head">
           <b>{t('moli.reglages.voix')}</b>
@@ -248,6 +343,20 @@
   .btn:disabled {
     opacity: 0.5;
     cursor: default;
+  }
+
+  .brain {
+    display: grid;
+    gap: 8px;
+  }
+
+  .models {
+    flex-wrap: wrap;
+    border-radius: var(--r-sm);
+  }
+
+  .voice-key .btn {
+    background: var(--surface);
   }
 
   .how {

@@ -9,8 +9,9 @@ use moli_runtime::BoxFuture;
 use serde::Deserialize;
 use serde_json::{Value as Json, json};
 
+use crate::claude::{self, Ask};
 use crate::house::{self, Layout};
-use crate::{Assistant, AssistantError, is_reasoning, pricing};
+use crate::{Assistant, AssistantError, OpenAiKnobs, Provider, pricing};
 
 /// What Moli proposes.
 #[derive(Clone, Debug)]
@@ -201,7 +202,7 @@ impl Assistant {
         let layout = Layout::load(self.0.layout_path.as_deref()).await;
         let snapshot = self.0.hub.snapshot();
         let now = jiff::Timestamp::now().to_zoned(self.0.tz.clone());
-        let system = builder_prompt(
+        let house_now = builder_context(
             &crate::house_date(&now),
             &snapshot.guard.protected_rooms.join(", "),
             &house::inventory(
@@ -212,42 +213,26 @@ impl Assistant {
             ),
             &self.meters().await,
         );
+        let guide = moli_i18n::tr!("assistant.auto.guide");
         let user = request_message(&request, current);
+        let brain = self.brain();
+        // The guide is long and never changes: Claude keeps it in its cache.
         let mut messages = vec![
-            json!({ "role": "system", "content": system }),
+            json!({ "role": "system", "content": format!("{guide}\n\n{house_now}"),
+                    "blocks": [{ "text": guide, "cache": true }, { "text": house_now }] }),
             json!({ "role": "user", "content": user }),
         ];
+        let schema = schema();
         let mut last_problems = String::new();
         for attempt in 0..2 {
-            let model = &self.0.config.builder_model;
-            let mut body = json!({
-                "model": model,
-                "messages": messages,
-                "response_format": { "type": "json_schema", "json_schema": { "name": "automation", "strict": true, "schema": schema() } },
-            });
-            if is_reasoning(model) {
-                body["max_completion_tokens"] = json!(8_000);
-                body["reasoning_effort"] = json!("low");
-            } else {
-                body["temperature"] = json!(0.2);
-                body["max_tokens"] = json!(3_000);
-            }
-            let answer = self
-                .0
-                .endpoint
-                .chat(key, &body)
-                .await
-                .map_err(|e| AssistantError::Upstream(e.to_string()))?;
-            *spent += pricing::chat(model, &answer["usage"]);
-            let content = answer["choices"][0]["message"]["content"]
-                .as_str()
-                .unwrap_or_default()
-                .to_owned();
+            let (content, said) = self
+                .draft_round(key, &brain, &messages, &schema, spent)
+                .await?;
             let draft = match parse(&content, current) {
                 Ok(d) => d,
                 Err(e) => {
                     last_problems = e;
-                    messages.push(json!({ "role": "assistant", "content": content }));
+                    messages.push(said);
                     messages.push(json!({ "role": "user", "content": moli_i18n::tr!("assistant.auto.unreadable", problems = last_problems) }));
                     continue;
                 }
@@ -279,13 +264,61 @@ impl Assistant {
                 return Ok(draft);
             }
             last_problems = errors.join(" ; ");
-            messages.push(json!({ "role": "assistant", "content": content }));
+            messages.push(said);
             messages.push(json!({ "role": "user", "content": moli_i18n::tr!("assistant.auto.refused", problems = last_problems) }));
         }
         Err(AssistantError::Upstream(moli_i18n::tr!(
             "assistant.auto.unusable",
             problems = last_problems
         )))
+    }
+
+    /// One round trip of a draft: the answer's text, and the message that
+    /// keeps it in the conversation (Claude's blocks as they came, its
+    /// thinking too). What it cost is added to `spent`.
+    async fn draft_round(
+        &self,
+        key: Option<&str>,
+        brain: &crate::Brain,
+        messages: &[Json],
+        schema: &Json,
+        spent: &mut f64,
+    ) -> Result<(String, Json), AssistantError> {
+        let model = &brain.builder_model;
+        let answer = self
+            .complete(
+                key,
+                brain.provider,
+                &Ask {
+                    model,
+                    messages,
+                    tools: None,
+                    last: false,
+                    effort: &self.0.config.builder_effort,
+                    schema: Some(schema),
+                },
+                OpenAiKnobs {
+                    reasoning_tokens: 8_000,
+                    temperature: 0.2,
+                    max_tokens: 3_000,
+                },
+                claude::BUILD_LIMIT,
+            )
+            .await?;
+        *spent += pricing::chat(model, &answer["usage"]);
+        if answer.get("refused").is_some() {
+            return Err(AssistantError::Upstream(moli_i18n::tr!(
+                "assistant.reply.refused"
+            )));
+        }
+        let message = &answer["choices"][0]["message"];
+        let content = message["content"].as_str().unwrap_or_default().to_owned();
+        let said = if brain.provider == Provider::Anthropic {
+            json!({ "role": "assistant", "content": content, "claude": message["claude"] })
+        } else {
+            json!({ "role": "assistant", "content": content })
+        };
+        Ok((content, said))
     }
 
     /// A text for a « Moli écrit » node: words for people, from the house's
@@ -309,23 +342,36 @@ impl Assistant {
                 house::Reader::Chat,
             ),
         );
-        let mut body = json!({
-            "model": self.0.config.model,
-            "messages": [{ "role": "system", "content": system }, { "role": "user", "content": prompt }],
-        });
-        if is_reasoning(&self.0.config.model) {
-            body["max_completion_tokens"] = json!(3_000);
-            body["reasoning_effort"] = json!("low");
-        } else {
-            body["temperature"] = json!(0.6);
-            body["max_tokens"] = json!(400);
-        }
+        let brain = self.brain();
+        let messages = [
+            json!({ "role": "system", "content": system }),
+            json!({ "role": "user", "content": prompt }),
+        ];
         let answer = self
-            .0
-            .endpoint
-            .chat(key.as_deref(), &body)
-            .await
-            .map_err(|e| AssistantError::Upstream(e.to_string()))?;
+            .complete(
+                key.as_deref(),
+                brain.provider,
+                &Ask {
+                    model: &brain.model,
+                    messages: &messages,
+                    tools: None,
+                    last: false,
+                    effort: &self.0.config.effort,
+                    schema: None,
+                },
+                OpenAiKnobs {
+                    reasoning_tokens: 3_000,
+                    temperature: 0.6,
+                    max_tokens: 400,
+                },
+                crate::llm::CHAT_LIMIT,
+            )
+            .await?;
+        if answer.get("refused").is_some() {
+            return Err(AssistantError::Upstream(moli_i18n::tr!(
+                "assistant.reply.refused"
+            )));
+        }
         Ok(answer["choices"][0]["message"]["content"]
             .as_str()
             .unwrap_or_default()
@@ -334,19 +380,15 @@ impl Assistant {
     }
 }
 
-/// What the drafting model is told: the guide, then the house as it is now.
-/// The inventory comes last among the words filled in (see `moli_i18n`).
-fn builder_prompt(date: &str, protected: &str, inventory: &str, meters: &str) -> String {
-    format!(
-        "{}\n\n{}",
-        moli_i18n::tr!("assistant.auto.guide"),
-        moli_i18n::tr!(
-            "assistant.auto.context",
-            date = date,
-            protected = protected,
-            meters = meters,
-            inventory = inventory
-        )
+/// What the drafting model is told after the guide: the house as it is
+/// now. The inventory comes last among the words filled in (see `moli_i18n`).
+fn builder_context(date: &str, protected: &str, inventory: &str, meters: &str) -> String {
+    moli_i18n::tr!(
+        "assistant.auto.context",
+        date = date,
+        protected = protected,
+        meters = meters,
+        inventory = inventory
     )
 }
 
@@ -627,7 +669,11 @@ mod tests {
         let date = "samedi 3 octobre 2026, 21h05";
         for protected in ["Chambre des enfants, Bureau", ""] {
             assert_eq!(
-                builder_prompt(date, protected, inventory, meters),
+                format!(
+                    "{}\n\n{}",
+                    moli_i18n::tr!("assistant.auto.guide"),
+                    builder_context(date, protected, inventory, meters)
+                ),
                 before::builder_prompt(date, protected, inventory, meters)
             );
         }
