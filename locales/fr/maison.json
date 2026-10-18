@@ -298,7 +298,7 @@
   "maison.accueil.chauffage.hors_gel": "Hors-gel",
   "maison.accueil.chauffage.arrete": "Arrêté",
   "maison.accueil.sonnette_titre": "Sonnette",
-  "maison.accueil.sonnette_image": "L’image de la porte viendra quand Ring donnera ses instantanés.",
+  "maison.accueil.sans_image": "Cet appareil ne donne pas d’image.",
   "maison.accueil.dernier_appui": "Dernier appui {when}",
   "maison.accueil.aucun_appui": "Personne n’a sonné cette semaine",
   "maison.accueil.dernier_mouvement": "Mouvement : {name}, {when}",

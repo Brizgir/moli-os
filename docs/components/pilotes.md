@@ -226,9 +226,11 @@ host = "192.168.1.x"
 
 ## `ring` : sonnettes et carillons Ring (`crates/moli-ring`)
 
-- **Couvre** : les sonnettes, caméras (`stickup_cams`) et carillons d'un compte Ring. **Lecture
-  seule**, pas d'image. Interface **non officielle** (celle de l'appli Android), le seul chemin :
-  un appareil Ring n'ouvre aucun port sur le réseau local.
+- **Couvre** : les sonnettes, caméras (`stickup_cams`) et carillons d'un compte Ring : événements,
+  santé, la dernière image de chaque caméra à la demande, et le mode du lieu (« Modes » de
+  l'appli : `disarmed`, `home`, `away`), la seule chose que Moli écrit. Interface **non
+  officielle** (celle de l'appli Android), le seul chemin : un appareil Ring n'ouvre aucun port
+  sur le réseau local.
 - **Connexion** (Système, carte Ring, `web/src/maison/ui/RingAccount.svelte`) : Ring n'offre
   aucune page de connexion pour une autre application, et **le mot de passe ne passe jamais par
   Moli**. La personne fait un jeton sur son ordinateur avec le client de Ring (`npx -p
@@ -254,10 +256,32 @@ host = "192.168.1.x"
   `battery_percentage`) ; derniers événements toutes les `poll` s (10 par défaut, 5 au moins) :
   `locations/<loc>/devices/<id>/events?limit=5`, ou l'ancien `doorbots/<id>/history` si le
   premier répond 404. 429 : pause de 10 min.
+- **Images** (`src/images.rs`, `SnapshotSource` déclaré au hub pour chaque sonnette et caméra,
+  jamais pour un carillon) : `PUT snapshots/update` (`{doorbot_ids, refresh: true}`), puis `POST
+  snapshots/timestamps` (`{doorbot_ids}` → `timestamps[].timestamp` en ms) toutes les 2 s, 5 fois
+  au plus, jusqu'à un horodatage plus récent que celui de l'image gardée, puis `GET
+  snapshots/image/<id>` (JPEG ; 404/410 : rien de disponible, l'image gardée est rendue). Jamais
+  en boucle : à la demande d'une surface seulement, une par caméra à la fois (verrou du hub et
+  cache du pilote), pas plus d'une demande par 60 s sur batterie (15 s sur secteur) ; entre deux,
+  l'image gardée. Même horodatage que l'image gardée : pas de nouvelle lecture. Le client Ring est
+  partagé entre la boucle et les images (`Arc<Mutex<Client>>`), le jeton renouvelé y est rangé
+  par `SecretKeeper` (hors de la boucle du pilote). L'heure de l'image est montrée au point
+  `image_at` (RFC 3339), que la tuile caméra affiche à la place de l'heure de lecture.
+- **Modes** (`model::mode`, `lib.rs::command_received`) : un appareil `ring:location-<lieu>` par
+  lieu qui répond, `GET/POST /api/v1/mode/location/<lieu>` sur l'hôte de l'appli
+  (`prd-api-us.prd.rings.solutions`, comme ring-client-api et python-ring-doorbell aujourd'hui ;
+  `app.ring.com` autrefois), mêmes en-têtes (`Bearer`, `hardware_id`, `user-agent`). Corps
+  `{"mode": …}` ; réponse `{mode, lastUpdateTimeMS, readOnly, …}`. Point `mode` (enum
+  `disarmed|home|away`, **`Semantic::Control`** : la garde retient tout ordre qui n'est pas `ui`
+  avec session, `automation` ou `system` ; `household`, `assistant`, `mcp`, `api`, `cli` reçoivent
+  une demande d'approbation, 202), `mode_since` (RFC 3339). Relu toutes les 30 s et juste après
+  chaque ordre ; l'ordre est en erreur si Ring ne montre pas le mode demandé. `readOnly` (alarme
+  Ring) : lu, refus d'écrire. `disabled`/`unset` : l'appareil est indisponible, sans mode.
 - **Configuration** : `kind = "ring"`, option `poll` seulement.
 - **Points** : sonnette `doorbell` (impulsion, vrai 10 s), `motion` (vrai 60 s après le dernier),
-  `battery` (%), `wifi_signal` (dBm) ; caméra : les mêmes sans `doorbell` ; carillon : `volume`
-  (0 à 11), `wifi_signal`. En ligne : disponibilité de l'appareil.
+  `battery` (%), `wifi_signal` (dBm), `image_at` ; caméra : les mêmes sans `doorbell` ; carillon :
+  `volume` (0 à 11), `wifi_signal` ; Surveillance Ring : `mode` (écrivable), `mode_since`. En
+  ligne : disponibilité de l'appareil.
 - **Pièges** : pas de notifications push (FCM) dans cette version, d'où le sondage. Un événement
   est dit **une fois**, s'il a moins de 90 s, et **jamais** depuis la première lecture après un
   démarrage ou une reconnexion (elle ne fait qu'apprendre ce qui est là) : jamais de « on sonne »
@@ -271,13 +295,17 @@ host = "192.168.1.x"
   événements des deux adresses ; fraîcheur des événements.
 - **Non vérifié** (jamais tourné contre les serveurs Ring) : `POST /session` (non bloquant si
   refusé), la forme exacte de `locations/<loc>/devices/<id>/events` (d'où le repli sur
-  `history`), `chimes/<id>/health`. Marche à suivre au premier essai :
-  `integrations/ring/onboarding.md`.
-- **Décisions** : lecture seule ; sondage plutôt que FCM (pas de dépendance à Firebase, au prix
-  de 10 à 20 s de retard) ; « en ligne » par la disponibilité de l'appareil, pas par un point
-  `online` ; `hardware_id` tiré une fois et gardé au coffre.
-- **Suites** : notifications push (instantané), instantané d'image, volume du carillon en
-  écriture.
+  `history`), `chimes/<id>/health` ; les instantanés (`snapshots/update`, `timestamps`, `image`)
+  et les modes (hôte de l'appli, forme de la réponse), écrits d'après ring-client-api et
+  python-ring-doorbell, rejoués sur des fixtures anonymisées (`snapshots-timestamps.json`,
+  `mode-location.json`) par les tests de `lib.rs` (pilote complet sur un faux transport : cache
+  d'image, horodatage jamais rajeuni, refus par origine, relecture après ordre, changement vu
+  depuis l'appli). Marche à suivre au premier essai : `integrations/ring/onboarding.md`.
+- **Décisions** : seul le mode s'écrit, par une personne (`Semantic::Control`) ; images à la
+  demande seulement, jamais en boucle (batterie, quotas) ; sondage plutôt que FCM (pas de
+  dépendance à Firebase, au prix de 10 à 20 s de retard) ; « en ligne » par la disponibilité de
+  l'appareil, pas par un point `online` ; `hardware_id` tiré une fois et gardé au coffre.
+- **Suites** : notifications push (instantané), volume du carillon en écriture, vidéo en direct.
 
 ## `sonos` : enceintes Sonos (`crates/moli-sonos`)
 
@@ -631,7 +659,7 @@ ni pièce native). Il ne déplace jamais rien. Sans argument : plan à blanc ; `
 | `hue` | `moli-hue` | HTTPS CLIP v2 + SSE, local, épinglé | oui : lumières, pièces ; zones non | pont Philips Hue (CLIP v2) |
 | `tuya` | `moli-tuya` | TCP 6668 chiffré 3.3/3.4/3.5, UDP 6666/6667/7000 ; cloud en lecture | oui : DP booléens, entiers, enum (local seulement) | prises Tuya (local, écriture comprise) ; capteurs sur pile et passerelles (cloud) |
 | `reolink` | `moli-reolink` | HTTPS API locale, épinglé (X.509 v1) | non (+ images) | Reolink Home Hub (caméras, sonnette) |
-| `ring` | `moli-ring` | HTTPS, API cloud de l'appli Ring (non officielle) | non | pas encore (cible : sonnette Ring et Chime) |
+| `ring` | `moli-ring` | HTTPS, API cloud de l'appli Ring (non officielle) | non | en service (sonnette et caméras sur batterie, un seul lieu) ; images et modes rejoués, à vérifier chez la personne |
 | `sonos` | `moli-sonos` | UPnP/SOAP HTTP 1400 ; annonces en WebSocket TLS 1443 | oui : lecture, volume, sourdine, annonces | Sonos Beam |
 | `alexa` | `moli-alexa` | HTTPS, interface de l'appli Alexa (non officielle) | oui : lecture, volume, musique, phrases, annonces, commandes | Echo Dot, Spot, Show 5 et groupes (lecture partielle, en cours) |
 | `philips` | `moli-philips` | JointSpace HTTPS 1926, digest, WoL ; Android TV Remote, Cast | oui : alimentation, volume, sourdine, Ambilight, touches, appli | Philips Google TV (lecture) |

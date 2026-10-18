@@ -73,5 +73,6 @@ export function visiblePages(facts, choices) {
  *  events without image (a Ring doorbell before its snapshots). */
 export function camerasOnlyRing(devices = [], config = {}) {
   if ((config?.favorites?.cameras?.length ?? 0) > 0) return false;
-  return !devices.some((d) => d.camera) && devices.some(ringing);
+  const shown = devices.filter((d) => d.camera || ringing(d));
+  return shown.length > 0 && shown.every((d) => d.manufacturer === 'Ring');
 }

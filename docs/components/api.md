@@ -212,6 +212,15 @@ Règles, dans l'ordre :
    facultatif ; liste vide = toute la maison) : la fenêtre peut passer minuit, `from == to`
    = toute la journée, l'heure d'été est suivie. Raison `heures calmes (21:00 → 07:30)`.
 
+Règle avant toutes les autres, **quelle que soit la pièce** : un point `Semantic::Control` (ordre
+à une machine au travail : pause ou annulation d'une impression, extinction d'un ordinateur ; mode
+de surveillance Ring : `disarmed`, `home`, `away`) n'obéit qu'à `ui` (session), `system` et
+`automation` ; `household`, `assistant`, `mcp`, `api` et `cli` reçoivent une demande d'approbation
+(raison `serveur.garde.machine`). Le tableau de bord sans code demande donc le code à l'appui :
+armer ou désarmer la surveillance d'une maison habitée est l'affaire d'une personne, et un
+automatisme qu'une personne a validé porte son intention. Testé dans `moli-runtime/tests/hub.rs`
+et dans `moli-ring` (refus `assistant`, `mcp`, `household`, `api` ; accepté `ui`, `automation`).
+
 Règles annexes :
 
 - **Étiquettes** : une origine autre que `ui`/`system` ne peut pas changer la **pièce**

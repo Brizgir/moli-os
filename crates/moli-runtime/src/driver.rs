@@ -111,6 +111,16 @@ impl DriverCtx {
         );
     }
 
+    /// Writes this instance's secrets from outside the driver's loop (a
+    /// cloud session renewed while a surface asks for an image).
+    #[must_use]
+    pub fn secret_keeper(&self) -> SecretKeeper {
+        SecretKeeper {
+            hub: self.hub.clone(),
+            instance: self.instance.clone(),
+        }
+    }
+
     /// Whether credentials obtained at runtime can be persisted.
     #[must_use]
     pub fn can_store_secrets(&self) -> bool {
@@ -293,6 +303,21 @@ impl DriverCtx {
 
     fn owns(&self, id: &DeviceId) -> bool {
         id.instance() == self.instance
+    }
+}
+
+/// Files one instance's secrets, from any task (see
+/// [`DriverCtx::store_secret`]).
+#[derive(Clone, Debug)]
+pub struct SecretKeeper {
+    hub: Hub,
+    instance: InstanceId,
+}
+
+impl SecretKeeper {
+    /// Persists a secret for the instance (encrypted at rest).
+    pub async fn store(&self, name: &str, value: &str) -> std::io::Result<()> {
+        self.hub.store_secret(&self.instance, name, value).await
     }
 }
 

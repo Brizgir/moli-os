@@ -4,10 +4,10 @@
   import { t } from '../../lib/i18n.svelte.js';
   import Icon from './Icon.svelte';
 
-  /** A doorbell that tells its events without an image (Ring): the last
-   *  press and the last motion, read in the history (the live value falls
-   *  back to « no » seconds later), and the batteries. The image waits for
-   *  the driver to give snapshots: a place kept for it. */
+  /** A doorbell that tells its events without an image: the last press
+   *  and the last motion, read in the history (the live value falls back
+   *  to « no » seconds later), and the batteries. A Ring doorbell gives
+   *  its image now (`CameraTile`): this card is for one that does not. */
   const devices = $derived(Object.values(hub.devices).filter((d) => !hidden(d.id) && ringing(d)));
   const bell = $derived(devices.find((d) => d.points.some((p) => p.key === 'doorbell')) ?? devices[0]);
   const watchers = $derived(devices.filter((d) => d.points.some((p) => p.key === 'motion')));
@@ -47,7 +47,7 @@
       <h2><Icon name="bell" size={18} />{t('maison.accueil.sonnette_titre')}</h2>
       <span class="more" aria-hidden="true"><Icon name="arrow-top-right" size={18} /></span>
     </div>
-    <div class="picture">{t('maison.accueil.sonnette_image')}</div>
+    <div class="picture">{t('maison.accueil.sans_image')}</div>
     <div class="facts">
       <b>{pressed ? t('maison.accueil.dernier_appui', { when: dayAndTime(pressed, home.now) }) : t('maison.accueil.aucun_appui')}</b>
       <span class="muted">

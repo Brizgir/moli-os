@@ -298,7 +298,7 @@
   "maison.accueil.chauffage.hors_gel": "Frost guard",
   "maison.accueil.chauffage.arrete": "Off",
   "maison.accueil.sonnette_titre": "Doorbell",
-  "maison.accueil.sonnette_image": "The picture of the door will come when Ring gives its snapshots.",
+  "maison.accueil.sans_image": "This device gives no image.",
   "maison.accueil.dernier_appui": "Last ring {when}",
   "maison.accueil.aucun_appui": "Nobody rang this week",
   "maison.accueil.dernier_mouvement": "Motion: {name}, {when}",
