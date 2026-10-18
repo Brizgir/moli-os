@@ -18,6 +18,6 @@
       <h2><Icon name="cctv" size={18} />{title ?? nameOf(id)}</h2>
       <a class="more" href="#/cameras" aria-label={t('maison.accueil.toutes_cameras')}><Icon name="arrow-top-right" size={18} /></a>
     </div>
-    <CameraTile {id} name={nameOf(id)} refresh={battery ? 0 : refresh} {battery} />
+    <CameraTile {id} name={nameOf(id)} refresh={battery ? 0 : refresh} {battery} onopen={(cam) => (location.hash = `#/cameras/${encodeURIComponent(cam)}`)} />
   </section>
 {/if}

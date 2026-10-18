@@ -39,8 +39,31 @@
     }
   }
 
+  /** `route`: `cameras/<id>` opens that camera big at once (a tap on an
+   *  image of the home page); closing it goes back there. */
+  let { route = '' } = $props();
+
   let open = $state(null);
+  let fromRoute = false;
   const current = $derived(cameras.find((c) => c.id === open));
+
+  $effect(() => {
+    const id = decodeURIComponent(route.split('/')[1] ?? '');
+    if (!id) return;
+    untrack(() => {
+      open = id;
+      fromRoute = true;
+    });
+  });
+
+  function close() {
+    if (fromRoute) {
+      fromRoute = false;
+      if (history.length > 1) history.back();
+      else location.hash = '#/cameras';
+    }
+    open = null;
+  }
 
   // What the camera saw today, from the history (rising edges only).
   const KINDS = [
@@ -103,7 +126,7 @@
   function onkey(e) {
     if (e.key !== 'Escape') return;
     if (shown) shown = null;
-    else open = null;
+    else if (open) close();
   }
 </script>
 
@@ -164,11 +187,11 @@
 
 {#if current}
   <div class="viewer" role="dialog" aria-modal="true" aria-label={t('salon.cameras.camera', { nom: current.name })}>
-    <button class="backdrop" onclick={() => (open = null)} aria-label={t('commun.fermer')}></button>
+    <button class="backdrop" onclick={close} aria-label={t('commun.fermer')}></button>
     <div class="stage">
       <div class="bar">
         <h2>{current.name}</h2>
-        <button class="close" onclick={() => (open = null)} aria-label={t('commun.fermer')}><Icon name="close" size={22} /></button>
+        <button class="close" onclick={close} aria-label={t('commun.fermer')}><Icon name="close" size={22} /></button>
       </div>
       {#if shown}
         {@const kind = kindOf(shown.key)}

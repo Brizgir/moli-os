@@ -232,7 +232,7 @@
     {:else if page === 'chauffage'}
       {#await import('./pages/Chauffage.svelte') then { default: Chauffage }}<Chauffage {route} />{/await}
     {:else if page === 'cameras'}
-      <Cameras />
+      <Cameras {route} />
     {:else if page === 'parler'}
       <Parler />
     {:else if page === 'energie' && route.startsWith('energie/solaire')}

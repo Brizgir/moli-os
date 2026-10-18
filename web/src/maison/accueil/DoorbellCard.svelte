@@ -26,6 +26,9 @@
   });
   const rings = $derived(Object.values(hub.devices).some((d) => !hidden(d.id) && ringing(d)));
 
+  /** A tap on the image: the camera big, with its passages of the day. */
+  const openBig = (id) => (location.hash = `#/cameras/${encodeURIComponent(id)}`);
+
   // The last real passage at the door (the history knows; the live value
   // is refreshed every few seconds whatever happens).
   let passage = $state(null);
@@ -45,7 +48,7 @@
       <h2><Icon name="bell" size={18} />{title ?? t('maison.accueil.devant_porte')}</h2>
       <a class="more" href="#/cameras" aria-label={t('maison.accueil.toutes_cameras')}><Icon name="arrow-top-right" size={18} /></a>
     </div>
-    <CameraTile id={bell.id} name={bell.name} refresh={bell.battery ? 0 : 15} battery={!!bell.battery} />
+    <CameraTile id={bell.id} name={bell.name} refresh={bell.battery ? 0 : 15} battery={!!bell.battery} onopen={openBig} />
     <p class="muted small">{passage ? t('maison.accueil.dernier_passage', { when: relative(passage, home.now) }) : t('maison.accueil.personne')}</p>
     {#if modes}<RingModes compact />{/if}
   </section>
