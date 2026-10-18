@@ -107,6 +107,18 @@
   const brickWord = (id) => (Object.hasOwn(BRICKS, id) ? t(`systeme.briques.${id}.desc`) : '');
   const SURFACES = { maison: 'home', atelier: 'atelier', mcp: 'robot', rest: 'branch' };
 
+  // HTTPS served by Moli itself ([server.tls]): where, until when, or why
+  // it is closed (the server says it in the house's language).
+  const httpsText = (tls) =>
+    tls.open
+      ? `${t('systeme.https.ouvert', {
+          port: tls.port,
+          names: tls.names.join(', '),
+          date: new Date(tls.expires).toLocaleDateString(locale()),
+          days: tls.expires_in_days,
+        })}${tls.expires_in_days < 14 ? ` · ${t('systeme.https.bientot')}` : ''}`
+      : t('systeme.https.ferme', { reason: tls.reason });
+
   // Commandable devices in no room: nobody can tell whether they sit in a
   // bedroom. (Weather, tariffs, the house's own helpers belong to no room.)
   const roomless = $derived(
@@ -278,6 +290,12 @@
             <span><b>{s.name}</b><small>{s.what}</small></span>
           </button>
         {/each}
+        {#if sys.tls}
+          <div class="node https" class:closed={!sys.tls.open} title={t('systeme.https.aide')}>
+            <span class="ic"><Icon name="shield" size={18} /></span>
+            <span><b>{t('systeme.https.titre')}</b><small>{httpsText(sys.tls)}</small></span>
+          </div>
+        {/if}
       </section>
     </div>
 
@@ -505,6 +523,10 @@
 
   .node:hover {
     transform: translateY(-1px);
+  }
+
+  .https.closed small {
+    color: var(--alert);
   }
 
   .node span {

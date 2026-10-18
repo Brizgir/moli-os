@@ -274,6 +274,7 @@ pub(crate) async fn redeem(
     Extension(humans): Extension<Arc<Sessions>>,
     Extension(persons): Persons,
     caller: Caller,
+    transport: crate::session::Transport,
     Json(body): Json<InvitationBody>,
 ) -> Response {
     match persons
@@ -281,7 +282,7 @@ pub(crate) async fn redeem(
         .await
     {
         Ok((token, person)) => (
-            [(SET_COOKIE, People::cookie(&token))],
+            [(SET_COOKIE, People::cookie(&token, transport))],
             Json(json!({ "person": person })),
         )
             .into_response(),

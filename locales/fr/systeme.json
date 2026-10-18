@@ -386,9 +386,13 @@
   "systeme.ring.verification": "Connexion…",
   "systeme.ring.aide": "Moli envoie ce jeton à Ring une fois pour le vérifier, puis garde seulement celui que Ring lui rend, chiffré dans son coffre, et le renouvelle lui-même. Ce que tu colles n'est ni affiché, ni journalisé, ni gardé. Moli apparaîtra parmi les appareils autorisés de ton compte Ring : tu peux l'y retirer à tout moment.",
   "systeme.ring.officieux": "Ring ne propose pas d'interface officielle : Moli utilise celle de l'appli Ring, qui peut changer sans prévenir. Les appuis sont relevés toutes les quelques secondes.",
-
   "systeme.journal.service.sync": "planning de chauffe modifié",
   "systeme.journal.service.create": "planning de chauffe créé",
   "systeme.journal.service.activate": "planning de chauffe activé",
-  "systeme.journal.service.autre": "action « {action} »"
+  "systeme.journal.service.autre": "action « {action} »",
+  "systeme.https.titre": "HTTPS",
+  "systeme.https.ouvert": "Ouvert sur le port {port} pour {names} · certificat valable jusqu'au {date} ({days} j)",
+  "systeme.https.bientot": "à renouveler bientôt",
+  "systeme.https.ferme": "Fermé : {reason}",
+  "systeme.https.aide": "Servi par Moli lui-même, sans relais : le micro du navigateur veut une page sécurisée. Le HTTP reste ouvert pour la maison."
 }
