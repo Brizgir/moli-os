@@ -32,6 +32,8 @@
      *  to what is chosen. */
     ruler = null,
     onpick = () => {},
+    /** How big the devices and the temperatures show (1: as drawn). */
+    sizes = { devices: 1, gauges: 1 },
     /** Edit: a change starts (to undo it), and ends. */
     onbegin = () => {},
     onend = () => {},
@@ -267,6 +269,17 @@
     });
   }
 
+  /** The pill hangs this far (cm) above the point it is anchored to. */
+  const LIFT = $derived(18 / cam.k);
+
+  /** The temperature pill of room `r` following the finger (anywhere on
+   *  the floor); the handle sits on the pill, not on its anchor. */
+  function grabGauge(e, r) {
+    grab(e, (x, y) => {
+      floor.rooms[r].gauge = E.clampPoint([x, y + LIFT], size).map((v) => (magnet ? E.toGrid(v) : Math.round(v)));
+    });
+  }
+
   /** Corner `j` of room `r` following the finger, caught by its neighbours
    *  (right angles), the other rooms' corners and the walls' faces. */
   function cornerMover(r, j) {
@@ -364,7 +377,7 @@
 
   const label = (n) => n.replace(/\s+/g, ' ');
   /** Devices small when the whole floor shows, full size once zoomed in. */
-  const pinScale = $derived(Math.min(1, Math.max(0.6, (cam.k / fitK) * 0.6)));
+  const pinScale = $derived(Math.min(1, Math.max(0.6, (cam.k / fitK) * 0.6)) * (sizes.devices ?? 1));
   const fs = $derived(12 / cam.k);
   const visible = (x, y) => x > cam.x - 80 / cam.k && y > cam.y - 80 / cam.k && x < cam.x + (W + 80) / cam.k && y < cam.y + (H + 80) / cam.k;
 
@@ -379,6 +392,12 @@
       if (typeof v === 'number') return v;
     }
     return null;
+  }
+
+  /** Where a room's temperature sits unless told: its foot, under its label. */
+  function gaugeAt0(poly) {
+    const [x] = labelAt(poly);
+    return [x, bottomAt(poly, x)];
   }
 
   /** The lowest point of a room under x: where its temperature sits. */
@@ -414,8 +433,8 @@
       if (t == null && r.kind === 'garden' && !garden) t = outside;
       if (r.kind === 'garden') garden = true;
       if (t == null) continue;
-      const [x] = labelAt(r.poly);
-      out.push({ id: r.id, t, x, y: bottomAt(r.poly, x), w: bbox(r.poly).w, indoor: INDOOR.has(r.kind) });
+      const [x, y] = r.gauge ?? gaugeAt0(r.poly);
+      out.push({ id: r.id, t, x, y, w: bbox(r.poly).w, indoor: INDOOR.has(r.kind) });
     }
     return out;
   });
@@ -490,6 +509,18 @@
       <!-- the handles wait: the tap picks the reference -->
     {:else if sel && selection.type === 'room'}
       <polygon points={points(sel.poly)} {...line} pointer-events="none" />
+      {#if sel.kind !== 'void' && sel.kind !== 'roof'}
+        {@const [gx, gy0] = sel.gauge ?? gaugeAt0(sel.poly)}
+        {@const gy = gy0 - LIFT}
+        <!-- where its temperature shows: a thermometer to drag -->
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
+        <g class="handle gauge-handle" onpointerdown={(e) => grabGauge(e, selection.i)}>
+          <circle cx={gx} cy={gy} r={hit * 1.2} fill="transparent" />
+          <circle cx={gx} cy={gy} r={11 / cam.k} fill={skin.bg} stroke={skin.glow} stroke-width="2" vector-effect="non-scaling-stroke" />
+          <path d="M {gx} {gy - 6 / cam.k} v {8 / cam.k}" stroke={skin.glow} stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke" />
+          <circle cx={gx} cy={gy + 3 / cam.k} r={3 / cam.k} fill={skin.glow} />
+        </g>
+      {/if}
       {#if sel.poly.length < E.MAX_POINTS}
         {#each sel.poly as [x, y], j (j)}
           {@const [nx, ny] = sel.poly[(j + 1) % sel.poly.length]}
@@ -766,15 +797,15 @@
   {#if W && H}
     <!-- each room's temperature, at its foot -->
     {#each climates as c (c.id)}
-      {#if c.w * cam.k >= 56 && visible(c.x, c.y)}
-        <div class="climate {tone(c.t)}" style="left:{(c.x - cam.x) * cam.k}px; top:{(c.y - cam.y) * cam.k}px">
+      {#if (c.w * cam.k >= 56 || editing) && visible(c.x, c.y)}
+        <div class="climate {tone(c.t)}" style="left:{(c.x - cam.x) * cam.k}px; top:{(c.y - cam.y) * cam.k}px; --m:{sizes.gauges ?? 1}">
           <b>{num(c.t, 1)}°</b>
           <i class="gauge"><i style="left:{gaugeAt(c.t)}%"></i></i>
         </div>
       {/if}
     {/each}
     {#if floorTemp != null}
-      <div class="climate floor-temp {tone(floorTemp)}">
+      <div class="climate floor-temp {tone(floorTemp)}" style="--m:{sizes.gauges ?? 1}">
         <span>{floor.name}</span>
         <b>{num(floorTemp, 1)}°</b>
         <i class="gauge"><i style="left:{gaugeAt(floorTemp)}%"></i></i>
@@ -809,11 +840,15 @@
     border-radius: 999px;
     background: color-mix(in srgb, var(--surface) 90%, transparent);
     box-shadow: 0 1px 6px rgb(0 0 0 / 14%);
-    font-size: 12px;
+    font-size: calc(12px * var(--m, 1));
     line-height: 1.2;
     pointer-events: none;
     white-space: nowrap;
     z-index: 1;
+  }
+
+  .climate .gauge {
+    width: calc(34px * var(--m, 1));
   }
 
   .climate b {
