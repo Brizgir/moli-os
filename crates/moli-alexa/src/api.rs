@@ -91,6 +91,18 @@ impl Session {
     }
 
     async fn send(&self, method: Method, path: &str, body: Option<&Json>) -> Result<Json, Failure> {
+        self.send_as(method, path, body, false).await
+    }
+
+    /// `routines`: with the routines editor's version header, which some
+    /// endpoints of the app's newer pages ask for.
+    async fn send_as(
+        &self,
+        method: Method,
+        path: &str,
+        body: Option<&Json>,
+        routines: bool,
+    ) -> Result<Json, Failure> {
         let referer = format!("https://{}/spa/index.html", self.host);
         let origin = format!("https://{}", self.host);
         let mut builder = Request::builder()
@@ -106,6 +118,9 @@ impl Session {
         if body.is_some() {
             builder = builder.header("content-type", "application/json; charset=utf-8");
         }
+        if routines {
+            builder = builder.header("routines-version", ROUTINES_VERSION);
+        }
         let request = builder
             .body(Full::new(Bytes::from(
                 body.map(Json::to_string).unwrap_or_default().into_bytes(),
@@ -117,10 +132,18 @@ impl Session {
             return Err(Failure::Expired);
         }
         if !status.is_success() {
-            let text = String::from_utf8_lossy(&answer[..answer.len().min(200)]).into_owned();
+            // The error's message, never the query (it names the speaker).
+            let text = error_message(&answer);
+            tracing::debug!(
+                path = endpoint(path),
+                status = status.as_u16(),
+                message = %text,
+                "alexa: refused"
+            );
             return Err(Failure::Other(anyhow::anyhow!(
-                "{}{path}: HTTP {} {text}",
+                "{}{}: HTTP {} {text}",
                 self.host,
+                endpoint(path),
                 status.as_u16()
             )));
         }
@@ -206,8 +229,9 @@ impl Session {
         .map(|_| ())
     }
 
-    /// What `echo` plays now, and the shape of the answer for the debug
-    /// log. A speaker with no player at all answers 400: it plays nothing.
+    /// What `echo`'s own player says, and the shape of the answer for the
+    /// debug log. A player that answers 400, or a state of `null`, says
+    /// nothing: on a real account an Echo Dot answers both while it plays.
     pub(crate) async fn playing(&self, echo: &Echo) -> Result<(Playing, String), Failure> {
         let path = format!(
             "/api/np/player?deviceSerialNumber={}&deviceType={}&screenWidth=1392",
@@ -216,24 +240,56 @@ impl Session {
         match self.get(&path).await {
             Ok(answer) => Ok((player_state(&answer), media::player_shape(&answer))),
             Err(Failure::Other(e)) if status(&e) == Some(400) => {
-                Ok((Playing::idle(), "HTTP 400".into()))
+                Ok((Playing::unknown(), "HTTP 400".into()))
             }
             Err(e) => Err(e),
         }
     }
 
-    /// The account's media sessions, in one call for every speaker. `None`:
-    /// the account has no such list (an older one), or refuses it; an
-    /// account that refuses it is not taken for a session that expired,
-    /// which would renew the session in a loop.
-    pub(crate) async fn media_sessions(&self) -> Result<Option<Json>, Failure> {
-        match self.get("/api/np/list-media-sessions").await {
+    /// The older media state of `echo` (`/api/media/state`), for a speaker
+    /// whose player says nothing. A 400 or 404 says nothing either.
+    pub(crate) async fn media_state(&self, echo: &Echo) -> Result<(Playing, String), Failure> {
+        let path = format!(
+            "/api/media/state?deviceSerialNumber={}&deviceType={}&screenWidth=1392",
+            echo.serial, echo.device_type
+        );
+        match self.get(&path).await {
+            Ok(answer) => Ok((media::media_state(&answer), media::media_shape(&answer))),
+            Err(Failure::Other(e)) if matches!(status(&e), Some(400 | 404)) => Ok((
+                Playing::unknown(),
+                format!("HTTP {}", status(&e).unwrap_or(0)),
+            )),
+            Err(e) => Err(e),
+        }
+    }
+
+    /// The account's media sessions, as `form` asks for them. `None`: the
+    /// site refuses this form (4xx, 501); an account that refuses it is not
+    /// taken for a session that expired, which would renew the session in
+    /// a loop. `for_echo`: the speaker the [`SessionsForm::Device`] form
+    /// names (the answer still lists the account's sessions).
+    pub(crate) async fn media_sessions(
+        &self,
+        form: SessionsForm,
+        for_echo: Option<&Echo>,
+    ) -> Result<Option<Json>, Failure> {
+        let base = "/api/np/list-media-sessions";
+        let path = match (form, for_echo) {
+            (SessionsForm::Device, Some(e)) => format!(
+                "{base}?deviceSerialNumber={}&deviceType={}",
+                e.serial, e.device_type
+            ),
+            (SessionsForm::Device, None) => return Ok(None),
+            (SessionsForm::Plain | SessionsForm::Routines, _) => base.to_owned(),
+        };
+        let routines = form == SessionsForm::Routines;
+        match self.send_as(Method::GET, &path, None, routines).await {
             Ok(answer) => Ok(Some(answer)),
             Err(Failure::Expired) => Ok(None),
             Err(Failure::Other(e))
                 if status(&e).is_some_and(|s| (400..500).contains(&s) || s == 501) =>
             {
-                tracing::debug!(status = status(&e), "alexa: no media sessions list");
+                tracing::debug!(form = %form, status = status(&e), "alexa: no media sessions list");
                 Ok(None)
             }
             Err(e) => Err(e),
@@ -249,15 +305,74 @@ impl Session {
     }
 }
 
+/// How the media sessions' list is asked for: the forms the open clients
+/// use, tried in this order until one answers.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum SessionsForm {
+    /// `?deviceSerialNumber=…&deviceType=…` of one speaker (alexa-remote2).
+    Device,
+    /// No parameter, as the app's first pages did.
+    Plain,
+    /// No parameter, with the routines editor's version header.
+    Routines,
+}
+
+impl SessionsForm {
+    pub(crate) const ALL: [Self; 3] = [Self::Device, Self::Plain, Self::Routines];
+}
+
+impl std::fmt::Display for SessionsForm {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::Device => "device",
+            Self::Plain => "plain",
+            Self::Routines => "routines",
+        })
+    }
+}
+
 pub(crate) fn player_state(answer: &Json) -> Playing {
     media::now_playing(&answer["playerInfo"])
 }
 
+/// A path without its query: the query names the speaker.
+fn endpoint(path: &str) -> &str {
+    path.split('?').next().unwrap_or(path)
+}
+
+/// What an error answer says, for the log: its `message` (or the first of
+/// its `errors`), else its text, 120 characters at most, one line. Amazon's
+/// messages describe the request, never the account.
+pub(crate) fn error_message(answer: &[u8]) -> String {
+    let text = String::from_utf8_lossy(&answer[..answer.len().min(1024)]);
+    let said = serde_json::from_str::<Json>(&text).ok().and_then(|j| {
+        [
+            &j["message"],
+            &j["errors"][0]["message"],
+            &j["error"]["message"],
+        ]
+        .into_iter()
+        .find_map(|m| m.as_str().map(str::to_owned))
+    });
+    let text = said.unwrap_or_else(|| text.into_owned());
+    let line: String = text.split_whitespace().collect::<Vec<_>>().join(" ");
+    if line.starts_with('<') {
+        return "(html)".into();
+    }
+    line.chars().take(120).collect()
+}
+
 /// An HTTP status in an error from [`Session::send`].
-fn status(e: &anyhow::Error) -> Option<u16> {
+pub(crate) fn status(e: &anyhow::Error) -> Option<u16> {
     let text = format!("{e:#}");
     let (_, after) = text.split_once(": HTTP ")?;
     after.get(..3)?.parse().ok()
+}
+
+/// Amazon refused the order for coming too soon after another (429):
+/// sent again once, a little later.
+pub(crate) fn rate_limited(e: &Failure) -> bool {
+    matches!(e, Failure::Other(e) if status(e) == Some(429))
 }
 
 pub(crate) fn volumes(answer: &Json) -> Vec<(String, f64)> {
@@ -570,13 +685,44 @@ mod tests {
             ("PLAYING", "So What", "Miles Davis")
         );
         assert_eq!(p.volume, Some(35.0));
-        assert_eq!(player_state(&json!({})).state, "IDLE");
+        assert!(player_state(&json!({})).is_unknown());
         let e = anyhow::anyhow!("alexa.amazon.fr/api/np/x: HTTP 404 Not Found");
         assert_eq!(status(&e), Some(404));
         assert_eq!(status(&anyhow::anyhow!("timed out")), None);
         let v =
             volumes(&json!({ "volumes": [{ "dsn": "A", "speakerVolume": 40 }, { "dsn": "B" }] }));
         assert_eq!(v, [("A".to_owned(), 40.0)]);
+    }
+
+    #[test]
+    fn a_refusal_is_logged_by_its_message_only() {
+        let body = include_bytes!("../fixtures/error-400.json");
+        assert_eq!(
+            error_message(body),
+            "Invalid request: a parameter is missing"
+        );
+        assert_eq!(error_message(br#"{"errors":[{"message":"nope"}]}"#), "nope");
+        assert_eq!(
+            error_message(b"Rate exceeded:\n  Too many requests"),
+            "Rate exceeded: Too many requests"
+        );
+        assert_eq!(error_message(b"<html><body>Bad</body></html>"), "(html)");
+        assert_eq!(error_message(b"").len(), 0);
+        assert_eq!(error_message(&[b'x'; 500]).chars().count(), 120);
+        assert_eq!(
+            endpoint("/api/np/player?deviceSerialNumber=G0911&deviceType=A1"),
+            "/api/np/player"
+        );
+        let e = Failure::Other(anyhow::anyhow!(
+            "alexa.amazon.fr/api/behaviors/preview: HTTP 429 Rate exceeded: Too many requests"
+        ));
+        assert!(rate_limited(&e));
+        assert!(!rate_limited(&Failure::Expired));
+        assert!(!rate_limited(&Failure::Other(anyhow::anyhow!(
+            "x: HTTP 500 oops"
+        ))));
+        assert_eq!(SessionsForm::Device.to_string(), "device");
+        assert_eq!(SessionsForm::ALL.len(), 3);
     }
 
     #[test]

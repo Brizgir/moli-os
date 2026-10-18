@@ -11,6 +11,7 @@ mod auth;
 mod echo;
 mod encode;
 mod media;
+mod queue;
 
 use std::collections::HashMap;
 use std::time::Duration;
@@ -20,8 +21,10 @@ use moli_runtime::{BoxFuture, CommandRequest, Driver, DriverCtx};
 use serde::Deserialize;
 use tokio::time::{Instant, MissedTickBehavior};
 
-use crate::api::{Failure, Session};
+use crate::api::{Failure, Session, SessionsForm};
 use crate::echo::Echo;
+use crate::media::Playing;
+use crate::queue::Queue;
 
 const REFRESH: &str = "refresh_token";
 const SERIAL: &str = "device_serial";
@@ -29,6 +32,9 @@ const SERIAL: &str = "device_serial";
 const POLL: Duration = Duration::from_secs(30);
 /// The speakers' volumes.
 const VOLUMES: Duration = Duration::from_secs(120);
+/// The volumes again, this soon after an order on one (the slider would
+/// otherwise go back to the old value until the next reading).
+const VOLUMES_AFTER_ORDER: Duration = Duration::from_secs(5);
 /// The account's speakers (one added, renamed…).
 const DEVICES: Duration = Duration::from_secs(30 * 60);
 /// The site's cookies are good two weeks: renewed well before.
@@ -246,15 +252,36 @@ struct Home {
     music: String,
     /// Speakers whose state could not be read, said once per session.
     unreadable: std::collections::HashSet<String>,
-    /// The account answers the media sessions' list (until it refuses).
-    sessions: bool,
+    /// The form of `list-media-sessions` the site answered last, if any.
+    form: Option<SessionsForm>,
+    /// The forms the site refused (4xx) in this session: not asked again.
+    refused: Vec<SessionsForm>,
+    /// Speakers whose `/api/media/state` the site refuses.
+    no_media_state: std::collections::HashSet<String>,
     /// The last shape logged, to log it again only when it changes.
     shape: String,
+    /// The orders that wait their turn (one at a time, a second apart).
+    queue: Queue<CommandRequest>,
 }
 
 impl Home {
     fn echo(&self, serial: &str) -> Option<&Echo> {
         self.speakers.values().find(|e| e.serial == serial)
+    }
+
+    /// The forms of the sessions' list still worth asking, the one that
+    /// answered last first.
+    fn forms(&self) -> Vec<SessionsForm> {
+        self.form
+            .into_iter()
+            .chain(SessionsForm::ALL)
+            .filter(|f| !self.refused.contains(f))
+            .fold(Vec::new(), |mut all, f| {
+                if !all.contains(&f) {
+                    all.push(f);
+                }
+                all
+            })
     }
 }
 
@@ -280,8 +307,11 @@ async fn connected(
         speakers: HashMap::new(),
         music,
         unreadable: std::collections::HashSet::new(),
-        sessions: true,
+        form: None,
+        refused: Vec::new(),
+        no_media_state: std::collections::HashSet::new(),
         shape: String::new(),
+        queue: Queue::default(),
     };
     discover(ctx, &mut home).await?;
     set_text(ctx, account, "status", "connected");
@@ -304,7 +334,23 @@ async fn connected(
         tokio::select! {
             command = ctx.next_command() => {
                 let Some(command) = command else { return Ok(()) };
+                // Several values for one point while they wait: the last
+                // one only, the others are taken as done.
+                if let Some(old) = home.queue.push(command.point.to_string(), command) {
+                    old.reply(Ok(()));
+                }
+            }
+            () = tokio::time::sleep_until(home.queue.ready_at(Instant::now())), if !home.queue.is_empty() => {
+                let Some(command) = home.queue.pop(Instant::now()) else { continue };
+                if command.abandoned() {
+                    command.reply(Err("expired".into()));
+                    continue;
+                }
                 let result = order(config, &mut home, refresh, &command).await;
+                home.queue.sent(Instant::now());
+                if result.is_ok() {
+                    confirm(ctx, &home, &command, &mut volumes);
+                }
                 command.reply(result.map_err(|e| moli_i18n::tr!("pilotes.alexa.echec", why = e)));
                 poll.reset_after(Duration::from_secs(3));
             }
@@ -326,6 +372,27 @@ async fn connected(
             }
         }
     }
+}
+
+/// An order Amazon accepted: what it set is shown at once (the volume),
+/// and read back soon after.
+fn confirm(
+    ctx: &DriverCtx,
+    home: &Home,
+    command: &CommandRequest,
+    volumes: &mut tokio::time::Interval,
+) {
+    if &*command.key != "volume" {
+        return;
+    }
+    let group = home
+        .speakers
+        .get(&command.device.id)
+        .is_some_and(|e| e.group);
+    if let (Some(level), false) = (command.value.as_f64(), group) {
+        ctx.set_state(&command.device.id, "volume", Value::Float(level.round()));
+    }
+    volumes.reset_after(VOLUMES_AFTER_ORDER);
 }
 
 /// The account's speakers and groups, shown in the house.
@@ -355,19 +422,21 @@ async fn discover(ctx: &DriverCtx, home: &mut Home) -> anyhow::Result<()> {
 }
 
 /// What each speaker plays: the account's media sessions, each speaker's
-/// own player for the rest, then the groups that play for their members (a
-/// session over: an error, `connected` starts again).
+/// own player for the rest, its older media state when the player says
+/// nothing, then the groups that play for their members. A speaker no
+/// source describes is unknown (a session over: an error, `connected`
+/// starts again).
 async fn playing(ctx: &DriverCtx, home: &mut Home) -> anyhow::Result<()> {
-    let (sessions, sessions_shape) = media_sessions(ctx, home).await;
-    let Home {
-        session,
-        speakers,
-        unreadable,
-        shape,
-        ..
-    } = home;
-    let mut online: Vec<&Echo> = speakers.values().filter(|e| e.online).collect();
+    let mut online: Vec<Echo> = home
+        .speakers
+        .values()
+        .filter(|e| e.online)
+        .cloned()
+        .collect();
     online.sort_by(|a, b| a.serial.cmp(&b.serial));
+    let online: Vec<&Echo> = online.iter().collect();
+    let first = online.iter().find(|e| !e.group).or(online.first()).copied();
+    let (sessions, sessions_shape) = media_sessions(ctx, home, first).await;
     let mut states = media::from_sessions(&online, &sessions);
     let mut sources: HashMap<String, String> = states
         .keys()
@@ -377,27 +446,38 @@ async fn playing(ctx: &DriverCtx, home: &mut Home) -> anyhow::Result<()> {
         if states.contains_key(&e.serial) {
             continue;
         }
-        match session.playing(e).await {
-            Ok((p, answer)) => {
-                sources.insert(e.serial.clone(), format!("player {{{answer}}}"));
+        // The device form of the list may describe this speaker only.
+        if home.form == Some(SessionsForm::Device) && first.is_some_and(|f| f.serial != e.serial) {
+            let (own, _) = media_sessions(ctx, home, Some(e)).await;
+            if let Some(p) = media::from_sessions(&[e], &own).remove(&e.serial) {
+                sources.insert(e.serial.clone(), "sessions(device)".into());
                 states.insert(e.serial.clone(), p);
-            }
-            Err(Failure::Expired) => anyhow::bail!("{RENEW}"),
-            Err(Failure::Other(err)) => {
-                if unreadable.insert(e.serial.clone()) {
-                    tracing::warn!(speaker = %e.name, error = %format!("{err:#}"), "alexa player state");
-                }
+                continue;
             }
         }
+        let (p, source) = match speaker_state(home, e).await {
+            Ok(found) => found,
+            Err(Failure::Expired) => anyhow::bail!("{RENEW}"),
+            Err(Failure::Other(err)) => {
+                if home.unreadable.insert(e.serial.clone()) {
+                    tracing::warn!(speaker = %e.name, error = %format!("{err:#}"), "alexa player state");
+                }
+                (Playing::unknown(), "error".into())
+            }
+        };
+        sources.insert(e.serial.clone(), source);
+        states.insert(e.serial.clone(), p);
     }
     for m in media::through_groups(&online, &mut states) {
         sources.insert(m, "group".into());
     }
-    for (id, e) in speakers.iter() {
+    for (id, e) in &home.speakers {
         let Some(p) = states.get(&e.serial) else {
             continue;
         };
-        ctx.set_state(id, "playing", Value::Bool(p.state == media::PLAYING));
+        // Unknown: `playing` is null, never « stopped » the dashboard
+        // would act on.
+        ctx.set_state(id, "playing", p.plays().map_or(Value::Null, Value::Bool));
         set_text(ctx, id, "state", &p.state.to_lowercase());
         set_text(ctx, id, "title", &p.title);
         set_text(ctx, id, "artist", &p.artist);
@@ -427,32 +507,78 @@ async fn playing(ctx: &DriverCtx, home: &mut Home) -> anyhow::Result<()> {
         .collect::<Vec<_>>()
         .join("; ");
     let now = format!("sessions {{{sessions_shape}}}; {now}");
-    if *shape != now {
+    if home.shape != now {
         tracing::debug!(instance = %ctx.instance(), shape = %now, "alexa playing");
-        *shape = now;
+        home.shape = now;
     }
     Ok(())
 }
 
-/// The account's media sessions, and the shape of the answer for the log.
-async fn media_sessions(ctx: &DriverCtx, home: &mut Home) -> (Vec<media::Session>, String) {
-    if !home.sessions {
-        return (Vec::new(), "none on this account".into());
+/// What one speaker's own sources say: its player, then (when the player
+/// says nothing) its older media state; unknown when neither does. With
+/// the source for the log.
+async fn speaker_state(home: &mut Home, e: &Echo) -> Result<(Playing, String), Failure> {
+    let (p, answer) = home.session.playing(e).await?;
+    if !p.is_unknown() || home.no_media_state.contains(&e.serial) {
+        return Ok((p, format!("player {{{answer}}}")));
     }
-    match home.session.media_sessions().await {
-        Ok(Some(answer)) => (media::sessions(&answer), media::sessions_shape(&answer)),
-        Ok(None) => {
-            home.sessions = false;
-            (Vec::new(), "none on this account".into())
+    let (m, media) = home.session.media_state(e).await?;
+    if m.is_unknown() {
+        if media.starts_with("HTTP") {
+            home.no_media_state.insert(e.serial.clone());
         }
-        Err(e) => {
-            tracing::debug!(instance = %ctx.instance(), error = %e, "alexa media sessions");
-            (Vec::new(), "unreachable".into())
-        }
+        // The player's volume is still worth showing.
+        return Ok((
+            Playing {
+                volume: p.volume.or(m.volume),
+                ..Playing::unknown()
+            },
+            format!("player {{{answer}}} media {{{media}}}"),
+        ));
     }
+    Ok((m, format!("media {{{media}}}")))
 }
 
-/// One order; a session that expired is renewed once and the order sent again.
+/// The account's media sessions, by the forms the site still answers
+/// (the one that answered last first; the device form names `echo`), and
+/// the form and shape of the answer for the log.
+async fn media_sessions(
+    ctx: &DriverCtx,
+    home: &mut Home,
+    echo: Option<&Echo>,
+) -> (Vec<media::Session>, String) {
+    for form in home.forms() {
+        match home.session.media_sessions(form, echo).await {
+            Ok(Some(answer)) => {
+                if home.form != Some(form) {
+                    tracing::info!(instance = %ctx.instance(), form = %form, "alexa: media sessions list answers");
+                    home.form = Some(form);
+                }
+                return (
+                    media::sessions(&answer),
+                    format!("form={form} {}", media::sessions_shape(&answer)),
+                );
+            }
+            Ok(None) => {
+                if form != SessionsForm::Device || echo.is_some() {
+                    home.refused.push(form);
+                }
+                if home.form == Some(form) {
+                    home.form = None;
+                }
+            }
+            Err(e) => {
+                tracing::debug!(instance = %ctx.instance(), form = %form, error = %e, "alexa media sessions");
+                return (Vec::new(), format!("form={form} unreachable"));
+            }
+        }
+    }
+    (Vec::new(), "none answers on this account".into())
+}
+
+/// One order; a session that expired is renewed once and the order sent
+/// again; an order refused for coming too soon (429) is sent again once
+/// after a pause.
 async fn order(
     config: &Config,
     home: &mut Home,
@@ -465,6 +591,11 @@ async fn order(
             home.session = Session::open(refresh, &config.domain, locale)
                 .await
                 .map_err(|e| format!("{e:#}"))?;
+            send(home, command).await.map_err(|e| e.to_string())
+        }
+        Err(e) if api::rate_limited(&e) => {
+            tracing::debug!(point = %command.point, "alexa: too many orders, one more try");
+            tokio::time::sleep(queue::BACKOFF).await;
             send(home, command).await.map_err(|e| e.to_string())
         }
         other => other.map_err(|e| e.to_string()),

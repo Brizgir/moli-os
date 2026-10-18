@@ -309,6 +309,35 @@ host = "192.168.1.x"
 - **Pièges** : description injoignable au démarrage = échec du pilote, relancé par le superviseur. Pas de gestion des groupes Sonos.
 - **Tests** : lecture du SOAP et du DIDL doublement échappé.
 
+## `alexa` : enceintes Amazon Echo (`crates/moli-alexa`)
+
+- **Couvre** : les Echo (Dot, Show, Spot) et les groupes multi-pièces d'un compte Amazon.
+- **Protocole** : HTTPS vers l'interface de l'appli Alexa (`alexa.amazon.fr`…), non officielle,
+  comme Alexa Media Player (Home Assistant), alexapy et alexa-remote2. Connexion par la
+  page Amazon elle-même (adresse collée dans le tableau de bord), jeton de rafraîchissement au
+  coffre, cookies renouvelés tous les 4 jours.
+- **Configuration** : `domain` (le site du compte), `music` (service par défaut, vide = celui
+  du compte). Guide d'installation : `integrations/alexa/README.md`.
+- **Points** : `playing`, `volume`, `play` (une recherche), `say`, `announce`, `command`
+  **écrivables** ; `state`, `title`, `artist` en lecture. `playing` est **nul** (et `state`
+  `unknown`) quand aucune réponse d'Amazon ne décrit l'enceinte : jamais « à l'arrêt » affirmé
+  sur un silence, le tableau de bord enverrait « lecture » par-dessus la musique.
+- **Ce qui joue** (`media.rs`) : les sessions média du compte (`np/list-media-sessions`, par la
+  première forme de requête acceptée : avec `deviceSerialNumber` et `deviceType`, puis sans,
+  puis sans avec `Routines-Version`), le lecteur de chaque enceinte restante (`np/player`), son
+  ancien état média (`media/state`) quand le lecteur répond 400 ou un état vide, puis les
+  groupes qui jouent pour leurs membres.
+- **Ordres** (`queue.rs`) : une file par compte, un ordre à la fois, au moins 1 s d'écart ;
+  plusieurs valeurs en attente pour un même point ne gardent que la dernière ; un `429 Rate
+  exceeded` est réessayé une fois après 2 s. Un volume accepté est posé tout de suite et
+  les volumes relus 5 s plus tard (sinon toutes les 2 min).
+- **Pièges** : `list-media-sessions` sans paramètre répond 400 sur un compte récent ;
+  `np/player` répond 400 ou `state: null` pour un Echo Dot même en lecture ; Amazon limite
+  les ordres rapprochés. Le journal debug (`moli_alexa=debug`) décrit la forme des réponses
+  (clés, statuts, nombre de sessions, message des refus), jamais un nom, une série ni un titre.
+- **Tests** : fixtures anonymisées (`crates/moli-alexa/fixtures/`), inconnu contre inactif,
+  file des ordres, message des refus.
+
 ## `philips` : télé Philips Android (`crates/moli-philips`)
 
 - **Couvre** : alimentation, volume, sourdine, Ambilight, application en cours, touches de télécommande ; côté Android : **ouvrir une appli** et **ce qui se joue** (titre, image, lecture/pause).
@@ -583,6 +612,7 @@ ni pièce native). Il ne déplace jamais rien. Sans argument : plan à blanc ; `
 | `reolink` | `moli-reolink` | HTTPS API locale, épinglé (X.509 v1) | non (+ images) | Reolink Home Hub (caméras, sonnette) |
 | `ring` | `moli-ring` | HTTPS, API cloud de l'appli Ring (non officielle) | non | pas encore (cible : sonnette Ring et Chime) |
 | `sonos` | `moli-sonos` | UPnP/SOAP HTTP 1400 ; annonces en WebSocket TLS 1443 | oui : lecture, volume, sourdine, annonces | Sonos Beam |
+| `alexa` | `moli-alexa` | HTTPS, interface de l'appli Alexa (non officielle) | oui : lecture, volume, musique, phrases, annonces, commandes | Echo Dot, Spot, Show 5 et groupes (lecture partielle, en cours) |
 | `philips` | `moli-philips` | JointSpace HTTPS 1926, digest, WoL ; Android TV Remote, Cast | oui : alimentation, volume, sourdine, Ambilight, touches, appli | Philips Google TV (lecture) |
 | `frigate` | `moli-frigate` | MQTT + HTTP interne 5000 | oui : détection, enregistrement, instantanés | Frigate |
 | `bambu` | `moli-bambu` | MQTT TLS 8883, épinglé | lumière, `control` (humain pour un agent) | pas encore (cible : Bambu Lab A1) |
