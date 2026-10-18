@@ -35,7 +35,9 @@ Ce qui marche aujourd'hui :
 Sur le réseau local, Moli OS répond sur `http://<hôte>:8790`. Depuis l'extérieur, il peut
 passer par un tunnel Cloudflare protégé par Cloudflare Access (par exemple
 `https://maison.example.org`, réservé aux e-mails du foyer) ; seuls les rapports des
-téléphones passent sans Access, avec leur propre jeton.
+téléphones passent sans Access, avec leur propre jeton. Par Tailscale sans routeur de
+sous-réseau, Moli sert lui-même le HTTPS (`[server.tls]`, certificat `tailscale cert`) pour
+que la voix marche depuis le téléphone ([installation.md](components/installation.md)).
 
 ## Par où commencer
 

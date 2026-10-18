@@ -67,6 +67,48 @@ Jamais de proxy inverse sur la même machine (Nginx, Caddy, `tailscale serve`…
 monde y paraîtrait local, donc de la maison. Moli refuse d'ailleurs une requête locale qui dit avoir été
 relayée.
 
+### HTTPS natif avec un certificat Tailscale
+
+Sans routeur de sous-réseau, le téléphone joint Moli à son adresse Tailscale (`100.x`) : c'est
+l'extérieur, on s'y connecte comme **personne** (mot de passe, [api.md § 1.2 bis](api.md)). Le
+tableau de bord marche, mais pas la voix : un navigateur n'ouvre le micro que sur une page
+**sécurisée** (HTTPS, ou `localhost`). Moli sert donc lui-même le HTTPS, sur un second port, sans
+relais : l'adresse du pair reste la vraie, la sécurité ne change pas. Le HTTP 8790 reste pour la
+maison (ni redirection, ni HSTS).
+
+1. **Le nom de la machine** sur Tailscale (MagicDNS), sans le point final :
+   `tailscale status --json | grep -m1 DNSName` → par exemple `machine.tailnet-example.ts.net`. HTTPS
+   doit être activé dans la console Tailscale (DNS → HTTPS Certificates), une fois.
+2. **Le certificat**, dans `data/tls/` (lisible par l'utilisateur 1000 du conteneur, la clé en
+   `0600`, jamais affichée) :
+   ```sh
+   sudo scripts/tailscale-cert.sh machine.tailnet-example.ts.net ./data/tls
+   # ou, une fois pour toutes : sudo tailscale set --operator=$USER, puis sans sudo
+   ```
+   Il vaut 90 jours (Let's Encrypt). Pour le renouveler sans y penser :
+   [docs/systemd/moli-tls.service](../systemd/moli-tls.service) et
+   [moli-tls.timer](../systemd/moli-tls.timer) (hebdomadaire ; copier dans
+   `/etc/systemd/system/`, adapter le nom et le chemin, `systemctl enable --now moli-tls.timer`).
+3. **`moli.toml`** :
+   ```toml
+   [server.tls]
+   cert_file = "/data/tls/moli.crt"   # chemins vus du conteneur
+   key_file = "/data/tls/moli.key"
+   port = 8791
+   ```
+   puis `docker compose restart moli-os` (cette fois seulement : ensuite Moli relit les fichiers
+   tout seul quand ils changent, ou aussitôt sur `docker kill -s HUP moli-os`). Rien à ajouter à
+   `allowed_hosts` : les noms du certificat en font partie.
+4. **Sur le téléphone** : `https://machine.tailnet-example.ts.net:8791`, se connecter avec son mot de passe
+   (une personne de la maison, invitée depuis Système → Personnes). Le micro s'ouvre.
+5. **Vérifier** : `curl -s http://127.0.0.1:8790/api/health | jq .tls` sur la machine
+   (`open: true`, `names`, `expires`), ou la carte Système (ligne « HTTPS »). Certificat absent,
+   illisible ou expiré : le port 8791 refuse les connexions, la raison est dans `reason` et la
+   maison est prévenue ; le HTTP continue. La maison est aussi prévenue **14 jours** avant l'échéance.
+
+Les cookies posés en HTTPS sont `Secure` ; une adresse `100.x` reste l'extérieur en HTTPS comme
+en HTTP, et aucun en-tête de relais n'est cru.
+
 ## Changer ou retrouver le code
 
 - **Changer** : page Système → « Code du tableau de bord » (le code actuel, puis le nouveau deux fois).

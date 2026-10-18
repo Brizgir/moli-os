@@ -17,7 +17,14 @@ Conventions de ce document : tous les horodatages sont en **millisecondes depuis
 ### 1.1 Un seul routeur, un seul port
 
 `crates/moli-api/src/lib.rs` (`router()`) sert **toutes** les surfaces sur le même port
-(`[server] listen`, défaut `0.0.0.0:8790`) :
+(`[server] listen`, défaut `0.0.0.0:8790`) ; avec `[server.tls]`, le **même routeur** (mêmes
+sessions, mêmes personnes) répond aussi en HTTPS sur un second port (défaut 8791), servi par
+Moli lui-même (`crates/moli-api/src/tls.rs`, rustls, TLS 1.2 et 1.3, suites AEAD seulement,
+HTTP/1.1) : voir [installation.md](installation.md), « HTTPS natif ». Le certificat et sa clé
+sont relus quand leurs fichiers changent (toutes les minutes, et au `SIGHUP`) ; absent,
+illisible ou expiré, l'écouteur HTTPS laisse tomber les connexions, `/api/health` et
+`/api/system` donnent la raison (`tls.reason`), la maison est prévenue (et 14 jours avant
+l'échéance) ; le HTTP continue. Ni redirection ni HSTS : le HTTP reste celui de la maison.
 
 | Préfixe | Surface |
 |---|---|
@@ -57,7 +64,8 @@ réseau local, mais ne peut pas forger l'en-tête `Host`.
 
 - Acceptés : `localhost`, `127.0.0.1`, `::1`, toute adresse IP écrite telle quelle (le
   rebinding DNS passe par un **nom** que l'attaquant contrôle, jamais par une IP), plus chaque
-  entrée de `[server] allowed_hosts` dans `moli.toml`.
+  entrée de `[server] allowed_hosts` dans `moli.toml`, plus les **noms du certificat HTTPS**
+  (`[server.tls]`, ses SAN : DNS et adresses), tels qu'ils sont au moment de la requête.
 - Comparaison insensible à la casse, port retiré des deux côtés (`maison.lan:8790`,
   `[fe80::1]:8790` et `maison.lan` sont équivalents).
 - `Host` absent ou inconnu : `403` texte brut `host not allowed (add it to
@@ -78,6 +86,13 @@ qui est au bout du fil (`Caller`) :
 | `lan` | adresse privée, lien local ou ULA (IPv4 mappée ramenée en IPv4) | l'adresse |
 | `access` | requête venue par le tunnel (en-têtes `cf-ray` / `cf-connecting-ip` **depuis la machine elle-même**) **et** assertion `Cf-Access-Jwt-Assertion` valide : signature RS256 vérifiée contre les clés publiques de l'équipe (`https://<team>.cloudflareaccess.com/cdn-cgi/access/certs`, rafraîchies au plus une fois par minute, gardées si Cloudflare est injoignable), audience = l'application, émetteur = l'équipe, non expirée (60 s de tolérance), e-mail présent | `access:<e-mail>` |
 | `outside` | tout le reste : tunnel sans assertion valide, adresse publique, appareil du réseau qui imite Cloudflare. **Refusé (403) sur toutes les routes.** | `cf:<ip>` ou l'adresse réelle |
+
+Le classement ne dépend **que de l'adresse réelle du pair**, jamais de la façon d'arriver
+(HTTP ou HTTPS natif) ni d'un en-tête : une adresse Tailscale (`100.x`) est l'extérieur en HTTPS
+comme en HTTP (la personne se connecte par mot de passe), une adresse du réseau de la maison
+reste le foyer ; `X-Forwarded-For`, `Forwarded`, `X-Real-IP`, `Tailscale-User-Login` ne sont
+jamais crus (venus de la boucle locale, ils font même une inconnue : un relais sur la machine
+rendrait tout le monde local).
 
 Le tunnel se termine sur la machine elle-même : sans assertion valide, une requête venue
 par Cloudflare est une **inconnue**, jamais `local` ni `cli`. Sans `[server.access]`
@@ -141,7 +156,9 @@ dashboard commande sans code), `via` et `who` (l'e-mail reconnu par Access).
   dans une maison sans propriétaire, quiconque prouve le code actuel (mêmes verrous). La
   maison en est avertie, toutes les sessions se ferment.
 - Cookie `moli_session` : `HttpOnly; SameSite=Strict; Path=/; Max-Age=2592000` (30 jours),
-  lié à la clé de l'appelant qui l'a ouvert : son adresse sur le réseau local, son e-mail
+  plus `Secure` quand la requête est arrivée en HTTPS (l'écouteur `[server.tls]` marque ses
+  requêtes, `Transport` ; en HTTP le navigateur refuserait un cookie `Secure`) — pareil pour
+  le cookie des personnes ; lié à la clé de l'appelant qui l'a ouvert : son adresse sur le réseau local, son e-mail
   à travers Access (l'adresse publique d'un téléphone change sans arrêt). Un cookie volé
   est inutile ailleurs.
 - Seul le SHA-256 du jeton est conservé, dans le coffre chiffré (`core/ui_sessions`), avec
@@ -277,7 +294,7 @@ Légende « Accès » : **libre** = aucune condition au-delà de la garde `Host`
 
 | Méthode | Chemin | Accès | Entrée | Réponse | Erreurs |
 |---|---|---|---|---|---|
-| GET | `/api/health` | libre | aucune | `{name:"moli-os", version, stats, guard, drivers}` | aucune |
+| GET | `/api/health` | libre | aucune | `{name:"moli-os", version, stats, guard, drivers, journal_failures, tls}` ; `tls` : `null` sans `[server.tls]`, sinon `{listen, port, open, reason, names, expires, expires_in_days, cert_file}` (jamais la clé) | aucune |
 | GET | `/api/devices` | libre ; un invité : ses pièces seulement (§ 3.1) | aucune | `Snapshot` : `{devices:[DeviceView], drivers:[DriverView], approvals:[ApprovalRequest], guard}` | aucune |
 | GET | `/api/devices/{id}` | libre ; un invité : ses pièces seulement | `id` = device_id | `DeviceView` | `404` unknown device ; `403` invité, hors de ses pièces |
 | GET | `/api/devices/{id}/snapshot` | libre ; **humain** si la caméra est dans une pièce protégée | aucune | image brute, `content-type` de la caméra, `cache-control: no-store` | `403` pièce protégée ; `404` appareil inconnu / pas une caméra ; `502` pas d'image en 20 s ou échec |
@@ -470,6 +487,8 @@ Description du système tel qu'il tourne (rien n'est écrit à la main) :
   `automations` (`live`, `drafts`, `total`, `runs_24h`), `assistant` (statut de Moli),
   `cameras` ; chacune `{id, name, active, facts}` ;
 - `surfaces` : liste fixe (`maison`, `atelier`, `mcp`, `rest`) ;
+- `tls` : l'état du HTTPS natif, comme dans `/api/health` (`null` sans `[server.tls]`) ; la
+  carte Système l'affiche (port, noms, échéance, ou la raison de la fermeture) ;
 - `perf` : 20 dernières lignes de `data/perf.jsonl` ; `coverage` : couverture lue dans
   `bench.json` ou `null`.
 
