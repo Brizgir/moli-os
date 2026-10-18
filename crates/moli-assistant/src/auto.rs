@@ -424,10 +424,20 @@ fn request_message(request: &str, current: Option<&Automation>) -> String {
     )
 }
 
+/// The JSON object in a model's words, when it wrapped it (a code fence, a
+/// sentence before): from the first `{` to the last `}`.
+fn json_object(content: &str) -> Option<&str> {
+    let start = content.find('{')?;
+    let end = content.rfind('}')?;
+    (end > start).then(|| &content[start..=end])
+}
+
 /// The model's flat JSON → the engine's graph (canvas positions kept from
 /// the current version for nodes that stay).
 fn parse(content: &str, current: Option<&Automation>) -> Result<Draft, String> {
-    let flat: Flat = serde_json::from_str(content).map_err(|e| e.to_string())?;
+    let flat: Flat = serde_json::from_str(content)
+        .or_else(|e| serde_json::from_str(json_object(content).ok_or(e)?))
+        .map_err(|e| e.to_string())?;
     let mut nodes = Vec::new();
     for raw in &flat.nodes {
         let mut raw = strip_nulls(raw);
@@ -656,6 +666,36 @@ mod tests {
         assert_eq!(
             required, properties,
             "strict mode needs every property required"
+        );
+    }
+
+    /// The draft's schema is past Claude's strict limits (24 optional, 16
+    /// unions): it goes to Claude in words, not as `output_config.format`,
+    /// and a draft wrapped in a fence or a sentence still reads.
+    #[test]
+    fn the_draft_goes_to_claude_in_words_and_a_wrapped_answer_reads() {
+        let strict = crate::claude::strict_schema(&schema());
+        assert!(!crate::claude::fits_strict(&strict));
+        let messages = [json!({ "role": "user", "content": "lampe" })];
+        let schema = schema();
+        let ask = crate::claude::Ask {
+            model: "claude-opus-5-5",
+            messages: &messages,
+            tools: None,
+            last: false,
+            effort: "high",
+            schema: Some(&schema),
+        };
+        let (body, _) = crate::claude::request(&ask, false);
+        assert!(body["output_config"].get("format").is_none());
+        let words = body["system"].as_array().unwrap().last().unwrap()["text"]
+            .as_str()
+            .unwrap();
+        assert!(words.starts_with("Answer with one JSON object only"));
+        let wrapped = "Voici :\n```json\n{\"name\":\"Entrée\",\"mode\":\"restart\",\"nodes\":[],\"edges\":[]}\n```";
+        assert_eq!(
+            json_object(wrapped),
+            Some("{\"name\":\"Entrée\",\"mode\":\"restart\",\"nodes\":[],\"edges\":[]}")
         );
     }
 
