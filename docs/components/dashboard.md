@@ -33,8 +33,9 @@ Système, Atelier. Bulle « Demander à Moli » sur toutes les pages sauf Moli.
 ## La mise en page de la maison : `data/home.json`
 
 Servie telle quelle par `/api/home` depuis le dossier de données (`data/home.json`, écrite à
-la main ou par un agent pour chaque maison). Sans elle, le dashboard reste utilisable (pièces
-telles que les appareils les nomment).
+la main ou par un agent pour chaque maison ; les **pièces** s'y déclarent aussi depuis l'onglet
+Pièces, voir plus bas). Sans elle, le dashboard reste utilisable (pièces telles que les
+appareils les nomment).
 
 ```json
 {
@@ -57,6 +58,19 @@ telles que les appareils les nomment).
 
 - `rooms[].aliases` : les noms que HA, Hue ou Tuya donnent à la même pièce (le dashboard et
   Moli les ramènent au nom canonique).
+- **Pièces depuis l'onglet Pièces** : le bouton « Nouvelle pièce » ouvre une fiche
+  (`ui/RoomForm.svelte`) : le nom, l'icône (choix parmi `ROOM_ICONS` de `lib/home.svelte.js`,
+  la même liste que `crates/moli-api/src/home.rs`), ses autres noms. Enregistrer demande le
+  code de la maison une fois (`asHuman`) puis `POST /api/home/rooms` ; le serveur réécrit
+  `rooms[]` de `home.json` sans toucher au reste, et prévient les tableaux de bord ouverts
+  (`home_changed` sur le flux d'événements : `home.config` est relu). Le ⚙ d'une carte ouvre la
+  même fiche pour **renommer** la pièce (les étiquettes `room` de ses appareils suivent,
+  `labels.toml` réécrit ; l'ancien nom devient un alias, pour que ce que Hue ou Alexa appellent
+  ainsi y reste), changer l'icône, ajouter un alias, ou la retirer de la liste (ses appareils
+  gardent leur pièce). Une pièce déclarée **sans appareil** s'affiche quand même (`roomList` :
+  `declared`, `empty`) avec « Aucun appareil ici pour l'instant » et un lien vers l'Atelier
+  pour y ranger quelque chose. Protéger une pièce reste dans `moli.toml` (`[guard]
+  protected_rooms`, lu au démarrage) : la fiche le dit, ne le propose pas.
 - `hidden` : masqué du dashboard **et** de l'inventaire de la conversation (pas de celui
   qui sert à créer les automatismes). Par exemple un compteur EM06 (sinon Moli montre une fiche
   « em06p » brute).

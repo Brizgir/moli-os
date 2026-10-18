@@ -14,7 +14,8 @@
    *  what it senses as chips. `icons`: pads show an icon only (names on
    *  hover and for screen readers). `every`: each sensor shows, even
    *  silent (filtered view). */
-  let { room, every = false, icons = false } = $props();
+  /** `onedit`: the room's sheet (rename, icon, other names), from Pièces. */
+  let { room, every = false, icons = false, onedit = null } = $props();
 
   const locked = $derived(protectedRoom(room.name));
 
@@ -189,7 +190,19 @@
     {#if room.lights.length}
       <button class="room-switch" class:on={room.lit} onclick={roomPower} aria-pressed={!!room.lit} title={room.lit ? t('commun.piece.tout_eteindre') : t('commun.piece.tout_allumer')} aria-label={t(room.lit ? 'commun.piece.label_eteindre' : 'commun.piece.label_allumer', { name: room.name })}><i></i></button>
     {/if}
+    {#if onedit}
+      <button class="round" onclick={() => onedit(room)} title={t('commun.piece.modifier')} aria-label={t('commun.piece.modifier_nom', { name: room.name })}>
+        <Icon name="tune" size={16} />
+      </button>
+    {/if}
   </div>
+
+  {#if room.empty}
+    <p class="empty">
+      <span>{t('commun.piece.vide')}</span>
+      <a href="#/atelier">{t('commun.piece.vide_invitation')}</a>
+    </p>
+  {/if}
 
   {#if showLooks}
     <AmbiancePicker lights={lamps} label={room.name} />
@@ -267,6 +280,22 @@
     display: flex;
     align-items: center;
     gap: 10px;
+  }
+
+  .empty {
+    display: grid;
+    gap: 4px;
+    margin: 0;
+    padding: 14px 16px;
+    border-radius: var(--r-sm);
+    background: var(--surface-2);
+    color: var(--ink-3);
+    font-size: 14px;
+  }
+
+  .empty a {
+    color: var(--cool);
+    font-weight: 600;
   }
 
   .room-icon {

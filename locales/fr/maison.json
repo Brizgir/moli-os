@@ -212,5 +212,20 @@
   "maison.meteo.legende_pluie": "Pluie",
   "maison.meteo.legende_nuages": "Nuages",
   "maison.meteo.legende_vent": "Vent (faible → fort)",
-  "maison.meteo.credit": "Prévisions Open-Meteo. Le point orange, c’est la maison."
+  "maison.meteo.credit": "Prévisions Open-Meteo. Le point orange, c’est la maison.",
+  "maison.pieces.nouvelle": "Nouvelle pièce",
+  "maison.pieces.fiche_modifier": "Modifier « {name} »",
+  "maison.pieces.nom": "Son nom",
+  "maison.pieces.nom_exemple": "Chambre des enfants",
+  "maison.pieces.icone": "Son icône",
+  "maison.pieces.alias": "Ses autres noms",
+  "maison.pieces.alias_exemple": "Chambre 2, Kids room",
+  "maison.pieces.alias_aide": "Les noms que Hue, Alexa ou le plan donnent à cette même pièce, séparés par des virgules.",
+  "maison.pieces.protegee_aide": "Pour qu'une pièce soit protégée (personne n'y agit sans toi), c'est dans le fichier moli.toml, section [guard].",
+  "maison.pieces.enregistrer": "Enregistrer",
+  "maison.pieces.enregistree": "{name} : enregistrée",
+  "maison.pieces.retirer": "Retirer de la liste",
+  "maison.pieces.retirer_confirmer": "Retirer « {name} » de la liste ? Ses appareils gardent leur pièce.",
+  "maison.pieces.retiree": "{name} : retirée de la liste",
+  "maison.pieces.aucune": "Aucune pièce encore : crée la première, puis range tes appareils dedans."
 }

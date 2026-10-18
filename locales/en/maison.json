@@ -212,5 +212,20 @@
   "maison.meteo.legende_pluie": "Rain",
   "maison.meteo.legende_nuages": "Clouds",
   "maison.meteo.legende_vent": "Wind (light → strong)",
-  "maison.meteo.credit": "Forecast by Open-Meteo. The orange dot is the house."
+  "maison.meteo.credit": "Forecast by Open-Meteo. The orange dot is the house.",
+  "maison.pieces.nouvelle": "New room",
+  "maison.pieces.fiche_modifier": "Edit “{name}”",
+  "maison.pieces.nom": "Its name",
+  "maison.pieces.nom_exemple": "Kids' bedroom",
+  "maison.pieces.icone": "Its icon",
+  "maison.pieces.alias": "Its other names",
+  "maison.pieces.alias_exemple": "Bedroom 2, Kids room",
+  "maison.pieces.alias_aide": "The names Hue, Alexa or the plan give this same room, separated by commas.",
+  "maison.pieces.protegee_aide": "For a room to be protected (nobody acts there without you), it is in the moli.toml file, [guard] section.",
+  "maison.pieces.enregistrer": "Save",
+  "maison.pieces.enregistree": "{name}: saved",
+  "maison.pieces.retirer": "Remove from the list",
+  "maison.pieces.retirer_confirmer": "Remove “{name}” from the list? Its devices keep their room.",
+  "maison.pieces.retiree": "{name}: removed from the list",
+  "maison.pieces.aucune": "No room yet: create the first one, then put your devices in it."
 }

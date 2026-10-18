@@ -150,5 +150,15 @@
   "serveur.personnes.point_depuis": "Dans cette zone depuis",
   "serveur.personnes.point_nombre": "Personnes à la maison",
   "serveur.personnes.point_quelquun": "Quelqu'un à la maison",
-  "serveur.personnes.point_tous_partis": "Tout le monde est parti"
+  "serveur.personnes.point_tous_partis": "Tout le monde est parti",
+  "serveur.maison.humain": "seule une personne (code) change les pièces de la maison",
+  "serveur.maison.pas_de_dossier": "pas de dossier de données",
+  "serveur.maison.fichier_illisible": "home.json : {error}",
+  "serveur.maison.nom_vide": "la pièce a besoin d'un nom",
+  "serveur.maison.nom_trop_long": "{max} caractères au plus pour un nom de pièce",
+  "serveur.maison.doublon": "« {name} » désigne déjà la pièce « {other} »",
+  "serveur.maison.icone_inconnue": "icône inconnue : {icon}",
+  "serveur.maison.trop_d_alias": "{max} autres noms au plus pour une pièce",
+  "serveur.maison.trop_de_pieces": "{max} pièces au plus",
+  "serveur.maison.inconnue": "pas de pièce « {name} » dans la liste"
 }

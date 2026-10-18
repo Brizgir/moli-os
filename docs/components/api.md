@@ -281,7 +281,7 @@ Légende « Accès » : **libre** = aucune condition au-delà de la garde `Host`
 | GET | `/api/devices` | libre ; un invité : ses pièces seulement (§ 3.1) | aucune | `Snapshot` : `{devices:[DeviceView], drivers:[DriverView], approvals:[ApprovalRequest], guard}` | aucune |
 | GET | `/api/devices/{id}` | libre ; un invité : ses pièces seulement | `id` = device_id | `DeviceView` | `404` unknown device ; `403` invité, hors de ses pièces |
 | GET | `/api/devices/{id}/snapshot` | libre ; **humain** si la caméra est dans une pièce protégée | aucune | image brute, `content-type` de la caméra, `cache-control: no-store` | `403` pièce protégée ; `404` appareil inconnu / pas une caméra ; `502` pas d'image en 20 s ou échec |
-| GET | `/api/home` | libre | aucune | contenu de `data/home.json` (disposition du dashboard famille), `{}` si absent | `500` JSON invalide |
+| GET | `/api/home` | libre | aucune | contenu de `data/home.json` (disposition du dashboard famille), `{}` si absent ; les pièces s'y déclarent par `/api/home/rooms` (§ 2.1 bis) | `500` JSON invalide |
 | GET | `/api/system` | libre | aucune | `{version, stats, drivers, bricks, surfaces, perf, coverage}` (carte du système, § 2.3) | aucune |
 | GET | `/api/bench` | libre | aucune | `data/bench.json` tel quel (comparaison avec Home Assistant, écrite par un script côté hôte, hors de ce dépôt) | `404` no comparison available yet |
 
@@ -373,6 +373,9 @@ Limites de `Turn` : 14 derniers messages renvoyés au modèle, 2 000 caractères
 | DELETE | `/api/phones/{id}` | **session humaine** | oublie un téléphone (perdu, vendu) : son jeton cesse de marcher |
 | POST | `/api/plan/images` | **session humaine** | corps = l'image (PNG, JPEG, WebP, SVG ; 8 Mo au plus) ; réponse `{ image: "<16 hex>.<ext>" }` (nom tiré du contenu) |
 | GET | `/api/plan/images/{name}` | libre | l'image, `immutable`, avec une CSP `sandbox` (un SVG ouvert seul ne peut rien exécuter) |
+| POST | `/api/home/rooms` | **session humaine** (`x-moli-origin: ui` + cookie) | `{ name, icon?, aliases? }` : déclare une pièce dans `data/home.json` (`rooms[]`), le reste du fichier intact ; nom nettoyé (espaces simples, 60 caractères au plus), pas de doublon (nom ou alias d'une autre pièce, accents et casse ignorés), icône parmi celles de `home.rs` (`ROOM_ICONS`, toutes dans `lib/icons.js`), 10 alias au plus, 100 pièces au plus ; écriture atomique (nom temporaire unique puis renommage) ; réponse `201` = le fichier entier (comme `GET /api/home`) ; `403` ; `422` ; `503` pas de dossier. Puis `home_changed` sur `/api/events` |
+| PUT | `/api/home/rooms/{name}` | **session humaine** | `{ name?, icon?, aliases? }` (absent = inchangé ; `icon: ""` = sans icône) sur la pièce `{name}` (nom ou alias) ; une pièce que seuls les appareils nommaient est déclarée au passage. **Renommer** : les étiquettes `room` des appareils rangés dedans suivent (`labels.toml` réécrit, un `label_changed` et une ligne de journal par appareil), et l'ancien nom reste en alias (ce que Hue, Alexa ou le plan appellent ainsi y reste rangé). Réponse `200` = le fichier entier |
+| DELETE | `/api/home/rooms/{name}` | **session humaine** | retire la déclaration (les appareils gardent leurs étiquettes) ; `404` pas dans la liste |
 
 Notifier un téléphone : `POST /api/command` sur `telephones:<id>/push` (texte : une ligne de titre, puis le message), ou le canal « telephone » d'un automatisme. Envoi par le service push d'Expo (jeton de l'appli), qui relaie vers Apple ou Google.
 
@@ -566,6 +569,7 @@ rend sa place.
 | `approval_requested` | `request` : `ApprovalRequest` (`id`, `ts`, `expires`, `point`, `value`, `origin`, `actor?`, `reason`, `device_name`, `native_name`, `rooms`) | un ordre attend un humain |
 | `approval_resolved` | `id`, `decision` : `approved` \| `denied` \| `expired` | décision ou expiration |
 | `notice` | `notice` : `{title?, message, from?, ts}` (`from` = nom de l'automatisme) | message pour la maison (nœud `notify`, canal `maison`) |
+| `home_changed` | aucun | `data/home.json` vient d'être écrit (une pièce déclarée, renommée, retirée) : le tableau de bord relit `GET /api/home` |
 
 Exemple :
 

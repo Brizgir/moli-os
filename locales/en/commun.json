@@ -236,5 +236,9 @@
   "commun.code.saisis_one": "{count} digit entered",
   "commun.code.saisis_other": "{count} digits entered",
   "commun.code.effacer": "Delete",
-  "commun.code.nouveau_choisir": "Choose a new code"
+  "commun.code.nouveau_choisir": "Choose a new code",
+  "commun.piece.modifier": "Edit the room",
+  "commun.piece.modifier_nom": "Edit {name}",
+  "commun.piece.vide": "No device here yet.",
+  "commun.piece.vide_invitation": "Put a device in this room (Workshop)"
 }

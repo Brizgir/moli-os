@@ -20,6 +20,7 @@ mod assistant;
 mod automations;
 mod caller;
 mod guard;
+mod home;
 mod integrations;
 mod limit;
 mod machines;
@@ -170,6 +171,11 @@ fn house_routes(humans: &Arc<session::Sessions>, options: &Options) -> Router<Hu
         .route("/api/infra", get(rest::infra))
         .layer(Extension(rest::InfraFile(infra)))
         .route("/api/plan", get(plan::get).put(plan::put))
+        .route("/api/home/rooms", post(home::create))
+        .route(
+            "/api/home/rooms/{name}",
+            put(home::update).delete(home::delete),
+        )
         .route(
             "/api/plan/images",
             upload(post(plan::upload), plan::MAX_IMAGE, humans),
@@ -344,6 +350,7 @@ pub fn router(hub: Hub, shutdown: CancellationToken, options: &Options) -> Route
         .layer(Extension(rest::Recorded(options.history.clone())))
         .layer(Extension(rest::BenchFile(options.bench_path.clone())))
         .layer(Extension(rest::HomeFile(options.home_path.clone())))
+        .layer(Extension(home::HomeStore::new(options.home_path.clone())))
         .layer(Extension(plan::PlanDir(
             options
                 .home_path

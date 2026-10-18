@@ -1194,3 +1194,150 @@ async fn an_invited_person_reaches_the_house_from_the_internet() {
     assert_eq!(status, 401);
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// Rooms are declared from the dashboard by a person: written whole into
+/// `home.json`, a rename carries the devices' labels along, and anyone can
+/// read the layout back.
+#[tokio::test]
+#[allow(clippy::too_many_lines)]
+async fn rooms_are_declared_by_a_person_and_a_rename_moves_the_labels() {
+    let dir = std::env::temp_dir().join(format!("moli-http-rooms-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let home = dir.join("home.json");
+    std::fs::write(&home, "{\"title\": \"Maison\", \"hidden\": [\"tuya:9\"]}\n").unwrap();
+    let hub = Hub::new(HubOptions {
+        labels_path: Some(dir.join("labels.toml")),
+        ..HubOptions::default()
+    })
+    .unwrap();
+    spawn_driver(
+        &hub,
+        InstanceId::from("fake"),
+        Arc::new(Lamp),
+        CancellationToken::new(),
+    );
+    for _ in 0..200 {
+        if hub.stats().drivers_running == 1 {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(5)).await;
+    }
+    let options = moli_api::Options {
+        ui_pin: Some(moli_api::UiPin::new("482915")),
+        home_path: Some(home.clone()),
+        ..moli_api::Options::default()
+    };
+    let addr = serve(&hub, &options).await;
+    let ui = "x-moli-origin: ui\r\n";
+    let room = json!({ "name": "Chambre 2", "icon": "bed-outline" });
+
+    // Declaring is not proving: the header alone, or an agent, is refused.
+    let (status, _) = request_with(&addr, "POST", "/api/home/rooms", Some(&room), ui).await;
+    assert_eq!(status, 403, "no human session");
+    let (status, _) = request(&addr, "POST", "/api/home/rooms", Some(&room)).await;
+    assert_eq!(status, 403);
+    let (_, body) = request(&addr, "GET", "/api/home", None).await;
+    assert_eq!(
+        serde_json::from_str::<Json>(&body).unwrap().get("rooms"),
+        None,
+        "nothing written by a refusal"
+    );
+
+    let pin = pin_session(&addr, "482915").await;
+    let human = format!("{ui}{pin}");
+    let (status, body) = request_with(&addr, "POST", "/api/home/rooms", Some(&room), &human).await;
+    assert_eq!(status, 201, "{body}");
+    let (status, body) = request_with(
+        &addr,
+        "POST",
+        "/api/home/rooms",
+        Some(&json!({ "name": "chambre 2" })),
+        &human,
+    )
+    .await;
+    assert_eq!(status, 422, "the same room twice: {body}");
+    let (status, body) = request_with(
+        &addr,
+        "POST",
+        "/api/home/rooms",
+        Some(&json!({ "name": "Bureau", "icon": "x" })),
+        &human,
+    )
+    .await;
+    assert_eq!(status, 422, "an unknown icon: {body}");
+    let (_, body) = request(&addr, "GET", "/api/home", None).await;
+    let layout: Json = serde_json::from_str(&body).unwrap();
+    assert_eq!(
+        layout["hidden"],
+        json!(["tuya:9"]),
+        "the rest of the file is kept"
+    );
+    assert_eq!(
+        layout["rooms"],
+        json!([{ "name": "Chambre 2", "icon": "bed-outline" }])
+    );
+
+    // The lamp lives there; the room is renamed: the lamp follows.
+    let (status, _) = request_with(
+        &addr,
+        "PUT",
+        "/api/labels/fake:lamp",
+        Some(&json!({ "room": "Chambre 2" })),
+        &human,
+    )
+    .await;
+    assert_eq!(status, 200);
+    let mut events = hub.subscribe();
+    let (status, body) = request_with(
+        &addr,
+        "PUT",
+        "/api/home/rooms/chambre%202",
+        Some(&json!({ "name": "Chambre des enfants", "aliases": ["Kids"] })),
+        &human,
+    )
+    .await;
+    assert_eq!(status, 200, "{body}");
+    let layout: Json = serde_json::from_str(&body).unwrap();
+    assert_eq!(
+        layout["rooms"][0],
+        json!({ "name": "Chambre des enfants", "icon": "bed-outline", "aliases": ["Kids", "Chambre 2"] }),
+        "the old name stays as an alias"
+    );
+    let (_, body) = request(&addr, "GET", "/api/devices/fake:lamp", None).await;
+    let lamp: Json = serde_json::from_str(&body).unwrap();
+    assert_eq!(lamp["label"]["room"], "Chambre des enfants");
+    let labels = std::fs::read_to_string(dir.join("labels.toml")).unwrap();
+    assert!(labels.contains("Chambre des enfants"), "{labels}");
+    let mut seen = Vec::new();
+    while let Ok(Ok(event)) = tokio::time::timeout(Duration::from_millis(200), events.recv()).await
+    {
+        seen.push(
+            serde_json::to_value(&event).unwrap()["type"]
+                .as_str()
+                .unwrap()
+                .to_owned(),
+        );
+    }
+    assert!(seen.contains(&"label_changed".to_owned()), "{seen:?}");
+    assert_eq!(
+        seen.last().map(String::as_str),
+        Some("home_changed"),
+        "{seen:?}"
+    );
+
+    let (status, _) = request_with(&addr, "DELETE", "/api/home/rooms/Kids", None, &human).await;
+    assert_eq!(status, 200, "by its alias too");
+    let (status, _) = request_with(&addr, "DELETE", "/api/home/rooms/Kids", None, &human).await;
+    assert_eq!(status, 404);
+    let (_, body) = request(&addr, "GET", "/api/home", None).await;
+    assert_eq!(
+        serde_json::from_str::<Json>(&body).unwrap()["rooms"],
+        json!([])
+    );
+    assert_eq!(
+        std::fs::read_dir(&dir).unwrap().count(),
+        2,
+        "home.json and labels.toml, no temporary file"
+    );
+    std::fs::remove_dir_all(&dir).unwrap();
+}

@@ -36,6 +36,14 @@ export const hub = $state({
 
 const JOURNAL_MAX = 60;
 
+/** Told when the house's layout (`home.json`) is written: the family
+ *  dashboard reads it again. */
+const layoutListeners = new Set();
+export function onHomeChanged(fn) {
+  layoutListeners.add(fn);
+  return () => layoutListeners.delete(fn);
+}
+
 function applySnapshot(snapshot) {
   const devices = {};
   for (const d of snapshot.devices) devices[d.id] = d;
@@ -103,6 +111,9 @@ function applyEvent(e) {
       setTimeout(() => (hub.notices = hub.notices.filter((n) => n.id !== id)), 15000);
       break;
     }
+    case 'home_changed':
+      for (const fn of layoutListeners) fn();
+      break;
   }
 }
 

@@ -1,7 +1,7 @@
 // The family dashboard's model: the hub's live state (SSE, shared with the
 // Atelier), the home layout (/api/home), and gentle helpers on top.
 
-import { hub, connect, login, decide, refreshSession } from '../../lib/hub.svelte.js';
+import { hub, connect, login, decide, refreshSession, onHomeChanged } from '../../lib/hub.svelte.js';
 import { t, locale } from '../../lib/i18n.svelte.js';
 
 export { hub };
@@ -44,6 +44,13 @@ export async function start() {
   started = true;
   connect();
   setInterval(() => (home.now = Date.now()), 15_000);
+  // Written from another screen (a room declared): read again at once.
+  onHomeChanged(loadLayout);
+  await loadLayout();
+}
+
+/** The layout (`/api/home`); `{}` when the house has none. */
+async function loadLayout() {
   try {
     const res = await fetch('/api/home');
     home.config = res.ok ? await res.json() : {};
@@ -230,7 +237,9 @@ export function deviceKind(d) {
   return 'sensor';
 }
 
-/** Rooms with their devices sorted by kind, the layout's order first. */
+/** Rooms with their devices sorted by kind, the layout's order first. A
+ *  room declared in the layout shows even with nothing in it yet
+ *  (`declared`, `empty`): the place to put something. */
 export function roomList() {
   const defs = home.config?.rooms ?? [];
   const map = new Map(defs.map((r) => [r.name, []]));
@@ -244,12 +253,16 @@ export function roomList() {
     map.get(room).push(d);
   }
   return [...map.entries()]
-    .filter(([, list]) => list.length)
+    .filter(([name, list]) => list.length || defs.some((r) => r.name === name))
     .map(([name, list]) => {
       const by = (...kinds) => list.filter((d) => kinds.includes(deviceKind(d)));
+      const def = defs.find((r) => r.name === name);
       return {
         name,
-        icon: defs.find((r) => r.name === name)?.icon ?? 'home',
+        icon: def?.icon ?? 'home',
+        declared: !!def,
+        aliases: def?.aliases ?? [],
+        empty: !list.length,
         group: by('group')[0] ?? null,
         lights: by('light'),
         plugs: by('plug').filter((d) => !quiet(d.id)),
@@ -307,6 +320,44 @@ export async function act(point, val, label) {
     note(t('commun.echec', { label: label ?? t('commun.commande'), error: humanError(err.message) }), 'error');
     return 'error';
   }
+}
+
+// ---- rooms ---------------------------------------------------------------------
+
+/** What a room may look like (each one is in `lib/icons.js`, and the
+ *  server accepts these only). */
+export const ROOM_ICONS = [
+  'home', 'sofa-outline', 'bed-outline', 'bed-king-outline', 'silverware-fork-knife', 'shower-head', 'toilet',
+  'desk-lamp', 'computer', 'book', 'tv', 'speaker', 'stairs', 'door', 'gate', 'car', 'package',
+  'flower-outline', 'leaf', 'palm', 'pool', 'pine', 'sun', 'home-roof', 'dog', 'fan', 'water', 'printer',
+];
+
+async function roomCall(method, path, body) {
+  const res = await fetch(path, { method, headers, body: body == null ? undefined : JSON.stringify(body) });
+  const answer = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const err = new Error(answer.error ?? res.statusText);
+    err.status = res.status;
+    throw err;
+  }
+  return answer;
+}
+
+/** Declares a room (`previous` null) or changes one, as a person (403:
+ *  the caller asks for the code first, see `asHuman`). The layout the
+ *  server answers is taken at once. */
+export async function saveRoom(room, previous = null) {
+  const body = { name: room.name, icon: room.icon ?? '', aliases: room.aliases ?? [] };
+  const layout = previous
+    ? await roomCall('PUT', `/api/home/rooms/${encodeURIComponent(previous)}`, body)
+    : await roomCall('POST', '/api/home/rooms', body);
+  home.config = layout;
+  return layout;
+}
+
+/** Forgets a declared room (its devices keep their labels). */
+export async function removeRoom(name) {
+  home.config = await roomCall('DELETE', `/api/home/rooms/${encodeURIComponent(name)}`);
 }
 
 // ---- ambiances -----------------------------------------------------------------
