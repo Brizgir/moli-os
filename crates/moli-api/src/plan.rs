@@ -152,7 +152,8 @@ struct Shape {
 }
 
 /// A room: its outline in cm, what it is, and the Moli room it is (for the
-/// lights that make it glow and the devices that belong in it).
+/// lights that make it glow and the devices that belong in it). `gauge`:
+/// where its temperature shows (cm; at its foot otherwise).
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Area {
@@ -162,6 +163,8 @@ struct Area {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     room: Option<String>,
     poly: Vec<[f64; 2]>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    gauge: Option<[f64; 2]>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -288,13 +291,21 @@ impl Floor {
                 &moli_i18n::tr!("serveur.plan.forme.element"),
             )?;
         }
+        self.check_rooms(&inside)?;
+        Ok(())
+    }
+
+    /// The rooms of a drawn floor: a few of them, each with an id of its
+    /// own, a known kind, a sound outline, its temperature inside.
+    fn check_rooms(&self, inside: &dyn Fn(f64, f64) -> bool) -> Result<(), String> {
         if self.rooms.len() > 100 {
             return Err(moli_i18n::tr!("serveur.plan.trop_de_pieces"));
         }
         let mut ids = std::collections::HashSet::new();
         for room in &self.rooms {
             let shape = (3..=MAX_POINTS).contains(&room.poly.len())
-                && room.poly.iter().all(|[x, y]| inside(*x, *y));
+                && room.poly.iter().all(|[x, y]| inside(*x, *y))
+                && room.gauge.is_none_or(|[x, y]| inside(x, y));
             if !id_ok(&room.id)
                 || !ids.insert(&room.id)
                 || !text_ok(&room.name, 60)
@@ -657,6 +668,21 @@ mod tests {
             "inside the floor"
         );
         assert!(drawn(json!({ "rooms": [{ "id": "x", "name": "X", "kind": "living", "poly": [[0, 0], [1, 1]] }] })).check(&dir).is_err());
+        let gauged = |at: serde_json::Value| {
+            drawn(
+                json!({ "rooms": [{ "id": "x", "name": "X", "kind": "living",
+                "poly": [[0, 0], [100, 0], [100, 100]], "gauge": at }] }),
+            )
+        };
+        assert_eq!(
+            gauged(json!([50, 90])).check(&dir),
+            Ok(()),
+            "a room says where its temperature shows"
+        );
+        assert!(
+            gauged(json!([50, 5000])).check(&dir).is_err(),
+            "inside the floor"
+        );
         let mut skin = drawn(json!({}));
         skin.skin = Some("néon".into());
         assert!(skin.check(&dir).is_err());
