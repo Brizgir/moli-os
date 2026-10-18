@@ -99,6 +99,14 @@ impl DashboardStore {
         }
     }
 
+    /// The store next to `home.json` (none: nowhere to write).
+    pub(crate) fn beside(home: Option<&FsPath>) -> Self {
+        Self::new(
+            home.and_then(FsPath::parent)
+                .map(|dir| dir.join("dashboards.json")),
+        )
+    }
+
     /// Someone left the house: their layouts go with them.
     pub(crate) async fn forget_person(&self, id: &str) -> Result<(), String> {
         let Some(path) = &self.path else {

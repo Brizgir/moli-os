@@ -322,6 +322,7 @@ fn assistant_routes() -> Router<Hub> {
 pub fn router(hub: Hub, shutdown: CancellationToken, options: &Options) -> Router {
     let allowed = guard::AllowedHosts::new(&options.allowed_hosts).with_tls(options.tls.clone());
     let (humans, gate, persons) = people(&hub, options);
+    let dashboards = dashboard::DashboardStore::beside(options.home_path.as_deref());
     Router::new()
         .route("/api/health", get(rest::health))
         .merge(device_routes())
@@ -388,13 +389,7 @@ pub fn router(hub: Hub, shutdown: CancellationToken, options: &Options) -> Route
         .layer(Extension(rest::BenchFile(options.bench_path.clone())))
         .layer(Extension(rest::HomeFile(options.home_path.clone())))
         .layer(Extension(home::HomeStore::new(options.home_path.clone())))
-        .layer(Extension(dashboard::DashboardStore::new(
-            options
-                .home_path
-                .as_deref()
-                .and_then(std::path::Path::parent)
-                .map(|dir| dir.join("dashboards.json")),
-        )))
+        .layer(Extension(dashboards))
         .layer(Extension(plan::PlanDir(
             options
                 .home_path
