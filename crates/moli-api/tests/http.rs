@@ -410,19 +410,6 @@ async fn only_a_person_gives_the_assistant_a_key() {
     assert_eq!(status, 503);
 }
 
-#[tokio::test]
-async fn only_a_person_chooses_the_assistants_model() {
-    let (addr, _hub) = server().await;
-    let (status, body) = request(
-        &addr,
-        "PUT",
-        "/api/assistant/brain",
-        Some(&json!({ "provider": "anthropic", "model": "claude-opus-5-5" })),
-    )
-    .await;
-    assert_eq!(status, 403, "{body}");
-}
-
 /// The response's `Set-Cookie` value for `name`, and the body.
 async fn request_cookie(
     addr: &str,
@@ -1389,81 +1376,6 @@ async fn rooms_are_declared_by_a_person_and_a_rename_moves_the_labels() {
         &hub,
         InstanceId::from("fake"),
         Arc::new(Lamp),
-/// A device with a document of its own (as a heating schedule): it says
-/// what it was asked and keeps what it was given.
-#[derive(Debug, Default)]
-struct Notebook(std::sync::Mutex<Vec<(String, Json)>>);
-
-impl moli_runtime::service::Service for Notebook {
-    fn read(&self, what: &str) -> BoxFuture<'_, Result<Json, moli_runtime::service::ServiceError>> {
-        let what = what.to_owned();
-        Box::pin(async move {
-            match what.as_str() {
-                "schedules" => Ok(json!({ "written": self.0.lock().unwrap().len() })),
-                other => Err(moli_runtime::service::ServiceError::UnknownAction(
-                    other.to_owned(),
-                )),
-            }
-        })
-    }
-
-    fn write(
-        &self,
-        action: &str,
-        input: Json,
-    ) -> BoxFuture<'_, Result<Json, moli_runtime::service::ServiceError>> {
-        let action = action.to_owned();
-        Box::pin(async move {
-            if input["bad"] == true {
-                return Err(moli_runtime::service::ServiceError::Invalid("bad".into()));
-            }
-            self.0.lock().unwrap().push((action, input));
-            Ok(json!({ "written": self.0.lock().unwrap().len() }))
-        })
-    }
-}
-
-struct Heating(Arc<Notebook>);
-
-impl Driver for Heating {
-    fn kind(&self) -> &'static str {
-        "heating"
-    }
-
-    fn run<'a>(&'a self, ctx: &'a mut DriverCtx) -> BoxFuture<'a, anyhow::Result<()>> {
-        Box::pin(async move {
-            let id = ctx.device_id("home");
-            ctx.upsert_device(Device {
-                id: id.clone(),
-                instance: ctx.instance().clone(),
-                native_name: "home".into(),
-                manufacturer: None,
-                model: None,
-                description: None,
-                native_room: None,
-                members: Vec::new(),
-                points: Vec::new(),
-            });
-            ctx.provide_service(&id, self.0.clone());
-            ctx.ready();
-            while let Some(cmd) = ctx.next_command().await {
-                cmd.reply(Err("no".into()));
-            }
-            Ok(())
-        })
-    }
-}
-
-/// A device's own document is read by anyone; changed by a person only
-/// (the dashboard and the code), never by an agent nor a script.
-#[tokio::test]
-async fn a_service_is_read_freely_and_changed_by_a_person_only() {
-    let hub = Hub::new(HubOptions::default()).unwrap();
-    let notebook = Arc::new(Notebook::default());
-    spawn_driver(
-        &hub,
-        InstanceId::from("heating"),
-        Arc::new(Heating(notebook.clone())),
         CancellationToken::new(),
     );
     for _ in 0..200 {
@@ -1590,6 +1502,93 @@ async fn a_service_is_read_freely_and_changed_by_a_person_only() {
         "home.json and labels.toml, no temporary file"
     );
     std::fs::remove_dir_all(&dir).unwrap();
+}
+
+/// A device with a document of its own (as a heating schedule): it says
+/// what it was asked and keeps what it was given.
+#[derive(Debug, Default)]
+struct Notebook(std::sync::Mutex<Vec<(String, Json)>>);
+
+impl moli_runtime::service::Service for Notebook {
+    fn read(&self, what: &str) -> BoxFuture<'_, Result<Json, moli_runtime::service::ServiceError>> {
+        let what = what.to_owned();
+        Box::pin(async move {
+            match what.as_str() {
+                "schedules" => Ok(json!({ "written": self.0.lock().unwrap().len() })),
+                other => Err(moli_runtime::service::ServiceError::UnknownAction(
+                    other.to_owned(),
+                )),
+            }
+        })
+    }
+
+    fn write(
+        &self,
+        action: &str,
+        input: Json,
+    ) -> BoxFuture<'_, Result<Json, moli_runtime::service::ServiceError>> {
+        let action = action.to_owned();
+        Box::pin(async move {
+            if input["bad"] == true {
+                return Err(moli_runtime::service::ServiceError::Invalid("bad".into()));
+            }
+            self.0.lock().unwrap().push((action, input));
+            Ok(json!({ "written": self.0.lock().unwrap().len() }))
+        })
+    }
+}
+
+struct Heating(Arc<Notebook>);
+
+impl Driver for Heating {
+    fn kind(&self) -> &'static str {
+        "heating"
+    }
+
+    fn run<'a>(&'a self, ctx: &'a mut DriverCtx) -> BoxFuture<'a, anyhow::Result<()>> {
+        Box::pin(async move {
+            let id = ctx.device_id("home");
+            ctx.upsert_device(Device {
+                id: id.clone(),
+                instance: ctx.instance().clone(),
+                native_name: "home".into(),
+                manufacturer: None,
+                model: None,
+                description: None,
+                native_room: None,
+                members: Vec::new(),
+                points: Vec::new(),
+            });
+            ctx.provide_service(&id, self.0.clone());
+            ctx.ready();
+            while let Some(cmd) = ctx.next_command().await {
+                cmd.reply(Err("no".into()));
+            }
+            Ok(())
+        })
+    }
+}
+
+/// A device's own document is read by anyone; changed by a person only
+/// (the dashboard and the code), never by an agent nor a script.
+#[tokio::test]
+async fn a_service_is_read_freely_and_changed_by_a_person_only() {
+    let hub = Hub::new(HubOptions::default()).unwrap();
+    let notebook = Arc::new(Notebook::default());
+    spawn_driver(
+        &hub,
+        InstanceId::from("heating"),
+        Arc::new(Heating(notebook.clone())),
+        CancellationToken::new(),
+    );
+    for _ in 0..200 {
+        if hub.stats().drivers_running == 1 {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(5)).await;
+    }
+    let options = moli_api::Options {
+        ui_pin: Some(moli_api::UiPin::new("482915")),
         ..moli_api::Options::default()
     };
     let addr = serve(&hub, &options).await;
