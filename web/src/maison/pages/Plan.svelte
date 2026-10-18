@@ -1,12 +1,13 @@
 <script>
   import { onMount } from 'svelte';
   import Icon from '../ui/Icon.svelte';
-  import { hub, value, nameOf, deviceKind, isOn, toggle, num, note, roomOf, savePref, doorOpen, leak, motion, isGroup, isFixture, unpowered } from '../lib/home.svelte.js';
+  import { hub, home, value, nameOf, deviceKind, isOn, toggle, num, note, roomOf, savePref, doorOpen, leak, motion, isGroup, isFixture, unpowered } from '../lib/home.svelte.js';
   import { asHuman, CANCELLED } from '../lib/auto.svelte.js';
   import Drawing from '../plan/Drawing.svelte';
   import House3D from '../plan/House3D.svelte';
   import { SKINS, SKIN_IDS, ITEMS } from '../plan/skins.js';
   import { spread } from '../plan/geometry.js';
+  import * as E from '../plan/editing.js';
   import FilterChips from '../ui/FilterChips.svelte';
   import SpeakerCard from '../ui/SpeakerCard.svelte';
   import { keeps, loadFilter } from '../lib/filters.js';
@@ -32,9 +33,18 @@
   let surface = $state(null);
   let drawing = $state(null);
   let dragging = null;
-  /** Edit, drawn floor: the fixture chosen, and the kind to add. */
-  let selected = $state(null);
+  /** Edit, drawn floor: the layer arranged, what is chosen in it (and the
+   *  room's chosen corner), the kinds to add, the magnet. */
+  let layer = $state('items');
+  let selection = $state(null);
+  let vertex = $state(null);
   let addKind = $state('bed');
+  let addOpeningKind = $state('door');
+  let magnet = $state(true);
+  /** Edit: the last changes, to undo and redo them. */
+  let hist = $state(E.history());
+  const LAYERS = ['items', 'rooms', 'walls', 'openings'];
+  const LISTS = { item: 'items', room: 'rooms', wall: 'walls', opening: 'openings' };
 
   /** This viewer's skin (the house's default otherwise). */
   function readSkin() {
@@ -116,6 +126,8 @@
   function pickFloor(id) {
     whole = false;
     floorId = id;
+    selection = null;
+    vertex = null;
   }
   const in3d = $derived(view === '3d' && !editing && drawn && floor?.size);
   const skinId = $derived(editing ? (draft?.skin ?? 'plan') : SKINS[mySkin] ? mySkin : (plan.skin ?? 'plan'));
@@ -123,7 +135,7 @@
 
   function chooseSkin(id) {
     if (editing) {
-      draft.skin = id;
+      change(() => (draft.skin = id));
       return;
     }
     mySkin = id;
@@ -221,13 +233,66 @@
     draft = structuredClone($state.snapshot(plan));
     editing = true;
     opened = null;
+    hist = E.history();
+    layer = 'items';
+    selection = null;
+    vertex = null;
   }
 
   function cancelEdit() {
     editing = false;
     draft = null;
     picking = null;
+    selection = null;
     floorId = plan.floors.find((f) => f.id === floorId)?.id ?? plan.floors[0]?.id ?? null;
+  }
+
+  // ---- edit: undo, redo ------------------------------------------------------------
+
+  const snapshot = () => JSON.stringify($state.snapshot(draft));
+
+  /** A change starts (a drag, a field): what there was is kept. */
+  function begin() {
+    E.remember(hist, snapshot());
+  }
+
+  /** It ends: nothing changed (a tap) forgets it. */
+  function end() {
+    E.settle(hist, snapshot());
+  }
+
+  function change(fn) {
+    begin();
+    fn();
+    end();
+  }
+
+  function restore(state) {
+    if (state == null) return;
+    draft = JSON.parse(state);
+    if (!draft.floors.some((f) => f.id === floorId)) floorId = draft.floors[0]?.id ?? null;
+    const f = draft.floors.find((x) => x.id === floorId);
+    if (selection && !f?.[LISTS[selection.type]]?.[selection.i]) selection = null;
+    vertex = null;
+  }
+
+  const back = () => restore(E.undo(hist, snapshot()));
+  const again = () => restore(E.redo(hist, snapshot()));
+
+  function keys(e) {
+    if (!editing || e.target.closest?.('input, select, textarea')) return;
+    const key = e.key.toLowerCase();
+    if ((e.ctrlKey || e.metaKey) && key === 'z') {
+      e.preventDefault();
+      if (e.shiftKey) again();
+      else back();
+    } else if ((e.ctrlKey || e.metaKey) && key === 'y') {
+      e.preventDefault();
+      again();
+    } else if ((e.key === 'Delete' || e.key === 'Backspace') && chosen) {
+      e.preventDefault();
+      removeChosen();
+    }
   }
 
   function slug(name) {
@@ -266,7 +331,7 @@
       busy = true;
       const image = file ? await asHuman(t('maison.plan.ajouter_plan', { name }), () => uploadImage(file)) : null;
       const id = slug(name);
-      draft.floors.push({ id, name, ...(image ? { image } : {}), devices: [] });
+      change(() => draft.floors.push({ id, name, ...(image ? { image } : {}), devices: [] }));
       floorId = id;
       newName = '';
     } catch (err) {
@@ -280,7 +345,7 @@
   function addBlankFloor() {
     const name = newName.trim() || t('maison.plan.etage_defaut', { n: draft.floors.length + 1 });
     const id = slug(name);
-    draft.floors.push({ id, name, devices: [] });
+    change(() => draft.floors.push({ id, name, devices: [] }));
     floorId = id;
     newName = '';
   }
@@ -291,7 +356,8 @@
     if (!file || !floor) return;
     try {
       busy = true;
-      floor.image = await asHuman(t('maison.plan.changer_plan', { name: floor.name }), () => uploadImage(file));
+      const image = await asHuman(t('maison.plan.changer_plan', { name: floor.name }), () => uploadImage(file));
+      change(() => (floor.image = image));
     } catch (err) {
       if (err.message !== CANCELLED) note(err.message, 'error');
     } finally {
@@ -301,7 +367,7 @@
 
   function removeFloor() {
     if (!floor || !confirm(t('maison.plan.retirer_confirme', { name: floor.name }))) return;
-    draft.floors = draft.floors.filter((f) => f.id !== floor.id);
+    change(() => (draft.floors = draft.floors.filter((f) => f.id !== floor.id)));
     floorId = draft.floors[0]?.id ?? null;
   }
 
@@ -319,7 +385,7 @@
 
   function placeHere(event) {
     if (!editing || !picking || !floor) return;
-    floor.devices.push({ id: picking, ...at(event) });
+    change(() => floor.devices.push({ id: picking, ...at(event) }));
     picking = null;
   }
 
@@ -329,6 +395,7 @@
     // Not a pan of the drawing: this device moves.
     event.stopPropagation();
     event.currentTarget.setPointerCapture(event.pointerId);
+    begin();
     dragging = spot;
   }
 
@@ -338,42 +405,187 @@
   }
 
   function drop() {
+    if (dragging) end();
     dragging = null;
   }
 
   function unplace(spot) {
-    floor.devices = floor.devices.filter((d) => d !== spot);
+    change(() => (floor.devices = floor.devices.filter((d) => d !== spot)));
   }
 
   function placeAt(x, y) {
     if (!editing || !picking || !floor) return;
-    floor.devices.push({ id: picking, x, y });
+    change(() => floor.devices.push({ id: picking, x, y }));
     picking = null;
   }
 
   // ---- drawn floor: fixtures and placing by room ---------------------------------
 
+  /** What is chosen on the floor (a fixture, a room, a wall, an opening). */
+  const chosen = $derived(editing && selection && floor ? (floor[LISTS[selection.type]]?.[selection.i] ?? null) : null);
+  /** A chosen wall as the plain box it covers (a quarter turn undone). */
+  const wallBox = $derived(selection?.type === 'wall' && chosen ? E.unturned(chosen) : null);
+  const openingWidth = $derived(selection?.type === 'opening' && chosen ? Math.round(E.widthOf(chosen, floor.walls ?? [])) : null);
+  /** The Moli rooms a drawn room can be (home.json), and the one it says. */
+  const moliRooms = $derived.by(() => {
+    const names = (home.config?.rooms ?? []).map((r) => r.name);
+    const own = selection?.type === 'room' ? chosen?.room : null;
+    return own && !names.includes(own) ? [...names, own] : names;
+  });
+
+  function chooseLayer(id) {
+    layer = id;
+    selection = null;
+    vertex = null;
+  }
+
+  /** The middle of what is on screen, inside the floor (`m` cm from its edges). */
+  function middle(m = 0) {
+    const c = drawing.center();
+    const [w, h] = floor.size;
+    return { x: Math.min(w - m, Math.max(m, c.x)), y: Math.min(h - m, Math.max(m, c.y)) };
+  }
+
   function addItem() {
     const kind = ITEMS[addKind];
-    const c = drawing.center();
-    const item = { kind: addKind, x: Math.round(c.x - kind.w / 2), y: Math.round(c.y - kind.h / 2), w: kind.w, h: kind.h };
-    floor.items = [...(floor.items ?? []), item];
-    selected = floor.items[floor.items.length - 1];
+    const c = middle();
+    change(() => {
+      const item = { kind: addKind, x: Math.round(c.x - kind.w / 2), y: Math.round(c.y - kind.h / 2), w: kind.w, h: kind.h };
+      floor.items = [...(floor.items ?? []), E.clampBox(item, floor.size)];
+      selection = { type: 'item', i: floor.items.length - 1 };
+    });
   }
 
   function turnItem() {
-    if (selected) selected.r = ((selected.r ?? 0) + 90) % 360;
+    if (chosen) change(() => (chosen.r = ((chosen.r ?? 0) + 90) % 360));
   }
 
-  function removeItem() {
-    if (!selected) return;
-    floor.items = floor.items.filter((it) => it !== selected);
-    selected = null;
+  /** The chosen thing goes (a wall takes its openings with it). */
+  function removeChosen() {
+    if (!chosen) return;
+    const { type, i } = selection;
+    change(() => {
+      if (type === 'wall') {
+        const on = new Set(E.openingsOn(floor.walls[i], floor.openings ?? []));
+        if (on.size) floor.openings = floor.openings.filter((_, k) => !on.has(k));
+      }
+      floor[LISTS[type]] = floor[LISTS[type]].filter((_, k) => k !== i);
+      selection = null;
+      vertex = null;
+    });
+  }
+
+  // ---- drawn floor: rooms -----------------------------------------------------------
+
+  function addRoom() {
+    const c = middle(150);
+    change(() => {
+      const taken = draft.floors.flatMap((f) => (f.rooms ?? []).map((r) => r.id));
+      const room = { id: E.freshId(taken), name: t('maison.plan.nouvelle_piece'), kind: 'other', poly: E.rectRoom(c.x, c.y) };
+      floor.rooms = [...(floor.rooms ?? []), room];
+      selection = { type: 'room', i: floor.rooms.length - 1 };
+      vertex = null;
+    });
+  }
+
+  function renameRoom(event) {
+    const name = event.currentTarget.value.trim().slice(0, 60);
+    if (name && name !== chosen.name) change(() => (chosen.name = name));
+    else event.currentTarget.value = chosen.name;
+  }
+
+  function setRoomKind(kind) {
+    change(() => (chosen.kind = kind));
+  }
+
+  function setMoliRoom(name) {
+    change(() => {
+      if (name) chosen.room = name;
+      else delete chosen.room;
+    });
+  }
+
+  function removeCorner() {
+    if (vertex == null || chosen.poly.length <= 3) return;
+    change(() => {
+      chosen.poly = E.removeVertex($state.snapshot(chosen.poly), vertex);
+      vertex = null;
+    });
+  }
+
+  // ---- drawn floor: walls and openings ----------------------------------------------
+
+  function addWall(along) {
+    const c = middle(160);
+    change(() => {
+      floor.walls = [...(floor.walls ?? []), E.clampBox(E.newWall(c.x, c.y, along), floor.size)];
+      selection = { type: 'wall', i: floor.walls.length - 1 };
+    });
+  }
+
+  /** The chosen wall changed by `fn` (on its plain box); its openings follow. */
+  function setWall(fn) {
+    const i = selection.i;
+    change(() => {
+      const before = E.unturned($state.snapshot(floor.walls[i]));
+      const after = fn(before);
+      floor.walls[i] = after;
+      if (!E.straight(after) || after.r != null) return;
+      for (const k of E.openingsOn(before, floor.openings ?? [])) floor.openings[k] = E.carryOpening($state.snapshot(floor.openings[k]), before, after);
+    });
+  }
+
+  /** A number from a field, within bounds (the field shows it); `null` when empty. */
+  function cm(event, min, max) {
+    const field = event.currentTarget;
+    const v = Number.parseFloat(String(field.value).replace(',', '.'));
+    if (!Number.isFinite(v)) return null;
+    const out = Math.min(max, Math.max(min, Math.round(v)));
+    field.value = String(out);
+    return out;
+  }
+
+  function wallThickness(event) {
+    const v = cm(event, 1, 200);
+    if (v) setWall((b) => E.setThickness(b, v));
+  }
+
+  function wallLength(event) {
+    const v = cm(event, E.MIN_WALL, 10000);
+    if (v) setWall((b) => E.clampBox(E.setLength(b, v), floor.size));
+  }
+
+  /** Empty: as high as the floor's walls; else a low wall, a railing. */
+  function wallHeight(event) {
+    const v = cm(event, 1, 1000);
+    setWall(({ height, ...rest }) => (v ? { ...rest, height: v } : rest));
+  }
+
+  function addOpening() {
+    const c = middle();
+    change(() => {
+      const width = E.OPENING_WIDTH[addOpeningKind];
+      const o = E.placeOpening($state.snapshot(floor.walls ?? []), { kind: addOpeningKind, x: 0, y: 0, w: width, h: 20 }, width, c.x, c.y);
+      floor.openings = [...(floor.openings ?? []), E.clampBox(o, floor.size)];
+      selection = { type: 'opening', i: floor.openings.length - 1 };
+    });
+  }
+
+  function setOpeningKind(kind) {
+    change(() => (chosen.kind = kind));
+  }
+
+  function openingWidthTo(event) {
+    const v = cm(event, E.MIN_OPENING, 2000);
+    if (!v) return;
+    const i = selection.i;
+    change(() => (floor.openings[i] = E.resizeOpening($state.snapshot(floor.walls ?? []), $state.snapshot(floor.openings[i]), v)));
   }
 
   /** Every device not on the plan yet goes into its room, if this floor has it. */
   function placeByRoom() {
     let placedNow = 0;
+    begin();
     for (const r of floor.rooms ?? []) {
       if (!r.room) continue;
       const mine = unplaced.filter((d) => roomOf(d) === r.room);
@@ -382,6 +594,7 @@
         placedNow++;
       });
     }
+    end();
     note(placedNow ? t('maison.plan.poses', { count: placedNow }) : t('maison.plan.rien_a_poser'));
   }
 
@@ -402,6 +615,7 @@
       editing = false;
       draft = null;
       picking = null;
+      selection = null;
       note(t('maison.plan.enregistre'));
     } catch (err) {
       if (err.message !== CANCELLED) note(err.message, 'error');
@@ -441,7 +655,7 @@
   {/if}
 {/snippet}
 
-<svelte:window bind:innerHeight={ih} />
+<svelte:window bind:innerHeight={ih} onkeydown={keys} />
 
 <div class="plan" data-unsaved={editing || undefined}>
   <header>
@@ -493,35 +707,46 @@
 
   {#if editing && floor?.size}
     <div class="tools">
-      <label class="pick">
-        <span class="muted small">{t('maison.plan.ajouter')}</span>
-        <select bind:value={addKind} aria-label={t('maison.plan.element_a_ajouter')}>
-          {#each Object.entries(ITEMS) as [id, it] (id)}<option value={id}>{it.name}</option>{/each}
-        </select>
-        <button class="link" onclick={addItem}><Icon name="plus" size={15} />{t('maison.plan.ajouter')}</button>
-      </label>
-      {#if selected}
-        <button class="link" onclick={turnItem}>{t('maison.plan.tourner')}</button>
-        <button class="link danger" onclick={removeItem}>{t('maison.plan.retirer_element')}</button>
-      {/if}
-      <button class="link" onclick={placeByRoom}>{t('maison.plan.poser_par_piece')}</button>
+      <span class="seg" role="group" aria-label={t('maison.plan.calques')}>
+        {#each LAYERS as id (id)}
+          <button class:active={layer === id} aria-pressed={layer === id} onclick={() => chooseLayer(id)}>{t(`maison.plan.calque.${id}`)}</button>
+        {/each}
+      </span>
+      <span class="row">
+        <button class="chip" onclick={back} disabled={!hist.past.length} title={t('maison.plan.defaire_aide')} aria-label={t('maison.plan.defaire')}><Icon name="undo" size={18} /><span class="word">{t('maison.plan.defaire')}</span></button>
+        <button class="chip" onclick={again} disabled={!hist.future.length} title={t('maison.plan.refaire_aide')} aria-label={t('maison.plan.refaire')}><Icon name="redo" size={18} /><span class="word">{t('maison.plan.refaire')}</span></button>
+        <label class="chip" title={t('maison.plan.magnetisme_aide')}><input type="checkbox" bind:checked={magnet} /><Icon name="magnet" size={16} /><span class="word">{t('maison.plan.magnetisme')}</span></label>
+      </span>
     </div>
-  {/if}
-
-  {#if editing}
     <div class="tools">
-      <label class="add">
-        <input placeholder={t('maison.plan.nom_etage_exemple')} bind:value={newName} aria-label={t('maison.plan.nom_nouvel_etage')} />
-        <span class="file"><Icon name="plus" size={16} />{t('maison.plan.ajouter_etage')}
-          <input type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" onchange={addFloor} disabled={busy} />
-        </span>
-        <button class="link" onclick={addBlankFloor} disabled={busy}>{t('maison.plan.sans_image')}</button>
-      </label>
-      {#if floor && !floor.size}
-        <span class="file small"><Icon name="camera" size={15} />{t('maison.plan.changer_image')}
-          <input type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" onchange={replaceImage} disabled={busy} />
-        </span>
-        <button class="link danger" onclick={removeFloor}>{t('maison.plan.retirer_etage')}</button>
+      {#if layer === 'items'}
+        <label class="pick">
+          <span class="muted small">{t('maison.plan.ajouter')}</span>
+          <select bind:value={addKind} aria-label={t('maison.plan.element_a_ajouter')}>
+            {#each Object.entries(ITEMS) as [id, it] (id)}<option value={id}>{it.name}</option>{/each}
+          </select>
+          <button class="link" onclick={addItem}><Icon name="plus" size={15} />{t('maison.plan.ajouter')}</button>
+        </label>
+        {#if selection?.type === 'item' && chosen}
+          <button class="link" onclick={turnItem}>{t('maison.plan.tourner')}</button>
+          <button class="link danger" onclick={removeChosen}>{t('maison.plan.retirer_element')}</button>
+        {/if}
+        <button class="link" onclick={placeByRoom}>{t('maison.plan.poser_par_piece')}</button>
+      {:else if layer === 'rooms'}
+        <button class="chip" onclick={addRoom}><Icon name="plus" size={16} />{t('maison.plan.ajouter_piece')}</button>
+        <span class="muted small">{t('maison.plan.aide.rooms')}</span>
+      {:else if layer === 'walls'}
+        <button class="chip" onclick={() => addWall('x')}><Icon name="plus" size={16} />{t('maison.plan.mur_horizontal')}</button>
+        <button class="chip" onclick={() => addWall('y')}><Icon name="plus" size={16} />{t('maison.plan.mur_vertical')}</button>
+        <span class="muted small">{t('maison.plan.aide.walls')}</span>
+      {:else}
+        <label class="pick">
+          <select bind:value={addOpeningKind} aria-label={t('maison.plan.ouverture_a_ajouter')}>
+            {#each E.OPENING_KINDS as k (k)}<option value={k}>{t(`maison.plan.ouverture.${k}`)}</option>{/each}
+          </select>
+          <button class="chip" onclick={addOpening}><Icon name="plus" size={16} />{t('maison.plan.ajouter')}</button>
+        </label>
+        <span class="muted small">{t('maison.plan.aide.openings')}</span>
       {/if}
     </div>
   {/if}
@@ -552,7 +777,49 @@
         <House3D plan={shown} floorId={floor.id} {skin} {keep} ontap={tap3d} />
       {:else if floor.size}
         <div class="drawn" onpointermove={drag} onpointerup={drop} onpointercancel={drop} role="presentation">
-          <Drawing bind:this={drawing} {floor} {skin} {editing} {picking} {keep} bind:selected onplace={placeAt} ontap={() => (opened = null)} token={spotBody} />
+          <Drawing bind:this={drawing} {floor} {skin} {editing} {picking} {keep} {layer} {magnet} bind:selection bind:vertex onbegin={begin} onend={end} onplace={placeAt} ontap={() => (opened = null)} token={spotBody} />
+          <!-- What is chosen, under the plan: choosing does not move the plan. -->
+          {#if chosen && selection.type !== 'item'}
+            <section class="sheet" aria-label={t('maison.plan.fiche')}>
+              {#if selection.type === 'room'}
+                <label><span>{t('maison.plan.piece_nom')}</span><input value={chosen.name} maxlength="60" onchange={renameRoom} /></label>
+                <label><span>{t('maison.plan.piece_type')}</span>
+                  <select value={chosen.kind} onchange={(e) => setRoomKind(e.currentTarget.value)}>
+                    {#each E.ROOM_KINDS as k (k)}<option value={k}>{t(`maison.plan.type_piece.${k}`)}</option>{/each}
+                  </select>
+                </label>
+                <label><span>{t('maison.plan.piece_moli')}</span>
+                  <select value={chosen.room ?? ''} onchange={(e) => setMoliRoom(e.currentTarget.value)}>
+                    <option value="">{t('maison.plan.aucune')}</option>
+                    {#each moliRooms as n (n)}<option value={n}>{n}</option>{/each}
+                  </select>
+                </label>
+                <p class="muted small">{t('maison.plan.aide.coins', { n: chosen.poly.length })}</p>
+                <div class="row">
+                  <button class="chip" onclick={removeCorner} disabled={vertex == null || chosen.poly.length <= 3}>{t('maison.plan.retirer_coin')}</button>
+                  <button class="chip danger" onclick={removeChosen}><Icon name="trash" size={16} />{t('maison.plan.retirer_piece')}</button>
+                </div>
+              {:else if selection.type === 'wall'}
+                <label><span>{t('maison.plan.epaisseur')}</span><input type="number" inputmode="numeric" min="1" max="200" value={E.thicknessOf(wallBox)} onchange={wallThickness} /></label>
+                <label><span>{t('maison.plan.longueur')}</span><input type="number" inputmode="numeric" min={E.MIN_WALL} max="10000" value={E.lengthOf(wallBox)} onchange={wallLength} /></label>
+                <label><span>{t('maison.plan.hauteur')}</span><input type="number" inputmode="numeric" min="1" max="1000" value={chosen.height ?? ''} placeholder={t('maison.plan.pleine_hauteur')} onchange={wallHeight} /></label>
+                {#if !E.straight(chosen)}<p class="muted small">{t('maison.plan.mur_biais')}</p>{/if}
+                <div class="row">
+                  <button class="chip danger" onclick={removeChosen}><Icon name="trash" size={16} />{t('maison.plan.retirer_mur')}</button>
+                </div>
+              {:else}
+                <label><span>{t('maison.plan.piece_type')}</span>
+                  <select value={chosen.kind} onchange={(e) => setOpeningKind(e.currentTarget.value)}>
+                    {#each E.OPENING_KINDS as k (k)}<option value={k}>{t(`maison.plan.ouverture.${k}`)}</option>{/each}
+                  </select>
+                </label>
+                <label><span>{t('maison.plan.largeur')}</span><input type="number" inputmode="numeric" min={E.MIN_OPENING} max="2000" value={openingWidth} onchange={openingWidthTo} /></label>
+                <div class="row">
+                  <button class="chip danger" onclick={removeChosen}><Icon name="trash" size={16} />{t('maison.plan.retirer_ouverture')}</button>
+                </div>
+              {/if}
+            </section>
+          {/if}
         </div>
       {:else}
       <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
@@ -593,11 +860,31 @@
       {/if}
     </div>
   {/if}
+
+  <!-- Floors come and go rarely: under the plan. -->
+  {#if editing}
+    <div class="tools">
+      <label class="add">
+        <input placeholder={t('maison.plan.nom_etage_exemple')} bind:value={newName} aria-label={t('maison.plan.nom_nouvel_etage')} />
+        <span class="file"><Icon name="plus" size={16} />{t('maison.plan.ajouter_etage')}
+          <input type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" onchange={addFloor} disabled={busy} />
+        </span>
+        <button class="link" onclick={addBlankFloor} disabled={busy}>{t('maison.plan.sans_image')}</button>
+      </label>
+      {#if floor && !floor.size}
+        <span class="file small"><Icon name="camera" size={15} />{t('maison.plan.changer_image')}
+          <input type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" onchange={replaceImage} disabled={busy} />
+        </span>
+        <button class="link danger" onclick={removeFloor}>{t('maison.plan.retirer_etage')}</button>
+      {/if}
+    </div>
+  {/if}
 </div>
 
 <style>
   .plan {
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     gap: 18px;
   }
 
@@ -819,6 +1106,113 @@
     display: inline-flex;
     align-items: center;
     gap: 8px;
+  }
+
+  .seg {
+    display: inline-flex;
+    max-width: 100%;
+    padding: 3px;
+    border-radius: 999px;
+    background: var(--surface);
+    box-shadow: var(--shadow);
+  }
+
+  .seg button {
+    flex: none;
+    min-height: 38px;
+    white-space: nowrap;
+    padding: 6px 14px;
+    border: none;
+    border-radius: 999px;
+    background: none;
+    color: var(--ink-2);
+    font: inherit;
+    font-size: 14px;
+    font-weight: 650;
+    cursor: pointer;
+  }
+
+  .seg button.active {
+    background: var(--ink);
+    color: var(--surface);
+  }
+
+  .row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+  }
+
+  /* Big enough for a finger. */
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 40px;
+    padding: 6px 14px;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    color: var(--ink);
+    font: inherit;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .chip:disabled {
+    opacity: 0.45;
+    cursor: default;
+  }
+
+  .chip.danger {
+    color: var(--alert);
+  }
+
+  .chip input {
+    width: 18px;
+    height: 18px;
+    margin: 0;
+  }
+
+  .sheet {
+    margin-top: 12px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 10px 14px;
+    padding: 12px 14px;
+    border-radius: var(--r-lg);
+    background: var(--surface);
+    box-shadow: var(--shadow);
+  }
+
+  .sheet label {
+    display: grid;
+    gap: 4px;
+    font-size: 12.5px;
+    color: var(--ink-3);
+  }
+
+  .sheet input,
+  .sheet select {
+    min-height: 40px;
+    padding: 6px 10px;
+    border-radius: var(--r-sm);
+    border: 1px solid var(--line);
+    background: var(--surface);
+    color: var(--ink);
+    font: inherit;
+    font-size: 15px;
+  }
+
+  .sheet input[type='number'] {
+    width: 9ch;
+  }
+
+  .sheet p {
+    flex-basis: 100%;
   }
 
   .pick select {
@@ -1088,6 +1482,19 @@
     .token {
       width: 32px;
       height: 32px;
+    }
+
+    /* The four layers, two by two. */
+    .seg {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      width: 100%;
+      border-radius: 22px;
+    }
+
+    /* Undo, redo, magnet: their icons are enough on a phone. */
+    .chip .word {
+      display: none;
     }
 
     /* Icons only while looking; names while arranging. */

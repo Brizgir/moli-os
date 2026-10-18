@@ -1,19 +1,34 @@
 <script>
   import { hub, home, value, deviceKind, isOn, roomOf, num } from '../lib/home.svelte.js';
   import { area, bbox, inside, labelAt, points } from './geometry.js';
+  import * as E from './editing.js';
   import { t, locale } from '../../lib/i18n.svelte.js';
 
   /**
    * A drawn floor (cm): rooms, walls, openings, fixtures and the house's
    * devices, alive. Zoom (wheel, pinch, double tap, buttons) and pan (drag);
-   * the skin is only colours. In edit mode, fixtures move, turn and resize.
+   * the skin is only colours. In edit mode, one layer at a time answers:
+   * fixtures move, turn and resize; a room's corners move (handles), a side
+   * gets a new one; a wall moves and stretches by its ends; an opening
+   * slides along its wall. A tap chooses, a drag on what is chosen moves it
+   * (a drag elsewhere still pans). The geometry is `editing.js`.
    */
   let {
     floor,
     skin,
     editing = false,
     picking = null,
-    selected = $bindable(null),
+    /** Edit: what is chosen, `{ type: 'item' | 'room' | 'wall' | 'opening', i }`. */
+    selection = $bindable(null),
+    /** Edit: the chosen corner of the chosen room. */
+    vertex = $bindable(null),
+    /** Edit: which layer answers ('items' with the devices, 'rooms', 'walls', 'openings'). */
+    layer = 'items',
+    /** Edit: the grid and the lines around catch what moves. */
+    magnet = true,
+    /** Edit: a change starts (to undo it), and ends. */
+    onbegin = () => {},
+    onend = () => {},
     token,
     keep = () => true,
     onplace = () => {},
@@ -95,6 +110,13 @@
   }
 
   function move(e) {
+    if (hold && hold.id === e.pointerId) {
+      if (!steady(e)) {
+        const p = toWorld(e.clientX, e.clientY);
+        hold.apply(p.x, p.y);
+      }
+      return;
+    }
     if (!pointers.has(e.pointerId)) return;
     pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (pointers.size >= 2 && pinch) {
@@ -117,6 +139,11 @@
   }
 
   function up(e) {
+    if (hold && hold.id === e.pointerId) {
+      hold = null;
+      onend();
+      return;
+    }
     if (!pointers.has(e.pointerId)) return;
     pointers.delete(e.pointerId);
     if (pointers.size < 2) pinch = null;
@@ -129,8 +156,8 @@
       if (!moved) {
         const p = toWorld(e.clientX, e.clientY);
         if (editing && picking) onplace(Math.round(p.x), Math.round(p.y));
-        else if (editing && !e.target.closest?.('.item')) selected = null;
-        else if (!editing) ontap(p);
+        else if (editing) choose(e.target.closest?.('[data-pick]'));
+        else ontap(p);
       }
       start = null;
     }
@@ -147,41 +174,123 @@
   });
 
   function dbl(e) {
-    if (e.target.closest?.('.pin')) return;
+    if (e.target.closest?.('.pin, .handle, .hit')) return;
     zoomAt(2, e.clientX, e.clientY);
   }
 
-  // ---- fixtures (edit) ----------------------------------------------------------------
+  // ---- edit: choose with a tap, then move what is chosen ------------------------------
 
-  let grip = null;
+  /** A drag under way: `apply(x, y)` (cm) until the finger lifts. */
+  let hold = null;
+  /** How close (cm) a line catches what moves, how big a handle is: pixels on screen. */
+  const tol = $derived(12 / cam.k);
+  const hit = $derived(14 / cam.k);
+  const LISTS = { item: 'items', room: 'rooms', wall: 'walls', opening: 'openings' };
+  const is = (type, i) => editing && selection?.type === type && selection.i === i;
 
-  function grabItem(e, item, mode = 'move') {
-    if (!editing) return;
-    e.stopPropagation();
-    e.currentTarget.setPointerCapture?.(e.pointerId);
-    selected = item;
-    grip = { id: e.pointerId, mode, x: e.clientX, y: e.clientY, item: { ...$state.snapshot(item) } };
+  function choose(el) {
+    selection = el ? { type: el.dataset.pick, i: Number(el.dataset.i) } : null;
+    vertex = null;
   }
 
-  function dragItem(e, item) {
-    if (!grip || grip.id !== e.pointerId) return;
-    const dx = (e.clientX - grip.x) / cam.k;
-    const dy = (e.clientY - grip.y) / cam.k;
-    if (grip.mode === 'move') {
-      item.x = Math.round(grip.item.x + dx);
-      item.y = Math.round(grip.item.y + dy);
-    } else {
+  function grab(e, apply = () => {}) {
+    e.stopPropagation();
+    box.setPointerCapture?.(e.pointerId);
+    onbegin();
+    hold = { id: e.pointerId, sx: e.clientX, sy: e.clientY, apply, moved: false };
+    return hold;
+  }
+
+  /** Still while the finger hesitates: a tap chooses, it does not nudge. */
+  function steady(e) {
+    if (!hold.moved && Math.abs(e.clientX - hold.sx) + Math.abs(e.clientY - hold.sy) < 4) return true;
+    hold.moved = true;
+    return false;
+  }
+
+  const snap = (v) => (magnet ? E.toGrid(v) : Math.round(v));
+
+  function grabItem(e, i, mode = 'move') {
+    if (!editing || layer !== 'items') return;
+    selection = { type: 'item', i };
+    const start = $state.snapshot(floor.items[i]);
+    const p0 = toWorld(e.clientX, e.clientY);
+    grab(e, (x, y) => {
+      const it = floor.items[i];
+      const dx = x - p0.x;
+      const dy = y - p0.y;
+      if (mode === 'move') {
+        Object.assign(it, E.clampBox({ ...it, x: snap(start.x + dx), y: snap(start.y + dy) }, size));
+        return;
+      }
       // Resize in the fixture's own frame (it may be turned).
-      const a = (-(grip.item.r ?? 0) * Math.PI) / 180;
+      const a = (-(start.r ?? 0) * Math.PI) / 180;
       const lx = dx * Math.cos(a) - dy * Math.sin(a);
       const ly = dx * Math.sin(a) + dy * Math.cos(a);
-      item.w = Math.max(10, Math.round(grip.item.w + lx));
-      item.h = Math.max(10, Math.round(grip.item.h + ly));
-    }
+      it.w = Math.max(10, snap(start.w + lx));
+      it.h = Math.max(10, snap(start.h + ly));
+    });
   }
 
-  function dropItem(e) {
-    if (grip?.id === e.pointerId) grip = null;
+  /** Corner `j` of room `r` following the finger, caught by its neighbours
+   *  (right angles), the other rooms' corners and the walls' faces. */
+  function cornerMover(r, j) {
+    const guides = E.mergeGuides(E.roomGuides(floor.rooms, [r, j]), E.wallGuides(floor.walls ?? []));
+    return (x, y) => {
+      const p = E.clampPoint([x, y], size);
+      floor.rooms[r].poly[j] = magnet ? E.snapPoint(p, guides, tol) : p.map(Math.round);
+    };
+  }
+
+  function grabCorner(e, r, j) {
+    vertex = j;
+    grab(e, cornerMover(r, j));
+  }
+
+  /** A new corner in the middle of side `j`, held at once. */
+  function grabSide(e, r, j) {
+    const room = floor.rooms[r];
+    if (room.poly.length >= E.MAX_POINTS) return;
+    const h = grab(e);
+    room.poly = E.insertVertex($state.snapshot(room.poly), j);
+    vertex = j + 1;
+    h.apply = cornerMover(r, j + 1);
+  }
+
+  /** A wall moved whole (`end` null) or by one end; its openings follow. */
+  function grabWall(e, i, end = null) {
+    const h = grab(e);
+    // A wall turned by a quarter becomes the plain box it covers.
+    const start = E.unturned($state.snapshot(floor.walls[i]));
+    floor.walls[i] = start;
+    const flat = E.straight(start) && start.r == null;
+    const openings = $state.snapshot(floor.openings ?? []);
+    const carried = flat ? E.openingsOn(start, openings).map((k) => [k, openings[k]]) : [];
+    const guides = flat && magnet ? E.wallGuides(floor.walls, i) : null;
+    const p0 = toWorld(e.clientX, e.clientY);
+    h.apply = (x, y) => {
+      const next =
+        end == null
+          ? E.clampBox(E.moveWall(start, x - p0.x, y - p0.y, guides, tol), size)
+          : E.stretchWall(start, end, E.clampPoint([x, y], size), guides, tol);
+      floor.walls[i] = next;
+      const [dx, dy] = end == null ? [next.x - start.x, next.y - start.y] : [0, 0];
+      for (const [k, o] of carried) floor.openings[k] = E.carryOpening(o, start, next, dx, dy);
+    };
+  }
+
+  /** An opening sliding along the closest wall. */
+  function grabOpening(e, i) {
+    const h = grab(e);
+    const start = $state.snapshot(floor.openings[i]);
+    const walls = $state.snapshot(floor.walls ?? []);
+    const width = E.widthOf(start, walls);
+    const p0 = toWorld(e.clientX, e.clientY);
+    const [cx, cy] = E.centerOf(start);
+    h.apply = (x, y) => {
+      const [px, py] = E.clampPoint([x - (p0.x - cx), y - (p0.y - cy)], size);
+      floor.openings[i] = E.placeOpening(walls, start, width, px, py, magnet);
+    };
   }
 
   // ---- what is alive -------------------------------------------------------------------
@@ -290,6 +399,75 @@
   const dark = $derived(skin.bg.startsWith('#0') || skin.bg.startsWith('#1'));
 </script>
 
+{#snippet editLayer()}
+  {@const sel = selection ? floor[LISTS[selection.type]]?.[selection.i] : null}
+  {@const line = { stroke: skin.glow, 'stroke-width': 2.5, 'vector-effect': 'non-scaling-stroke', fill: 'none' }}
+  <g class="edit">
+    <!-- the layer's hit boxes: thin walls, easy to touch -->
+    {#if layer === 'walls'}
+      {#each floor.walls ?? [] as w, i (i)}
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
+        <rect class="hit" data-pick="wall" data-i={i} x={w.x - hit} y={w.y - hit} width={w.w + 2 * hit} height={w.h + 2 * hit} transform={w.r ? `rotate(${w.r} ${w.x + w.w / 2} ${w.y + w.h / 2})` : null} onpointerdown={(e) => is('wall', i) && grabWall(e, i)} />
+      {/each}
+    {:else if layer === 'openings'}
+      {#each floor.openings ?? [] as o, i (i)}
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
+        <rect class="hit" data-pick="opening" data-i={i} x={o.x - hit} y={o.y - hit} width={o.w + 2 * hit} height={o.h + 2 * hit} onpointerdown={(e) => is('opening', i) && grabOpening(e, i)} />
+      {/each}
+    {/if}
+
+    {#if sel && selection.type === 'room'}
+      <polygon points={points(sel.poly)} {...line} pointer-events="none" />
+      {#if sel.poly.length < E.MAX_POINTS}
+        {#each sel.poly as [x, y], j (j)}
+          {@const [nx, ny] = sel.poly[(j + 1) % sel.poly.length]}
+          <!-- svelte-ignore a11y_no_static_element_interactions -->
+          <g class="handle" onpointerdown={(e) => grabSide(e, selection.i, j)}>
+            <circle cx={(x + nx) / 2} cy={(y + ny) / 2} r={hit * 1.3} fill="transparent" />
+            <circle cx={(x + nx) / 2} cy={(y + ny) / 2} r={7 / cam.k} fill={skin.bg} stroke={skin.glow} stroke-width="2" vector-effect="non-scaling-stroke" />
+            <path d="M {(x + nx) / 2 - 4 / cam.k} {(y + ny) / 2} h {8 / cam.k} M {(x + nx) / 2} {(y + ny) / 2 - 4 / cam.k} v {8 / cam.k}" stroke={skin.glow} stroke-width="2" vector-effect="non-scaling-stroke" />
+          </g>
+        {/each}
+      {/if}
+      {#each sel.poly as [x, y], j (j)}
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
+        <g class="handle" onpointerdown={(e) => grabCorner(e, selection.i, j)}>
+          <circle cx={x} cy={y} r={hit * 1.6} fill="transparent" />
+          <circle cx={x} cy={y} r={(vertex === j ? 11 : 8) / cam.k} fill={skin.glow} stroke={skin.bg} stroke-width="2" vector-effect="non-scaling-stroke" />
+        </g>
+      {/each}
+    {:else if sel && selection.type === 'wall'}
+      {@const flat = sel.r == null || E.straight(sel)}
+      {@const [cx, cy] = E.centerOf(sel)}
+      <rect x={sel.x - 4 / cam.k} y={sel.y - 4 / cam.k} width={sel.w + 8 / cam.k} height={sel.h + 8 / cam.k} transform={sel.r ? `rotate(${sel.r} ${cx} ${cy})` : null} {...line} stroke-dasharray="6 4" pointer-events="none" />
+      {#if flat}
+        {#each E.ends(E.straight(sel)) as [x, y], end (end)}
+          <!-- svelte-ignore a11y_no_static_element_interactions -->
+          <g class="handle" onpointerdown={(e) => grabWall(e, selection.i, end)}>
+            <circle cx={x} cy={y} r={hit * 1.6} fill="transparent" />
+            <circle cx={x} cy={y} r={8 / cam.k} fill={skin.glow} stroke={skin.bg} stroke-width="2" vector-effect="non-scaling-stroke" />
+          </g>
+        {/each}
+      {/if}
+      {@render mover(cx, cy, (e) => grabWall(e, selection.i))}
+    {:else if sel && selection.type === 'opening'}
+      {@const [cx, cy] = E.centerOf(sel)}
+      <rect x={sel.x - 4 / cam.k} y={sel.y - 4 / cam.k} width={sel.w + 8 / cam.k} height={sel.h + 8 / cam.k} {...line} stroke-dasharray="6 4" pointer-events="none" />
+      {@render mover(cx, cy, (e) => grabOpening(e, selection.i))}
+    {/if}
+  </g>
+{/snippet}
+
+<!-- A handle in the middle of what is chosen: hold it to move it. -->
+{#snippet mover(cx, cy, ondown)}
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <g class="handle" onpointerdown={ondown}>
+    <circle cx={cx} cy={cy} r={hit * 1.6} fill="transparent" />
+    <circle cx={cx} cy={cy} r={11 / cam.k} fill={skin.glow} stroke={skin.bg} stroke-width="2" vector-effect="non-scaling-stroke" />
+    <path d="M {cx - 6 / cam.k} {cy} h {12 / cam.k} M {cx} {cy - 6 / cam.k} v {12 / cam.k}" stroke={skin.bg} stroke-width="2" vector-effect="non-scaling-stroke" />
+  </g>
+{/snippet}
+
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
   class="drawing"
@@ -342,10 +520,10 @@
       {/if}
 
       <!-- rooms, their texture, their warmth -->
-      {#each floor.rooms ?? [] as r (r.id)}
-        <polygon class="room" points={points(r.poly)} fill={skin.rooms[r.kind] ?? skin.rooms.other} stroke={skin.roomLine} stroke-width="1.2" vector-effect="non-scaling-stroke" stroke-dasharray={skin.roomLine === 'none' ? null : '6 4'} />
+      {#each floor.rooms ?? [] as r, i (r.id)}
+        <polygon class="room" data-pick={editing && layer === 'rooms' ? 'room' : null} data-i={i} points={points(r.poly)} fill={skin.rooms[r.kind] ?? skin.rooms.other} stroke={skin.roomLine} stroke-width="1.2" vector-effect="non-scaling-stroke" stroke-dasharray={skin.roomLine === 'none' ? null : '6 4'} />
         {#if TEXTURE[r.kind]}
-          <polygon points={points(r.poly)} fill="url(#{TEXTURE[r.kind]}-{uid})" />
+          <polygon class="texture" points={points(r.poly)} fill="url(#{TEXTURE[r.kind]}-{uid})" />
         {/if}
         {#if r.room && warm.has(r.room)}
           <polygon class="warm" points={points(r.poly)} fill={skin.glow} opacity={0.1 * skin.glowStrength * warm.get(r.room)} />
@@ -372,12 +550,10 @@
         <!-- svelte-ignore a11y_no_static_element_interactions -->
         <g
           class="item"
-          class:chosen={editing && selected === it}
+          class:chosen={is('item', i)}
+          class:asleep={editing && layer !== 'items'}
           transform="rotate({it.r ?? 0} {cx} {cy})"
-          onpointerdown={(e) => grabItem(e, it)}
-          onpointermove={(e) => dragItem(e, it)}
-          onpointerup={dropItem}
-          onpointercancel={dropItem}
+          onpointerdown={(e) => grabItem(e, i)}
         >
           {#if it.kind === 'plant'}
             <circle {cx} {cy} r={Math.min(it.w, it.h) / 2} fill={dark ? '#1f3323' : '#cfe3bf'} stroke={skin.itemLine} stroke-width="1.2" vector-effect="non-scaling-stroke" />
@@ -445,23 +621,22 @@
               <rect x={it.x + it.w * 0.08} y={it.y + it.h * 0.12} width={it.w * 0.84} height={it.h * 0.76} rx={it.h * 0.3} fill="none" stroke={skin.itemLine} stroke-width="1" vector-effect="non-scaling-stroke" />
             {/if}
           {/if}
-          {#if editing && selected === it}
+          {#if is('item', i)}
             <rect class="frame" x={it.x - 6} y={it.y - 6} width={it.w + 12} height={it.h + 12} fill="none" stroke={skin.glow} stroke-width="2" stroke-dasharray="6 4" vector-effect="non-scaling-stroke" />
             <circle
               class="handle"
               cx={it.x + it.w}
               cy={it.y + it.h}
-              r={9 / cam.k}
+              r={hit}
               fill={skin.glow}
-              onpointerdown={(e) => grabItem(e, it, 'size')}
-              onpointermove={(e) => dragItem(e, it)}
-              onpointerup={dropItem}
+              onpointerdown={(e) => grabItem(e, i, 'size')}
             />
           {/if}
         </g>
       {/each}
 
       <!-- walls, then what opens in them -->
+      <g class:asleep={editing}>
       {#each floor.walls ?? [] as w, i (i)}
         <rect x={w.x} y={w.y} width={w.w} height={w.h} fill={skin.wall} transform={w.r ? `rotate(${w.r} ${w.x + w.w / 2} ${w.y + w.h / 2})` : null} opacity={w.height && w.height < 120 ? 0.55 : null} />
       {/each}
@@ -486,6 +661,7 @@
           {/if}
         </g>
       {/each}
+      </g>
 
       <!-- names -->
       {#each floor.rooms ?? [] as r (r.id)}
@@ -498,13 +674,17 @@
           {/if}
         {/if}
       {/each}
+
+      {#if editing}
+        {@render editLayer()}
+      {/if}
     </svg>
 
     <!-- the devices: always the same size on screen -->
     {#each floor.devices ?? [] as spot (spot.id)}
       {@const d = hub.devices[spot.id]}
       {#if d && keep(d) && visible(spot.x, spot.y)}
-        <div class="pin" style="left:{(spot.x - cam.x) * cam.k}px; top:{(spot.y - cam.y) * cam.k}px; --s:{pinScale}" class:named={cam.k > fitK * 1.7}>
+        <div class="pin" style="left:{(spot.x - cam.x) * cam.k}px; top:{(spot.y - cam.y) * cam.k}px; --s:{pinScale}" class:named={cam.k > fitK * 1.7} class:asleep={editing && (layer !== 'items' || selection?.type === 'item')}>
           {@render token(spot, d)}
         </div>
       {/if}
@@ -668,7 +848,34 @@
   }
 
   .handle {
+    cursor: grab;
+  }
+
+  .item .handle {
     cursor: nwse-resize;
+  }
+
+  .hit {
+    fill: transparent;
+    cursor: pointer;
+  }
+
+  .texture {
+    pointer-events: none;
+  }
+
+  /* Edit: only the layer being arranged answers the finger. */
+  .asleep {
+    pointer-events: none;
+  }
+
+  .pin.asleep {
+    opacity: 0.3;
+  }
+
+  .pin.asleep :global(.name),
+  .pin.asleep :global(.unplace) {
+    display: none;
   }
 
   .pin {
