@@ -297,10 +297,50 @@ pub(crate) fn strict_schema(schema: &Json) -> Json {
             {
                 out.entry("properties").or_insert_with(|| json!({}));
                 out.insert("additionalProperties".into(), json!(false));
+                optional_instead_of_null(&mut out);
             }
             Json::Object(out)
         }
         other => other.clone(),
+    }
+}
+
+/// Strict mode takes at most 16 union-typed parameters, and the schemas
+/// written for OpenAI spell « nothing » as `null` in every field (OpenAI's
+/// strict mode wants every field required). Claude takes a field that is
+/// simply left out: a property that is « X or null » becomes « X », no
+/// longer required (a missing field reads as `null` on Moli's side).
+fn optional_instead_of_null(object: &mut Map<String, Json>) {
+    let Some(Json::Object(properties)) = object.get_mut("properties") else {
+        return;
+    };
+    let mut optional = Vec::new();
+    for (name, property) in properties.iter_mut() {
+        let Json::Object(p) = property else { continue };
+        if let Some(Json::Array(values)) = p.get_mut("enum")
+            && values.iter().any(Json::is_null)
+        {
+            values.retain(|v| !v.is_null());
+            optional.push(name.clone());
+            continue;
+        }
+        let Some(Json::Array(branches)) = p.get("anyOf") else {
+            continue;
+        };
+        let is_null = |b: &Json| b.get("type").and_then(Json::as_str) == Some("null");
+        if !branches.iter().any(is_null) {
+            continue;
+        }
+        let rest: Vec<Json> = branches.iter().filter(|b| !is_null(b)).cloned().collect();
+        optional.push(name.clone());
+        if let [only] = rest.as_slice() {
+            *property = only.clone();
+        } else {
+            p.insert("anyOf".into(), Json::Array(rest));
+        }
+    }
+    if let Some(Json::Array(required)) = object.get_mut("required") {
+        required.retain(|r| r.as_str().is_none_or(|r| !optional.iter().any(|o| o == r)));
     }
 }
 
@@ -868,18 +908,46 @@ mod tests {
             json!({
                 "type": "object",
                 "additionalProperties": false,
-                "required": ["op", "days", "value", "rule"],
+                "required": [],
                 "properties": {
-                    "op": { "enum": ["eq", null] },
-                    "days": { "anyOf": [{ "type": "array", "items": { "type": "integer" } }, { "type": "null" }] },
-                    "value": { "anyOf": [{ "type": "string" }, { "type": "number" }, { "type": "null" }] },
-                    "rule": { "anyOf": [
-                        { "type": "object", "properties": { "x": { "type": "string" } }, "required": ["x"], "additionalProperties": false },
-                        { "type": "null" }
-                    ] }
+                    "op": { "enum": ["eq"] },
+                    "days": { "type": "array", "items": { "type": "integer" } },
+                    "value": { "anyOf": [{ "type": "string" }, { "type": "number" }] },
+                    "rule": { "type": "object", "properties": { "x": { "type": "string" } }, "required": ["x"], "additionalProperties": false }
                 }
             })
         );
+    }
+
+    /// Anthropic refuses a strict schema with more than 16 union-typed
+    /// parameters: « or null » fields are left out instead, so the
+    /// automation draft (written for OpenAI, nullable everywhere) passes.
+    #[test]
+    fn nullable_fields_become_optional_and_unions_stay_few() {
+        fn unions(s: &Json) -> usize {
+            match s {
+                Json::Object(m) => {
+                    usize::from(
+                        m.contains_key("anyOf") || m.get("type").is_some_and(Json::is_array),
+                    ) + m.values().map(unions).sum::<usize>()
+                }
+                Json::Array(a) => a.iter().map(unions).sum(),
+                _ => 0,
+            }
+        }
+        let mut fields = serde_json::Map::new();
+        let mut required = Vec::new();
+        for i in 0..30 {
+            fields.insert(format!("f{i}"), json!({ "type": ["string", "null"] }));
+            required.push(json!(format!("f{i}")));
+        }
+        fields.insert("kind".into(), json!({ "type": "string" }));
+        required.push(json!("kind"));
+        let schema = json!({ "type": "object", "properties": fields, "required": required });
+        let strict = strict_schema(&schema);
+        assert_eq!(unions(&strict), 0);
+        assert_eq!(strict["required"], json!(["kind"]));
+        assert_eq!(strict["properties"]["f7"], json!({ "type": "string" }));
     }
 
     #[test]
