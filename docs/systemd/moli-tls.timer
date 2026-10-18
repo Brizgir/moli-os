@@ -1,0 +1,12 @@
+# Chaque semaine : `tailscale cert` ne redemande un certificat qu'à l'approche de l'échéance,
+# le reste du temps il rend le certificat en cours. Moli relit les fichiers tout seul.
+[Unit]
+Description=Renouvellement hebdomadaire du certificat HTTPS de Moli OS
+
+[Timer]
+OnCalendar=weekly
+RandomizedDelaySec=1h
+Persistent=true
+
+[Install]
+WantedBy=timers.target

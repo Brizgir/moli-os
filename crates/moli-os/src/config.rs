@@ -139,6 +139,44 @@ pub struct Server {
     /// made-up energy past is filed. Only with `demo = true`.
     #[serde(default)]
     pub demo_seed: Option<PathBuf>,
+    /// HTTPS served by Moli itself, next to HTTP (absent: HTTP only).
+    #[serde(default)]
+    pub tls: Option<TlsConfig>,
+}
+
+/// `[server.tls]`: a certificate and its key (files the container reads,
+/// e.g. `/data/tls/moli.crt`; relative paths are read from `data_dir`), and
+/// the HTTPS port. The key is never printed nor kept anywhere else.
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TlsConfig {
+    pub cert_file: PathBuf,
+    pub key_file: PathBuf,
+    #[serde(default = "default_tls_port")]
+    pub port: u16,
+}
+
+fn default_tls_port() -> u16 {
+    8791
+}
+
+impl Server {
+    /// The HTTPS listener's settings, paths made absolute.
+    pub fn tls_options(&self) -> Option<moli_api::TlsOptions> {
+        let tls = self.tls.as_ref()?;
+        let from_data = |p: &Path| {
+            if p.is_relative() {
+                self.data_dir.join(p)
+            } else {
+                p.to_path_buf()
+            }
+        };
+        Some(moli_api::TlsOptions {
+            cert_file: from_data(&tls.cert_file),
+            key_file: from_data(&tls.key_file),
+            listen: SocketAddr::new(self.listen.ip(), tls.port),
+        })
+    }
 }
 
 fn default_language() -> String {
@@ -161,6 +199,7 @@ impl Default for Server {
             language: default_language(),
             demo: false,
             demo_seed: None,
+            tls: None,
         }
     }
 }
@@ -317,6 +356,18 @@ impl Config {
         if self.server.worker_threads == 0 {
             bail!("worker_threads must be ≥ 1");
         }
+        if let Some(tls) = &self.server.tls {
+            if tls.port == 0 || tls.port == self.server.listen.port() {
+                bail!(
+                    "[server.tls] port = {}: HTTPS needs a port of its own, HTTP keeps {}",
+                    tls.port,
+                    self.server.listen.port()
+                );
+            }
+            if tls.cert_file.as_os_str().is_empty() || tls.key_file.as_os_str().is_empty() {
+                bail!("[server.tls] cert_file and key_file are both needed");
+            }
+        }
         self.guard.policy()?;
         if let Some(energy) = &self.energy {
             energy
@@ -351,6 +402,25 @@ mod tests {
         let again = Config::load(&path).unwrap();
         assert_eq!(again.server.data_dir, config.server.data_dir);
         let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn https_wants_its_own_port_and_reads_its_files_from_the_data_dir() {
+        let config: Config = toml::from_str(
+            "[server]\ndata_dir = \"/data\"\n[server.tls]\ncert_file = \"tls/moli.crt\"\nkey_file = \"/etc/moli/moli.key\"",
+        )
+        .unwrap();
+        config.check().unwrap();
+        let tls = config.server.tls_options().unwrap();
+        assert_eq!(tls.cert_file, PathBuf::from("/data/tls/moli.crt"));
+        assert_eq!(tls.key_file, PathBuf::from("/etc/moli/moli.key"));
+        assert_eq!(tls.listen.port(), 8791);
+        assert_eq!(tls.listen.ip(), config.server.listen.ip());
+        let same_port: Config =
+            toml::from_str("[server.tls]\ncert_file = \"a\"\nkey_file = \"b\"\nport = 8790")
+                .unwrap();
+        assert!(same_port.check().is_err());
+        assert!(Server::default().tls_options().is_none());
     }
 
     #[test]

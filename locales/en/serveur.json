@@ -154,5 +154,12 @@
   "serveur.maison.trop_de_pieces": "{max} rooms at most",
   "serveur.maison.inconnue": "no room “{name}” in the list",
   "serveur.service.sans_reponse": "the device did not answer in time",
-  "serveur.service.humain": "only a person (code), from the dashboard, changes this setting"
+  "serveur.service.humain": "only a person (code), from the dashboard, changes this setting",
+  "serveur.tls.notice_titre": "HTTPS",
+  "serveur.tls.notice_expire": "The HTTPS certificate of {names} expires in {days} days ({date}). Renew it on the machine (scripts/tailscale-cert.sh): Moli reads it again by itself.",
+  "serveur.tls.notice_ferme": "HTTPS closed: {reason}. The dashboard stays reachable over HTTP on the home network.",
+  "serveur.tls.notice_ouvert": "HTTPS open again for {names} (certificate valid until {date}).",
+  "serveur.tls.raison.illisible": "certificate or key unreadable ({error})",
+  "serveur.tls.raison.expire": "certificate expired on {date}",
+  "serveur.tls.raison.pas_encore": "certificate not valid yet (before {date})"
 }

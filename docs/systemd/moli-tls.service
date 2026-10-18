@@ -1,0 +1,15 @@
+# Renouvelle le certificat HTTPS de Moli (Tailscale / Let's Encrypt), lancé par moli-tls.timer.
+# À copier dans /etc/systemd/system/, puis : systemctl enable --now moli-tls.timer
+# Adapter : le nom MagicDNS de la machine, et le chemin du dépôt (dossier data/ à côté).
+[Unit]
+Description=Certificat HTTPS de Moli OS (tailscale cert)
+After=network-online.target tailscaled.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# <nom> : « tailscale status --json | grep DNSName », sans le point final.
+WorkingDirectory=/opt/moli-os
+ExecStart=/opt/moli-os/scripts/tailscale-cert.sh <nom>.<tailnet>.ts.net /opt/moli-os/data/tls
+# Les fichiers appartiennent à l'utilisateur 1000 du conteneur ; changer avec MOLI_UID.
+Environment=MOLI_UID=1000
