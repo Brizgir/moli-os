@@ -1,0 +1,47 @@
+# The house's own image, built by GitHub instead of the house's small machine:
+# every push to `maison` (or a `deploiement-*` branch) builds the Docker image
+# and stores it in this account's registry (ghcr.io/<owner>/moli-os). The house
+# then only downloads it: `docker compose pull && docker compose up -d`.
+# Belongs to this fork only: never part of a pull request to the original project.
+name: image-maison
+
+on:
+  push:
+    branches: [maison, "deploiement-*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: image-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/moli-os
+          tags: |
+            type=ref,event=branch
+            type=sha,prefix=,format=short
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
