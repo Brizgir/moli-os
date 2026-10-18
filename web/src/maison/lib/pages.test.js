@@ -67,6 +67,8 @@ test('a person forces a page in or out', () => {
 
 test('the cameras are a doorbell when only Ring tells its events', () => {
   assert.equal(camerasOnlyRing(house, {}), true);
+  // A Ring doorbell with its image is still « the doorbell ».
+  assert.equal(camerasOnlyRing([...house, { id: 'ring:bell2', camera: true, manufacturer: 'Ring', points: [point('doorbell')] }], {}), true);
   assert.equal(camerasOnlyRing([...house, { id: 'reolink:1', camera: true, points: [] }], {}), false);
   assert.equal(camerasOnlyRing(house, { favorites: { cameras: [{ id: 'reolink:1' }] } }), false);
   assert.equal(camerasOnlyRing([], {}), false);

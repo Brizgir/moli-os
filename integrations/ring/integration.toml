@@ -4,7 +4,7 @@ name = "Sonnettes et carillons Ring"
 # Unofficial: the Ring app's own cloud API, which Ring may change at any
 # time. Ring devices answer nothing on the home network.
 brands = ["Ring"]
-models = ["Video Doorbell", "Battery Doorbell", "Chime", "Chime Pro", "Stick Up Cam"]
+models = ["Video Doorbell", "Battery Doorbell", "Chime", "Chime Pro", "Stick Up Cam", "Stick Up Cam Mini"]
 transport = "https"
 driver = "ring"
 crate = "moli-ring"
@@ -27,7 +27,7 @@ options = []
 reused = ""
 author = "agent"
 
-# Replayed by the crate's tests (crates/moli-ring/src/{auth,api,signin,model}.rs).
+# Replayed by the crate's tests (crates/moli-ring/src/{auth,api,signin,model,lib}.rs).
 [[fixture]]
 file = "fixtures/ring-devices.json"
 
@@ -45,3 +45,9 @@ file = "fixtures/oauth-token.json"
 
 [[fixture]]
 file = "fixtures/oauth-bad-refresh.json"
+
+[[fixture]]
+file = "fixtures/snapshots-timestamps.json"
+
+[[fixture]]
+file = "fixtures/mode-location.json"

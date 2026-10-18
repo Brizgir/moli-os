@@ -1,6 +1,6 @@
 [package]
 name = "moli-ring"
-description = "Moli OS driver for Ring doorbells, cameras and chimes through Ring's own (unofficial) cloud API: presses, motion, battery, Wi-Fi, read only, with a sign-in made once from the dashboard."
+description = "Moli OS driver for Ring doorbells, cameras and chimes through Ring's own (unofficial) cloud API: presses, motion, battery, Wi-Fi, the last image on demand, the location's mode (disarmed, home, away), with a sign-in made once from the dashboard."
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -23,6 +23,7 @@ tracing.workspace = true
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["test-util"] }
+tokio-util.workspace = true
 
 [lints]
 workspace = true

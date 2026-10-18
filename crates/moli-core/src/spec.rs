@@ -153,8 +153,9 @@ pub enum Semantic {
     Smoke,
     Tamper,
     Config,
-    /// An order to a machine at work (pause or cancel a print): an agent
-    /// asking gets a human's approval first.
+    /// An order to a machine at work (pause or cancel a print), or to the
+    /// house's watch (arm or disarm the cameras): an agent asking gets a
+    /// human's approval first, and so does the dashboard without a code.
     Control,
     /// What a person gives once to connect an account (a cloud sign-in, a
     /// one-time code): taken from a person at the dashboard only, never

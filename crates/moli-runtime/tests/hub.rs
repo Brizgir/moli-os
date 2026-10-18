@@ -528,6 +528,19 @@ async fn stopping_a_machine_is_a_humans_call_in_any_room() {
         .await;
     assert!(matches!(held, Err(CommandError::NeedsApproval { .. })));
     assert!(hub.state(&point("control")).is_none(), "nothing ran");
+    // Nor does an agent over MCP, nor the dashboard without a code (anyone
+    // on the home network can claim to be it): arming the house's watch
+    // wants the code.
+    for origin in [Origin::Mcp, Origin::Household, Origin::Api] {
+        let held = hub
+            .command(&point("control"), Value::from("pause"), origin, None)
+            .await;
+        assert!(
+            matches!(held, Err(CommandError::NeedsApproval { .. })),
+            "{origin:?}"
+        );
+    }
+    assert!(hub.state(&point("control")).is_none(), "nothing ran");
     for origin in [Origin::Ui, Origin::Automation] {
         hub.command(&point("control"), Value::from("pause"), origin, None)
             .await

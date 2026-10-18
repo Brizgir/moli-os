@@ -91,6 +91,14 @@
   ];
   const active = $derived(EVENTS.filter(([key]) => value(id, key) === true || (key === 'person' && Number(value(id, 'person')) > 0)));
   const online = $derived(device(id)?.online !== false);
+  // When the image was taken, as the camera says it (Ring may give back
+  // an old one): shown rather than when it was fetched.
+  const takenAt = $derived.by(() => {
+    const at = value(id, 'image_at');
+    const ms = typeof at === 'string' ? Date.parse(at) : NaN;
+    return Number.isNaN(ms) ? null : ms;
+  });
+  const shownAt = $derived(src ? (takenAt ?? shotAt) : null);
 </script>
 
 <figure class="cam" class:big>
@@ -102,7 +110,7 @@
     {/if}
     <span class="top">
       <span class="live" class:off={!online || failed}><i></i>{name}</span>
-      {#if battery}<span class="chip">{t('salon.camera.batterie')} · {shotAt ? relative(shotAt, home.now) : t('salon.camera.toucher_voir')}</span>{/if}
+      {#if battery}<span class="chip">{t('salon.camera.batterie')} · {shownAt ? relative(shownAt, home.now) : t('salon.camera.toucher_voir')}</span>{:else if shownAt && takenAt}<span class="chip">{relative(shownAt, home.now)}</span>{/if}
     </span>
     {#if active.length}
       <span class="events">

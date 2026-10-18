@@ -28,7 +28,6 @@
   "salon.volume": "Volume",
   "salon.sourdine": "Sourdine",
   "salon.couper_son": "Couper le son",
-
   "salon.tele.label": "Télécommande",
   "salon.tele.eteindre": "Éteindre la TV",
   "salon.tele.allumer": "Allumer la TV",
@@ -66,7 +65,6 @@
   "salon.tele.veille_profonde": "En veille profonde : le bouton la réveille",
   "salon.tele.allumee": "Télévision allumée",
   "salon.tele.en_veille": "Télévision en veille",
-
   "salon.cameras.titre": "Caméras",
   "salon.cameras.sous_titre": "Ce qui se passe autour de la maison. Touche une image pour l’agrandir.",
   "salon.cameras.protegee": "Pièce protégée : visible par toi seul",
@@ -74,14 +72,22 @@
   "salon.cameras.camera": "Caméra {nom}",
   "salon.cameras.aujourdhui": "Aujourd’hui",
   "salon.cameras.rien": "Rien de signalé depuis 24 h.",
-
+  "salon.surveillance.titre": "Surveillance Ring",
+  "salon.surveillance.disarmed": "Désactivé",
+  "salon.surveillance.home": "Domicile",
+  "salon.surveillance.away": "Absent",
+  "salon.surveillance.actuel": "Mode actuel : {mode}",
+  "salon.surveillance.depuis": "changé {when}",
+  "salon.surveillance.inconnu": "Mode inconnu pour l’instant",
+  "salon.surveillance.envoi": "Changement en cours…",
+  "salon.surveillance.code": "le code de la maison est demandé",
+  "salon.surveillance.changer": "Surveillance Ring : {mode}",
   "salon.evenement.sonnette": "On a sonné",
   "salon.evenement.personne": "Personne",
   "salon.evenement.vehicule": "Véhicule",
   "salon.evenement.animal": "Animal",
   "salon.evenement.colis": "Colis",
   "salon.evenement.mouvement": "Mouvement",
-
   "salon.camera.agrandir": "{nom} : agrandir",
   "salon.camera.actualiser": "{nom} : actualiser",
   "salon.camera.image": "Image de la caméra {nom}",
@@ -89,7 +95,6 @@
   "salon.camera.chargement": "Chargement…",
   "salon.camera.batterie": "Batterie",
   "salon.camera.toucher_voir": "touche pour voir",
-
   "salon.securite.titre": "Sécurité",
   "salon.securite.depuis": "depuis {heure}",
   "salon.securite.introuvable": "appareil introuvable",
@@ -114,7 +119,6 @@
   "salon.securite.detecteur_muet": "muet ({raison})",
   "salon.securite.mouvement_etat": "mouvement",
   "salon.securite.calme": "calme",
-
   "salon.impression.titre": "Impression",
   "salon.impression.sous_titre": "Les imprimantes 3D, où en est l’impression et la main dessus (seul un humain met en pause ou annule), et l’imprimante papier.",
   "salon.impression.aucune": "Aucune imprimante connue de Moli.",
@@ -148,7 +152,6 @@
   "salon.impression.totaux_one": "{prints} impression · {heures} h d’impression",
   "salon.impression.totaux_other": "{prints} impressions · {heures} h d’impression",
   "salon.impression.km_filament": "{km} km de filament",
-
   "salon.papier.imprimante": "Imprimante",
   "salon.papier.prete": "Prête",
   "salon.papier.act_clignoter": "{nom} : faire clignoter",

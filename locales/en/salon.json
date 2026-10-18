@@ -28,7 +28,6 @@
   "salon.volume": "Volume",
   "salon.sourdine": "Mute",
   "salon.couper_son": "Mute",
-
   "salon.tele.label": "Remote",
   "salon.tele.eteindre": "Turn the TV off",
   "salon.tele.allumer": "Turn the TV on",
@@ -66,7 +65,6 @@
   "salon.tele.veille_profonde": "Deep sleep: the button wakes it up",
   "salon.tele.allumee": "Television on",
   "salon.tele.en_veille": "Television on standby",
-
   "salon.cameras.titre": "Cameras",
   "salon.cameras.sous_titre": "What’s going on around the house. Tap a picture to enlarge it.",
   "salon.cameras.protegee": "Protected room: only you can see it",
@@ -74,14 +72,22 @@
   "salon.cameras.camera": "{nom} camera",
   "salon.cameras.aujourdhui": "Today",
   "salon.cameras.rien": "Nothing to report in the last 24 h.",
-
+  "salon.surveillance.titre": "Ring watch",
+  "salon.surveillance.disarmed": "Disarmed",
+  "salon.surveillance.home": "Home",
+  "salon.surveillance.away": "Away",
+  "salon.surveillance.actuel": "Current mode: {mode}",
+  "salon.surveillance.depuis": "changed {when}",
+  "salon.surveillance.inconnu": "Mode unknown for now",
+  "salon.surveillance.envoi": "Changing…",
+  "salon.surveillance.code": "the home's code is asked",
+  "salon.surveillance.changer": "Ring watch: {mode}",
   "salon.evenement.sonnette": "Someone rang",
   "salon.evenement.personne": "Person",
   "salon.evenement.vehicule": "Vehicle",
   "salon.evenement.animal": "Animal",
   "salon.evenement.colis": "Package",
   "salon.evenement.mouvement": "Motion",
-
   "salon.camera.agrandir": "{nom}: enlarge",
   "salon.camera.actualiser": "{nom}: refresh",
   "salon.camera.image": "{nom} camera image",
@@ -89,7 +95,6 @@
   "salon.camera.chargement": "Loading…",
   "salon.camera.batterie": "Battery",
   "salon.camera.toucher_voir": "tap to view",
-
   "salon.securite.titre": "Security",
   "salon.securite.depuis": "since {heure}",
   "salon.securite.introuvable": "device not found",
@@ -114,7 +119,6 @@
   "salon.securite.detecteur_muet": "silent ({raison})",
   "salon.securite.mouvement_etat": "motion",
   "salon.securite.calme": "no motion",
-
   "salon.impression.titre": "Printing",
   "salon.impression.sous_titre": "The 3D printers, how each print is going, and the controls (only a person can pause or cancel), plus the paper printer.",
   "salon.impression.aucune": "Moli doesn’t know of any printers yet.",
@@ -148,7 +152,6 @@
   "salon.impression.totaux_one": "{prints} print · {heures} h of printing",
   "salon.impression.totaux_other": "{prints} prints · {heures} h of printing",
   "salon.impression.km_filament": "{km} km of filament",
-
   "salon.papier.imprimante": "Printer",
   "salon.papier.prete": "Ready",
   "salon.papier.act_clignoter": "{nom}: blink",
