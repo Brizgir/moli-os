@@ -1,19 +1,22 @@
 //! Moli, the home's own assistant.
 //!
-//! A conversation (typed or spoken) with an OpenAI-compatible model that
-//! acts through the hub, as `Origin::Assistant`: the guard applies exactly
+//! A conversation (typed or spoken) with a model — Claude, by Anthropic's
+//! Messages API (`claude.rs`), or an OpenAI-compatible one — that acts
+//! through the hub, as `Origin::Assistant`: the guard applies exactly
 //! as to any agent (protected rooms, quiet hours), and a held order comes
 //! back to the dashboard to be approved with one gesture. The model also
 //! decides what the screen shows (`show`): the answer is a few words and
 //! the right controls, not a wall of text.
 //!
-//! The model never sees camera images, and never sees a secret: the API key
-//! lives in the encrypted store (`moli-os secrets set assistant api_key`).
+//! The model never sees camera images, and never sees a secret: the API keys
+//! live in the encrypted store (`moli-os secrets set assistant
+//! anthropic_api_key` for Claude, `… api_key` for OpenAI, its voice too).
 
 // The automation draft schema is one big `json!`.
 #![recursion_limit = "256"]
 
 mod auto;
+mod claude;
 mod door;
 mod exchanges;
 mod house;
@@ -49,18 +52,89 @@ use serde_json::{Value as Json, json};
 use crate::house::{Layout, name_of};
 use crate::llm::Endpoint;
 
+/// Who thinks: Anthropic (Claude) or an OpenAI-compatible API.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Provider {
+    Anthropic,
+    Openai,
+}
+
+impl Provider {
+    pub(crate) fn id(self) -> &'static str {
+        match self {
+            Self::Anthropic => "anthropic",
+            Self::Openai => "openai",
+        }
+    }
+
+    pub(crate) fn from_id(id: &str) -> Option<Self> {
+        match id {
+            "anthropic" => Some(Self::Anthropic),
+            "openai" => Some(Self::Openai),
+            _ => None,
+        }
+    }
+
+    /// Its key's name in the vault (instance `assistant`).
+    pub(crate) fn secret(self) -> &'static str {
+        match self {
+            Self::Anthropic => "anthropic_api_key",
+            Self::Openai => "api_key",
+        }
+    }
+
+    fn default_url(self) -> &'static str {
+        match self {
+            Self::Anthropic => claude::DEFAULT_URL,
+            Self::Openai => "https://api.openai.com/v1",
+        }
+    }
+
+    fn default_model(self) -> &'static str {
+        match self {
+            Self::Anthropic => claude::DEFAULT_MODEL,
+            Self::Openai => "gpt-4.1-mini",
+        }
+    }
+
+    fn default_builder(self) -> &'static str {
+        match self {
+            Self::Anthropic => claude::DEFAULT_MODEL,
+            Self::Openai => "gpt-4.1",
+        }
+    }
+}
+
 /// `[assistant]` in moli.toml.
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
-    /// OpenAI-compatible API (`http://` for a model on the local network).
-    #[serde(default = "default_base_url")]
-    pub base_url: String,
-    #[serde(default = "default_model")]
-    pub model: String,
+    /// Who thinks; by default OpenAI, unless `base_url` is Anthropic's.
+    #[serde(default)]
+    pub provider: Option<Provider>,
+    /// The provider's API (`http://` for an OpenAI-compatible model on the
+    /// local network); by default the provider's own.
+    #[serde(default)]
+    pub base_url: Option<String>,
+    /// The voice's OpenAI-compatible API (Anthropic has no voice); by
+    /// default OpenAI's, or `base_url` when OpenAI thinks.
+    #[serde(default)]
+    pub base_url_voice: Option<String>,
+    /// The conversation's model; by default the provider's (`claude-opus-5-5`,
+    /// `gpt-4.1-mini`).
+    #[serde(default)]
+    pub model: Option<String>,
     /// For drafting automations: rare, so a stronger model is affordable.
-    #[serde(default = "default_builder")]
-    pub builder_model: String,
+    #[serde(default)]
+    pub builder_model: Option<String>,
+    /// How deeply Claude thinks in the conversation (`low` … `max`): a
+    /// house wants its answer at once.
+    #[serde(default = "default_effort")]
+    pub effort: String,
+    /// … and to draft an automation.
+    #[serde(default = "default_builder_effort")]
+    pub builder_effort: String,
     /// Speech to text; empty to disable voice.
     #[serde(default = "default_transcribe")]
     pub transcribe_model: String,
@@ -87,9 +161,10 @@ pub struct Config {
     #[serde(default = "default_timezone")]
     pub timezone: String,
     /// Questions about the world outside, answered from the web (the
-    /// provider's own search); empty to disable it.
-    #[serde(default = "default_model")]
-    pub search_model: String,
+    /// provider's own search); by default the conversation's model, empty
+    /// to disable it.
+    #[serde(default)]
+    pub search_model: Option<String>,
     /// When the day's exchanges are sent on Telegram (`HH:MM`, the house's
     /// time); empty for no recap.
     #[serde(default = "default_recap_at")]
@@ -109,9 +184,13 @@ impl Default for Config {
     /// No `[assistant]` in moli.toml: Moli is there anyway, waiting for a key.
     fn default() -> Self {
         Self {
-            base_url: default_base_url(),
-            model: default_model(),
-            builder_model: default_builder(),
+            provider: None,
+            base_url: None,
+            base_url_voice: None,
+            model: None,
+            builder_model: None,
+            effort: default_effort(),
+            builder_effort: default_builder_effort(),
             transcribe_model: default_transcribe(),
             speech_model: default_speech_model(),
             speech_voice: default_speech_voice(),
@@ -121,7 +200,7 @@ impl Default for Config {
             local_voice: default_local_voice(),
             local_listen: default_local_listen(),
             timezone: default_timezone(),
-            search_model: default_model(),
+            search_model: None,
             recap_at: default_recap_at(),
             door_speakers: Vec::new(),
             latitude: None,
@@ -130,12 +209,29 @@ impl Default for Config {
     }
 }
 
-fn default_base_url() -> String {
-    "https://api.openai.com/v1".into()
+impl Config {
+    /// The provider `moli.toml` names, or the one its `base_url` is.
+    pub fn provider(&self) -> Provider {
+        self.provider.unwrap_or_else(|| {
+            if self
+                .base_url
+                .as_deref()
+                .is_some_and(|u| u.contains("anthropic.com"))
+            {
+                Provider::Anthropic
+            } else {
+                Provider::Openai
+            }
+        })
+    }
 }
 
-fn default_model() -> String {
-    "gpt-4.1-mini".into()
+fn default_effort() -> String {
+    "low".into()
+}
+
+fn default_builder_effort() -> String {
+    "high".into()
 }
 
 fn default_transcribe() -> String {
@@ -169,10 +265,6 @@ fn default_local_voice() -> String {
 
 fn default_local_listen() -> String {
     "127.0.0.1:10300".into()
-}
-
-fn default_builder() -> String {
-    "gpt-4.1".into()
 }
 
 fn default_timezone() -> String {
@@ -215,7 +307,10 @@ struct Inner {
     history: Option<moli_history::History>,
     layout_path: Option<PathBuf>,
     config: Config,
-    endpoint: Endpoint,
+    /// Where each provider is asked; the voice is always OpenAI-compatible.
+    openai: Endpoint,
+    anthropic: Endpoint,
+    voice: Endpoint,
     tz: jiff::tz::TimeZone,
     running: tokio::sync::Semaphore,
     recent: Mutex<VecDeque<Instant>>,
@@ -224,7 +319,7 @@ struct Inner {
     voice_running: tokio::sync::Semaphore,
     voice_recent: Mutex<VecDeque<Instant>>,
     /// The voice chosen in the dashboard, and where it is kept.
-    prefs: std::sync::RwLock<Option<settings::VoicePrefs>>,
+    prefs: std::sync::RwLock<Option<settings::Prefs>>,
     prefs_path: std::sync::RwLock<Option<PathBuf>>,
     /// For drafting automations from the conversation.
     automations: std::sync::RwLock<Option<moli_automation::Automations>>,
@@ -310,8 +405,16 @@ pub struct Usage {
     pub prompt_tokens: u64,
     /// Of the prompt tokens, those the provider read from its cache (cheaper).
     pub cached_tokens: u64,
+    /// Of the prompt tokens, those written to Anthropic's cache (dearer, once).
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub written_tokens: u64,
     pub completion_tokens: u64,
     pub steps: usize,
+}
+
+#[allow(clippy::trivially_copy_pass_by_ref)]
+fn is_zero(n: &u64) -> bool {
+    *n == 0
 }
 
 #[derive(Debug, Serialize)]
@@ -362,19 +465,41 @@ impl Assistant {
         layout_path: Option<PathBuf>,
         config: Config,
     ) -> anyhow::Result<Self> {
-        let endpoint = Endpoint::parse(&config.base_url)?;
+        let provider = config.provider();
+        let url = |p: Provider| {
+            config
+                .base_url
+                .clone()
+                .filter(|_| p == provider)
+                .unwrap_or_else(|| p.default_url().to_owned())
+        };
+        let openai = Endpoint::parse(&url(Provider::Openai))?;
+        let anthropic = Endpoint::anthropic(&url(Provider::Anthropic))?;
+        let voice = match &config.base_url_voice {
+            Some(url) => Endpoint::parse(url)?,
+            None => openai.clone(),
+        };
         let tz = jiff::tz::TimeZone::get(&config.timezone)?;
         anyhow::ensure!(
             (0.25..=4.0).contains(&config.speech_speed),
             "speech_speed must be between 0.25 and 4"
         );
+        for effort in [&config.effort, &config.builder_effort] {
+            anyhow::ensure!(
+                claude::EFFORTS.contains(&effort.as_str()),
+                "effort must be one of {}",
+                claude::EFFORTS.join(", ")
+            );
+        }
         Ok(Self(Arc::new(Inner {
             hub,
             energy,
             history,
             layout_path,
             config,
-            endpoint,
+            openai,
+            anthropic,
+            voice,
             tz,
             running: tokio::sync::Semaphore::new(2),
             recent: Mutex::new(VecDeque::new()),
@@ -392,27 +517,121 @@ impl Assistant {
         })))
     }
 
+    /// Who thinks now, and with which models: `moli.toml`, unless the
+    /// dashboard chose otherwise (`settings.rs`).
+    pub(crate) fn brain(&self) -> Brain {
+        let c = &self.0.config;
+        let prefs = self
+            .0
+            .prefs
+            .read()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone();
+        let configured = c.provider();
+        let provider = prefs
+            .as_ref()
+            .and_then(|p| p.provider.as_deref())
+            .and_then(Provider::from_id)
+            .unwrap_or(configured);
+        let own = provider == configured;
+        let pick = |set: &Option<String>, default: &str| {
+            set.clone()
+                .filter(|m| own && !m.is_empty())
+                .unwrap_or_else(|| default.to_owned())
+        };
+        let model = prefs
+            .as_ref()
+            .and_then(|p| p.model.clone())
+            .unwrap_or_else(|| pick(&c.model, provider.default_model()));
+        let builder_model = pick(&c.builder_model, provider.default_builder());
+        // `search_model = ""` turns the web off, whoever thinks.
+        let search_model = match &c.search_model {
+            Some(m) if m.is_empty() => String::new(),
+            Some(m) if own => m.clone(),
+            _ => model.clone(),
+        };
+        Brain {
+            provider,
+            model,
+            builder_model,
+            search_model,
+        }
+    }
+
+    /// Where `brain` is asked.
+    pub(crate) fn endpoint(&self, provider: Provider) -> &Endpoint {
+        match provider {
+            Provider::Anthropic => &self.0.anthropic,
+            Provider::Openai => &self.0.openai,
+        }
+    }
+
+    /// The thinking provider's key: none needed by a model on the local
+    /// network (it would never get one).
     fn key(&self) -> Result<Option<String>, AssistantError> {
-        let key = self.0.hub.secret(&InstanceId::from("assistant"), "api_key");
-        if key.is_none() && !self.0.endpoint.is_local() {
-            return Err(AssistantError::NotConfigured(
-                "no API key: pipe it into `moli-os secrets set assistant api_key`".into(),
-            ));
+        let provider = self.brain().provider;
+        let key = self.secret(provider);
+        if key.is_none() && !self.endpoint(provider).is_local() {
+            return Err(AssistantError::NotConfigured(format!(
+                "no API key: pipe it into `moli-os secrets set assistant {}`",
+                provider.secret()
+            )));
         }
         Ok(key)
+    }
+
+    fn secret(&self, provider: Provider) -> Option<String> {
+        self.0
+            .hub
+            .secret(&InstanceId::from("assistant"), provider.secret())
+    }
+
+    /// The voice's key: OpenAI's, whoever thinks (Anthropic has no voice).
+    /// Without it, the voice is the house's own (Whisper, Piper).
+    fn voice_key(&self) -> Result<Option<String>, AssistantError> {
+        let key = self.secret(Provider::Openai);
+        if key.is_none() && !self.0.voice.is_local() {
+            return Err(AssistantError::NotConfigured(format!(
+                "no OpenAI key for the cloud voice: pipe it into `moli-os secrets set assistant {}`",
+                Provider::Openai.secret()
+            )));
+        }
+        Ok(key)
+    }
+
+    /// One round trip to whoever thinks: its answer in Moli's shape
+    /// (`choices[0].message`, `usage`) either way.
+    pub(crate) async fn complete(
+        &self,
+        key: Option<&str>,
+        provider: Provider,
+        ask: &claude::Ask<'_>,
+        openai: OpenAiKnobs,
+        limit: Duration,
+    ) -> Result<Json, AssistantError> {
+        let endpoint = self.endpoint(provider);
+        let answer = match provider {
+            Provider::Anthropic => claude::complete(endpoint, key, ask, limit).await,
+            Provider::Openai => endpoint.chat(key, &openai_body(ask, openai)).await,
+        }
+        .map_err(|e| AssistantError::Upstream(e.to_string()))?;
+        Ok(answer)
     }
 
     /// What the dashboard needs to know before offering a conversation.
     pub fn status(&self) -> Json {
         let ready = self.key().is_ok();
         let c = &self.0.config;
-        let cloud_listen = ready && !c.transcribe_model.is_empty();
+        let voiced = self.voice_key().is_ok();
+        let cloud_listen = ready && voiced && !c.transcribe_model.is_empty();
         let local_listen = voice::host_port(&c.local_listen).is_some();
-        let cloud_voice = ready && !c.speech_model.is_empty();
+        let cloud_voice = ready && voiced && !c.speech_model.is_empty();
         let local_voice = voice::host_port(&c.local_speech).is_some();
+        let brain = self.brain();
         json!({
             "ready": ready,
-            "model": c.model,
+            "provider": brain.provider,
+            "model": brain.model,
             "listen": ready && (cloud_listen || local_listen),
             "speak": ready && (cloud_voice || local_voice),
             "voices": { "cloud": cloud_voice, "local": local_voice },
@@ -458,10 +677,10 @@ impl Assistant {
         }
         let mut failure = None;
         if !c.transcribe_model.is_empty() {
-            match self.key() {
+            match self.voice_key() {
                 Ok(key) => match self
                     .0
-                    .endpoint
+                    .voice
                     .transcribe(key.as_deref(), &c.transcribe_model, audio, mime)
                     .await
                 {
@@ -543,12 +762,12 @@ impl Assistant {
             0,
         )?;
         let c = &self.0.config;
-        let key = self.key().ok();
+        let key = self.voice_key().ok();
         let (chosen, style) = self.voice_and_style();
         let voices = voice::Voices {
             cloud: match &key {
                 Some(key) if !c.speech_model.is_empty() => Some(voice::Cloud {
-                    endpoint: &self.0.endpoint,
+                    endpoint: &self.0.voice,
                     key: key.as_deref(),
                     model: &c.speech_model,
                     voice: voice.unwrap_or(&chosen),
@@ -612,11 +831,12 @@ impl Assistant {
                         .collect(),
                     exchanges::Cost::new(
                         pricing::think(
-                            &c.model,
+                            &r.model,
                             r.usage.prompt_tokens,
                             r.usage.cached_tokens,
                             r.usage.completion_tokens,
-                        ) + r.draft_cost,
+                        ) + pricing::written(&r.model, r.usage.written_tokens)
+                            + r.draft_cost,
                         hear,
                         if spoken {
                             pricing::speak(&c.speech_model, r.reply.chars().count())
@@ -841,6 +1061,7 @@ impl Assistant {
             ));
         }
         let key = self.key()?;
+        let brain = self.brain();
         let _permit = self.admit()?;
         let layout = Layout::load(self.0.layout_path.as_deref()).await;
         let page = turn.surface.as_deref() == Some("page");
@@ -851,25 +1072,88 @@ impl Assistant {
             .unwrap_or_default();
 
         let power = self.power_now().await;
-        let mut messages = vec![
-            json!({ "role": "system", "content": with_voice(self.system_prompt(&layout, page, &power) + &self.web_line(), turn.spoken) }),
-        ];
+        let mut messages = vec![self.system_message(&brain, &layout, page, &power, turn.spoken)];
         let skip = turn.messages.len().saturating_sub(MAX_MESSAGES);
         for m in turn.messages.iter().skip(skip) {
             let content: String = m.content.chars().take(MAX_MESSAGE_CHARS).collect();
             messages.push(json!({ "role": m.role, "content": content }));
         }
 
-        // Spoken, nobody waits for cards: no `show`, one round trip less
-        // (the screen still gets the cards the question calls for).
-        let mut offered = tools();
-        if turn.spoken
-            && let Some(list) = offered.as_array_mut()
-        {
-            list.retain(|t| t["function"]["name"] != "show");
-            list.push(end_tool());
+        let offered = self.offered(&brain, turn.spoken);
+        let mut run = Run {
+            model: brain.model.clone(),
+            ..Run::default()
+        };
+        for step in 0..MAX_STEPS {
+            let answer = self
+                .complete(
+                    key.as_deref(),
+                    brain.provider,
+                    &claude::Ask {
+                        model: &brain.model,
+                        messages: &messages,
+                        tools: Some(&offered),
+                        last: step + 1 == MAX_STEPS,
+                        effort: &self.0.config.effort,
+                        schema: None,
+                    },
+                    OpenAiKnobs {
+                        reasoning_tokens: 4_000,
+                        temperature: 0.3,
+                        max_tokens: 700,
+                    },
+                    llm::CHAT_LIMIT,
+                )
+                .await?;
+            run.usage.steps = step + 1;
+            let usage = &answer["usage"];
+            run.usage.prompt_tokens += usage["prompt_tokens"].as_u64().unwrap_or(0);
+            run.usage.completion_tokens += usage["completion_tokens"].as_u64().unwrap_or(0);
+            run.usage.cached_tokens += usage["prompt_tokens_details"]["cached_tokens"]
+                .as_u64()
+                .unwrap_or(0);
+            run.usage.written_tokens += usage["cache_written_tokens"].as_u64().unwrap_or(0);
+            // Claude declined: nothing it asked for is done, the family is told.
+            if answer.get("refused").is_some() {
+                run.refused = true;
+                return Ok(Self::finish(
+                    &moli_i18n::tr!("assistant.reply.refused"),
+                    run,
+                    &layout,
+                    &question,
+                ));
+            }
+            let message = &answer["choices"][0]["message"];
+            let calls = message["tool_calls"].as_array().filter(|c| !c.is_empty());
+            if let Some(calls) = calls {
+                if let Some(said) = self
+                    .act(message, calls, &layout, &mut run, &mut messages)
+                    .await
+                {
+                    return Ok(Self::finish(&said, run, &layout, &question));
+                }
+                continue;
+            }
+            let text = message["content"]
+                .as_str()
+                .unwrap_or_default()
+                .trim()
+                .to_owned();
+            return Ok(Self::finish(&text, run, &layout, &question));
         }
+        Ok(Self::finish("", run, &layout, &question))
+    }
+
+    /// The tools of a turn. Spoken, nobody waits for cards: no `show`, one
+    /// round trip less (the screen still gets the cards the question calls
+    /// for).
+    fn offered(&self, brain: &Brain, spoken: bool) -> Json {
+        let mut offered = tools();
         if let Some(list) = offered.as_array_mut() {
+            if spoken {
+                list.retain(|t| t["function"]["name"] != "show");
+                list.push(end_tool());
+            }
             if self
                 .0
                 .config
@@ -879,61 +1163,11 @@ impl Assistant {
             {
                 list.push(forecast_tool());
             }
-            if self.searches() {
+            if self.searches(brain) {
                 list.push(search_tool());
             }
         }
-        let mut run = Run::default();
-        for step in 0..MAX_STEPS {
-            let mut body = json!({
-                "model": self.0.config.model,
-                "messages": messages,
-                "tools": offered,
-            });
-            // Reasoning models (gpt-5…, o…) take neither a temperature nor
-            // `max_tokens`; they think briefly here: answers are short.
-            if is_reasoning(&self.0.config.model) {
-                body["max_completion_tokens"] = json!(4_000);
-                body["reasoning_effort"] = json!("low");
-            } else {
-                body["temperature"] = json!(0.3);
-                body["max_tokens"] = json!(700);
-            }
-            if step + 1 == MAX_STEPS {
-                body["tool_choice"] = json!("none");
-            }
-            let answer = self
-                .0
-                .endpoint
-                .chat(key.as_deref(), &body)
-                .await
-                .map_err(|e| AssistantError::Upstream(e.to_string()))?;
-            run.usage.steps = step + 1;
-            run.usage.prompt_tokens += answer["usage"]["prompt_tokens"].as_u64().unwrap_or(0);
-            run.usage.completion_tokens +=
-                answer["usage"]["completion_tokens"].as_u64().unwrap_or(0);
-            run.usage.cached_tokens += answer["usage"]["prompt_tokens_details"]["cached_tokens"]
-                .as_u64()
-                .unwrap_or(0);
-            let message = &answer["choices"][0]["message"];
-            let calls = message["tool_calls"].as_array().filter(|c| !c.is_empty());
-            if let Some(calls) = calls {
-                if let Some(said) = self
-                    .act(message, calls, &layout, &mut run, &mut messages)
-                    .await
-                {
-                    return Ok(self.finish(&said, run, &layout, &question));
-                }
-                continue;
-            }
-            let text = message["content"]
-                .as_str()
-                .unwrap_or_default()
-                .trim()
-                .to_owned();
-            return Ok(self.finish(&text, run, &layout, &question));
-        }
-        Ok(self.finish("", run, &layout, &question))
+        offered
     }
 
     /// Runs an answer's tool calls, their results added to `messages`. Cards,
@@ -963,11 +1197,16 @@ impl Assistant {
             )
         });
         let mut says: Vec<String> = Vec::new();
-        messages.push(json!({
+        let mut asked = json!({
             "role": "assistant",
             "content": message["content"],
             "tool_calls": calls,
-        }));
+        });
+        // Claude's own blocks (its thinking too) go back as they came.
+        if !message["claude"].is_null() {
+            asked["claude"] = message["claude"].clone();
+        }
+        messages.push(asked);
         for call in calls {
             let name = call["function"]["name"].as_str().unwrap_or_default();
             if run.tools.len() < 16 {
@@ -1001,10 +1240,10 @@ impl Assistant {
         (carried_out && (!said.is_empty() || run.end)).then_some(said)
     }
 
-    fn finish(&self, text: &str, mut run: Run, layout: &Layout, question: &str) -> Reply {
+    fn finish(text: &str, mut run: Run, layout: &Layout, question: &str) -> Reply {
         // The model sometimes answers in words only: the screen still shows
         // what the question was obviously about.
-        if run.cards.is_empty() && run.actions.is_empty() {
+        if run.cards.is_empty() && run.actions.is_empty() && !run.refused {
             run.cards = guess_cards(question);
         }
         // Whatever was acted on shows up, even if the model forgot to say so.
@@ -1037,7 +1276,7 @@ impl Assistant {
             reply,
             cards: run.cards,
             actions: run.actions,
-            model: self.0.config.model.clone(),
+            model: run.model,
             usage: run.usage,
             end: run.end,
             tools: run.tools,
@@ -1063,13 +1302,13 @@ impl Assistant {
     }
 
     /// The web is searched only through the provider (never a local model).
-    fn searches(&self) -> bool {
-        !self.0.config.search_model.is_empty() && !self.0.endpoint.is_local()
+    fn searches(&self, brain: &Brain) -> bool {
+        !brain.search_model.is_empty() && !self.endpoint(brain.provider).is_local()
     }
 
     /// Models believe they cannot read the news: told otherwise when they can.
-    fn web_line(&self) -> String {
-        if self.searches() {
+    fn web_line(&self, brain: &Brain) -> String {
+        if self.searches(brain) {
             moli_i18n::tr!("assistant.prompt.web")
         } else {
             String::new()
@@ -1094,33 +1333,49 @@ impl Assistant {
         }
         run.searches += 1;
         let c = &self.0.config;
-        match outside::search(
-            &self.0.endpoint,
-            key.as_deref(),
-            &c.search_model,
-            &c.timezone,
-            query,
-        )
-        .await
-        {
-            Ok((found, usage)) => {
-                run.search_cost += pricing::SEARCH
-                    + pricing::think(
-                        &c.search_model,
+        let brain = self.brain();
+        let model = &brain.search_model;
+        let found = match brain.provider {
+            Provider::Anthropic => {
+                let mut spent = claude::SearchUsage::default();
+                let found = claude::search(
+                    &self.0.anthropic,
+                    key.as_deref(),
+                    model,
+                    &c.timezone,
+                    &outside::question(query),
+                    &mut spent,
+                )
+                .await;
+                #[allow(clippy::cast_precision_loss)]
+                let searches = spent.searches as f64;
+                run.search_cost += searches * pricing::CLAUDE_SEARCH
+                    + pricing::think(model, spent.prompt, spent.cached, spent.completion)
+                    + pricing::written(model, spent.written);
+                found.map(|answer| json!({ "answer": answer }))
+            }
+            Provider::Openai => {
+                let found =
+                    outside::search(&self.0.openai, key.as_deref(), model, &c.timezone, query)
+                        .await;
+                run.search_cost += pricing::SEARCH;
+                found.map(|(found, usage)| {
+                    run.search_cost += pricing::think(
+                        model,
                         usage["input_tokens"].as_u64().unwrap_or(0),
                         usage["input_tokens_details"]["cached_tokens"]
                             .as_u64()
                             .unwrap_or(0),
                         usage["output_tokens"].as_u64().unwrap_or(0),
                     );
-                found
+                    found
+                })
             }
-            Err(e) => {
-                run.search_cost += pricing::SEARCH;
-                tracing::warn!(error = %e, "web search failed");
-                json!({ "error": "the web search failed" })
-            }
-        }
+        };
+        found.unwrap_or_else(|e| {
+            tracing::warn!(error = %e, "web search failed");
+            json!({ "error": "the web search failed" })
+        })
     }
 
     /// Live power, circuit by circuit, and today's figures: the most asked
@@ -1135,7 +1390,18 @@ impl Assistant {
         power_line(&s)
     }
 
-    fn system_prompt(&self, layout: &Layout, page: bool, power: &str) -> String {
+    /// The conversation's system message. For Claude, also in three
+    /// blocks: the instructions (stable: cached across turns), the house
+    /// (its values move: cached within a turn), then the moment (date and
+    /// power, after the last breakpoint).
+    fn system_message(
+        &self,
+        brain: &Brain,
+        layout: &Layout,
+        page: bool,
+        power: &str,
+        spoken: bool,
+    ) -> Json {
         let snapshot = self.0.hub.snapshot();
         let guard = &snapshot.guard;
         let now = jiff::Timestamp::now().to_zoned(self.0.tz.clone());
@@ -1154,22 +1420,38 @@ impl Assistant {
             |q| quiet_text(&q.from, &q.to, q.active),
         );
         let rooms: Vec<&str> = layout.rooms.iter().map(|r| r.name.as_str()).collect();
-        ChatPrompt {
+        let inventory = house::inventory(
+            &snapshot.devices,
+            layout,
+            &guard.protected_rooms,
+            house::Reader::Chat,
+        );
+        let date = house_date(&now);
+        let rooms = rooms.join(", ");
+        let prompt = ChatPrompt {
             title: layout.title.as_deref(),
             page,
             protected: &protected,
             quiet: &quiet,
-            date: &house_date(&now),
+            date: &date,
             power,
-            rooms: &rooms.join(", "),
-            inventory: &house::inventory(
-                &snapshot.devices,
-                layout,
-                &guard.protected_rooms,
-                house::Reader::Chat,
-            ),
+            rooms: &rooms,
+            inventory: &inventory,
+        };
+        let web = self.web_line(brain);
+        let mut message = json!({
+            "role": "system",
+            "content": with_voice(prompt.render() + &web, spoken),
+        });
+        if brain.provider == Provider::Anthropic {
+            let (stable, house, moment) = prompt.split();
+            message["blocks"] = json!([
+                { "text": with_voice(stable.trim_end().to_owned() + &web, spoken), "cache": true },
+                { "text": house, "cache": true },
+                { "text": moment },
+            ]);
         }
-        .render()
+        message
     }
 
     async fn tool(&self, name: &str, args: &Json, layout: &Layout, run: &mut Run) -> Json {
@@ -1410,8 +1692,68 @@ impl Assistant {
     }
 }
 
+/// Who thinks, and with which models.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct Brain {
+    pub provider: Provider,
+    pub model: String,
+    pub builder_model: String,
+    /// Empty: no web.
+    pub search_model: String,
+}
+
+/// An OpenAI-compatible request's own settings: reasoning models take a
+/// budget of tokens, the others a temperature and a length.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct OpenAiKnobs {
+    pub reasoning_tokens: u32,
+    pub temperature: f64,
+    pub max_tokens: u32,
+}
+
+/// The chat completion `ask` is, for an OpenAI-compatible API. What only
+/// Claude reads (system `blocks`, an answer's `claude` blocks) stays here.
+fn openai_body(ask: &claude::Ask<'_>, knobs: OpenAiKnobs) -> Json {
+    let messages: Vec<Json> = ask
+        .messages
+        .iter()
+        .map(|m| {
+            let mut m = m.clone();
+            if let Some(o) = m.as_object_mut() {
+                o.remove("blocks");
+                o.remove("claude");
+            }
+            m
+        })
+        .collect();
+    let mut body = json!({ "model": ask.model, "messages": messages });
+    if let Some(tools) = ask.tools {
+        body["tools"] = tools.clone();
+    }
+    if let Some(schema) = ask.schema {
+        body["response_format"] = json!({ "type": "json_schema", "json_schema": { "name": "automation", "strict": true, "schema": schema } });
+    }
+    // Reasoning models (gpt-5…, o…) take neither a temperature nor
+    // `max_tokens`; they think briefly here: answers are short.
+    if is_reasoning(ask.model) {
+        body["max_completion_tokens"] = json!(knobs.reasoning_tokens);
+        body["reasoning_effort"] = json!("low");
+    } else {
+        body["temperature"] = json!(knobs.temperature);
+        body["max_tokens"] = json!(knobs.max_tokens);
+    }
+    if ask.last {
+        body["tool_choice"] = json!("none");
+    }
+    body
+}
+
 #[derive(Debug, Default)]
 struct Run {
+    /// The model that thought.
+    model: String,
+    /// It declined to answer.
+    refused: bool,
     cards: Vec<Json>,
     actions: Vec<Action>,
     usage: Usage,
@@ -1951,6 +2293,7 @@ fn quiet_text(from: &str, to: &str, active: bool) -> String {
 }
 
 /// What the conversation's system prompt is made of.
+#[derive(Clone, Copy)]
 struct ChatPrompt<'a> {
     title: Option<&'a str>,
     page: bool,
@@ -1995,6 +2338,35 @@ impl ChatPrompt<'_> {
             .map(|(name, value)| (*name, value as &dyn Display))
             .collect();
         moli_i18n::trf("assistant.prompt.chat", &args)
+    }
+
+    /// The prompt in three, for a cache: what changes rarely (who Moli is,
+    /// the rules, the guard), then the house (rooms, inventory), then the
+    /// moment — the lines of the date and of the live power, wherever the
+    /// catalogue puts them. `stable + moment + house` is `render()` when
+    /// the moment's lines come first after the rules, as they do.
+    fn split(&self) -> (String, String, String) {
+        const DATE: &str = "\u{1}date\u{1}";
+        const POWER: &str = "\u{1}power\u{1}";
+        let marked = ChatPrompt {
+            date: DATE,
+            power: POWER,
+            ..*self
+        }
+        .render();
+        let (mut stable, mut house, mut moment) = (String::new(), String::new(), String::new());
+        let mut past = false;
+        for line in marked.split_inclusive('\n') {
+            if line.contains(DATE) || line.contains(POWER) {
+                past = true;
+                moment.push_str(&line.replace(DATE, self.date).replace(POWER, self.power));
+            } else if past {
+                house.push_str(line);
+            } else {
+                stable.push_str(line);
+            }
+        }
+        (stable, house, moment)
     }
 }
 
@@ -2236,6 +2608,359 @@ mod tests {
         Assistant::new(hub, None, None, None, config).unwrap()
     }
 
+    /// Moli thinking with Claude over a hub with the lamp running; the
+    /// provider answers `answers` in turn and keeps every request.
+    async fn claude_with_lamp(answers: Vec<Json>) -> (Assistant, Arc<Mutex<Vec<String>>>) {
+        let (url, asked) =
+            crate::llm::tests::fake_provider(answers.iter().map(Json::to_string).collect()).await;
+        let hub = moli_runtime::Hub::new(moli_runtime::HubOptions::default()).unwrap();
+        moli_runtime::spawn_driver(
+            &hub,
+            InstanceId::from("fake"),
+            Arc::new(Lamp),
+            tokio_util::sync::CancellationToken::new(),
+        );
+        for _ in 0..200 {
+            if hub.device(&DeviceId::from("fake:lamp")).is_some() {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
+        let config: Config =
+            serde_json::from_value(json!({ "provider": "anthropic", "base_url": url })).unwrap();
+        (
+            Assistant::new(hub, None, None, None, config).unwrap(),
+            asked,
+        )
+    }
+
+    fn body_of(request: &str) -> Json {
+        serde_json::from_str(request.split_once("\r\n\r\n").unwrap().1).unwrap()
+    }
+
+    fn lamp_is_on(moli: &Assistant) -> bool {
+        moli.0
+            .hub
+            .device(&DeviceId::from("fake:lamp"))
+            .unwrap()
+            .state
+            .get("on")
+            .is_some_and(|s| s.value == Value::Bool(true))
+    }
+
+    /// A turn with Claude: two calls in one answer, run, their results sent
+    /// back together after the answer's own blocks; the instructions and the
+    /// house cached, the moment after the last breakpoint.
+    #[tokio::test]
+    async fn claude_runs_parallel_calls_and_hears_their_results() {
+        let first = json!({
+            "id": "msg_test_1", "type": "message", "role": "assistant", "model": "claude-opus-5-5",
+            "stop_reason": "tool_use",
+            "content": [
+                { "type": "thinking", "thinking": "", "signature": "c2lnLXRlc3Q=" },
+                { "type": "tool_use", "id": "toolu_test_a", "name": "get_device", "input": { "device": "fake:lamp" } },
+                { "type": "tool_use", "id": "toolu_test_b", "name": "set", "input": { "point": "fake:lamp/on", "value": true, "say": "C'est allumé." } }
+            ],
+            "usage": { "input_tokens": 50, "cache_creation_input_tokens": 3_000, "cache_read_input_tokens": 0, "output_tokens": 60 }
+        });
+        let second = json!({
+            "id": "msg_test_2", "type": "message", "role": "assistant", "model": "claude-opus-5-5",
+            "stop_reason": "end_turn",
+            "content": [{ "type": "text", "text": "C'est allumé." }],
+            "usage": { "input_tokens": 200, "cache_creation_input_tokens": 0, "cache_read_input_tokens": 3_000, "output_tokens": 10 }
+        });
+        let (moli, asked) = claude_with_lamp(vec![first.clone(), second]).await;
+        let turn: Turn = serde_json::from_value(json!({
+            "messages": [{ "role": "user", "content": "Allume la lampe" }],
+        }))
+        .unwrap();
+        let reply = moli.turn(turn).await.unwrap();
+        assert_eq!(reply.reply, "C'est allumé.");
+        assert_eq!(reply.model, "claude-opus-5-5");
+        assert_eq!(reply.actions.len(), 1);
+        assert_eq!(reply.actions[0].status, "done");
+        assert!(lamp_is_on(&moli));
+        assert_eq!(
+            (
+                reply.usage.prompt_tokens,
+                reply.usage.cached_tokens,
+                reply.usage.written_tokens
+            ),
+            (6_250, 3_000, 3_000)
+        );
+
+        let asked = asked.lock().unwrap();
+        assert_eq!(asked.len(), 2);
+        assert!(asked[0].starts_with("POST /v1/messages "), "{}", asked[0]);
+        assert!(asked[0].contains("anthropic-version: 2023-06-01"));
+        let (one, two) = (body_of(&asked[0]), body_of(&asked[1]));
+        // The same prefix both times: system and tools unchanged, the
+        // conversation only grows.
+        assert_eq!(one["system"], two["system"]);
+        assert_eq!(one["tools"], two["tools"]);
+        let system = one["system"].as_array().unwrap();
+        assert_eq!(system.len(), 3);
+        assert!(system[0]["cache_control"].is_object() && system[1]["cache_control"].is_object());
+        assert!(system[2].get("cache_control").is_none());
+        let date = house_date(&jiff::Timestamp::now().to_zoned(moli.0.tz.clone()));
+        let (stable, moment) = (system[0]["text"].to_string(), system[2]["text"].to_string());
+        assert!(
+            stable.contains("Moli") && !stable.contains(&date),
+            "{stable}"
+        );
+        assert!(moment.contains(&date), "{moment}");
+        assert!(system[1]["text"].as_str().unwrap().contains("fake:lamp"));
+        assert_eq!(one["output_config"], json!({ "effort": "low" }));
+        assert!(one.get("thinking").is_none());
+        assert!(
+            one["tools"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .all(|t| t["strict"] == true)
+        );
+
+        let sent = two["messages"].as_array().unwrap();
+        assert_eq!(sent.len(), 3);
+        assert_eq!(
+            sent[1],
+            json!({ "role": "assistant", "content": first["content"] })
+        );
+        let results = sent[2]["content"].as_array().unwrap();
+        assert_eq!(sent[2]["role"], "user");
+        assert_eq!(results.len(), 2);
+        assert_eq!(results[0]["tool_use_id"], "toolu_test_a");
+        assert_eq!(results[1]["tool_use_id"], "toolu_test_b");
+        assert!(results[1]["content"].as_str().unwrap().contains("done"));
+    }
+
+    /// Claude declines: its calls are not run, the family is told so.
+    #[tokio::test]
+    async fn a_refusal_from_claude_does_nothing() {
+        let refused = json!({
+            "id": "msg_test", "type": "message", "role": "assistant", "model": "claude-opus-5-5",
+            "stop_reason": "refusal",
+            "stop_details": { "type": "refusal", "category": "cyber", "explanation": null },
+            "content": [{ "type": "tool_use", "id": "toolu_x", "name": "set", "input": { "point": "fake:lamp/on", "value": true, "say": "" } }],
+            "usage": { "input_tokens": 30, "output_tokens": 0 }
+        });
+        let (moli, asked) = claude_with_lamp(vec![refused]).await;
+        let reply = moli.turn(spoken("Allume la lampe")).await.unwrap();
+        assert_eq!(reply.reply, moli_i18n::tr!("assistant.reply.refused"));
+        assert!(reply.actions.is_empty() && reply.cards.is_empty());
+        assert!(!lamp_is_on(&moli));
+        assert_eq!(asked.lock().unwrap().len(), 1);
+    }
+
+    /// Cut by `max_tokens`: the words that came are said, the call is not run.
+    #[tokio::test]
+    async fn a_cut_answer_from_claude_runs_no_call() {
+        let cut = json!({
+            "id": "msg_test", "type": "message", "role": "assistant", "model": "claude-opus-5-5",
+            "stop_reason": "max_tokens",
+            "content": [
+                { "type": "text", "text": "Je m'en occupe." },
+                { "type": "tool_use", "id": "toolu_x", "name": "set", "input": { "point": "fake:lamp/on" } }
+            ],
+            "usage": { "input_tokens": 30, "output_tokens": 16_000 }
+        });
+        let (moli, _asked) = claude_with_lamp(vec![cut]).await;
+        let reply = moli.turn(spoken("Allume la lampe")).await.unwrap();
+        assert_eq!(reply.reply, "Je m'en occupe.");
+        assert!(reply.actions.is_empty());
+        assert!(!lamp_is_on(&moli));
+    }
+
+    #[test]
+    fn the_provider_is_named_or_read_from_base_url() {
+        let config = |v: Json| -> Config { serde_json::from_value(v).unwrap() };
+        assert_eq!(Config::default().provider(), Provider::Openai);
+        assert_eq!(
+            config(json!({ "base_url": "https://api.anthropic.com" })).provider(),
+            Provider::Anthropic
+        );
+        assert_eq!(
+            config(json!({ "provider": "anthropic" })).provider(),
+            Provider::Anthropic
+        );
+        assert_eq!(
+            config(json!({ "base_url": "http://192.168.1.20:11434/v1" })).provider(),
+            Provider::Openai
+        );
+        assert!(serde_json::from_value::<Config>(json!({ "provider": "mistral" })).is_err());
+    }
+
+    fn moli(config: Json) -> Assistant {
+        let hub = moli_runtime::Hub::new(moli_runtime::HubOptions::default()).unwrap();
+        Assistant::new(
+            hub,
+            None,
+            None,
+            None,
+            serde_json::from_value(config).unwrap(),
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn claudes_models_by_default_and_the_dashboards_choice_after() {
+        let claude = moli(json!({ "provider": "anthropic" }));
+        assert_eq!(
+            claude.brain(),
+            Brain {
+                provider: Provider::Anthropic,
+                model: "claude-opus-5-5".into(),
+                builder_model: "claude-opus-5-5".into(),
+                search_model: "claude-opus-5-5".into(),
+            }
+        );
+        assert!(!claude.0.anthropic.is_local());
+        let openai = moli(json!({}));
+        assert_eq!(openai.brain().model, "gpt-4.1-mini");
+        assert_eq!(openai.brain().builder_model, "gpt-4.1");
+        // `moli.toml`'s models belong to its provider: switched in the
+        // dashboard, the other provider's defaults apply.
+        let set = moli(json!({ "model": "gpt-4.1", "builder_model": "gpt-5", "search_model": "" }));
+        *set.0.prefs.write().unwrap() = Some(settings::Prefs {
+            voice: "coral".into(),
+            style: "enjoue".into(),
+            pace: None,
+            provider: Some("anthropic".into()),
+            model: Some("claude-sonnet-5-5".into()),
+        });
+        assert_eq!(
+            set.brain(),
+            Brain {
+                provider: Provider::Anthropic,
+                model: "claude-sonnet-5-5".into(),
+                builder_model: "claude-opus-5-5".into(),
+                search_model: String::new(),
+            }
+        );
+        assert!(
+            Assistant::new(
+                moli_runtime::Hub::new(moli_runtime::HubOptions::default()).unwrap(),
+                None,
+                None,
+                None,
+                serde_json::from_value(json!({ "effort": "none" })).unwrap()
+            )
+            .is_err()
+        );
+    }
+
+    /// Claude's key and OpenAI's are two: the voice keeps OpenAI's, and
+    /// without it the house's own voice speaks.
+    #[tokio::test]
+    async fn claude_thinks_with_its_key_the_voice_with_openais() {
+        let dir = std::env::temp_dir().join(format!("moli-claude-key-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let hub = moli_runtime::Hub::new(moli_runtime::HubOptions {
+            secrets: Some((
+                dir.join("secrets.json"),
+                moli_runtime::MasterKey::generate().unwrap(),
+            )),
+            ..moli_runtime::HubOptions::default()
+        })
+        .unwrap();
+        let config = json!({ "provider": "anthropic", "local_listen": "", "local_speech": "" });
+        let claude = Assistant::new(
+            hub,
+            None,
+            None,
+            None,
+            serde_json::from_value(config).unwrap(),
+        )
+        .unwrap();
+        match claude.key() {
+            Err(AssistantError::NotConfigured(why)) => {
+                assert!(why.contains("anthropic_api_key"), "{why}");
+            }
+            other => panic!("{other:?}"),
+        }
+        claude
+            .0
+            .hub
+            .store_secret(
+                &InstanceId::from("assistant"),
+                "anthropic_api_key",
+                "sk-ant-test-abcdefghij0123456789",
+            )
+            .await
+            .unwrap();
+        assert!(claude.key().unwrap().is_some());
+        let status = claude.status();
+        assert_eq!(status["ready"], true);
+        assert_eq!(status["provider"], "anthropic");
+        assert_eq!(
+            (status["listen"].clone(), status["speak"].clone()),
+            (json!(false), json!(false))
+        );
+        assert!(claude.voice_key().is_err());
+        claude
+            .0
+            .hub
+            .store_secret(
+                &InstanceId::from("assistant"),
+                "api_key",
+                "sk-proj-abcdefghij0123456789",
+            )
+            .await
+            .unwrap();
+        let status = claude.status();
+        assert_eq!(
+            (status["listen"].clone(), status["speak"].clone()),
+            (json!(true), json!(true))
+        );
+        // The voice goes to OpenAI, never to Anthropic.
+        assert_eq!(
+            claude.0.voice,
+            Endpoint::parse("https://api.openai.com/v1").unwrap()
+        );
+        let settings = claude.settings();
+        assert_eq!(
+            settings["keys"],
+            json!({ "anthropic": true, "openai": true })
+        );
+        assert_eq!(
+            settings["rates"],
+            json!({ "input": 4.0, "cached": 0.2, "output": 20.0 })
+        );
+        assert!(!settings.to_string().contains("sk-"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// The prompt split for the cache is the prompt, in another order.
+    #[test]
+    fn the_prompt_split_for_the_cache_loses_nothing() {
+        let prompt = ChatPrompt {
+            title: Some("Les Tilleuls"),
+            page: false,
+            protected: "Chambre",
+            quiet: "aucune",
+            date: "samedi 18 octobre 2026, 21h05",
+            power: "Électricité en direct : 940 W.",
+            rooms: "Salon",
+            inventory: "## Salon\n- hue:1 · Lampe · on✎=true\n",
+        };
+        let (stable, house, moment) = prompt.split();
+        assert_eq!(format!("{stable}{moment}{house}"), prompt.render());
+        assert!(
+            moment.contains("21h05") && moment.contains("940 W"),
+            "{moment}"
+        );
+        assert!(!stable.contains("21h05") && !house.contains("21h05"));
+        assert!(house.contains("hue:1") && stable.contains("Les Tilleuls"));
+        // Without live power, its line is just empty.
+        let (_, _, moment) = ChatPrompt {
+            power: "",
+            ..prompt
+        }
+        .split();
+        assert!(moment.contains("21h05"));
+    }
+
     fn spoken(question: &str) -> Turn {
         serde_json::from_value(json!({
             "spoken": true,
@@ -2387,7 +3112,9 @@ mod tests {
         ];
 
         let layout = Layout::default();
-        let prompt = moli.system_prompt(&layout, false, "");
+        let prompt = moli
+            .system_message(&moli.brain(), &layout, false, "", false)
+            .to_string();
         let device = moli
             .get_device(&json!({ "device": "fake:phone" }), &layout)
             .to_string();

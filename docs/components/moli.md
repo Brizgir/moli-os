@@ -1,7 +1,8 @@
 # Moli, l'assistant (`crates/moli-assistant`)
 
-Une conversation (écrite, ou parlée en HTTPS) avec un modèle **compatible OpenAI** (OpenAI,
-Mistral, un Ollama local en `http://`…). Moli lit l'inventaire de la maison, agit sous la
+Une conversation (écrite, ou parlée en HTTPS) avec **Claude**, par l'API Messages d'Anthropic
+en natif (`claude.rs`), ou un modèle **compatible OpenAI** (OpenAI, Mistral, un Ollama local en
+`http://`…). Moli lit l'inventaire de la maison, agit sous la
 garde, **choisit ce que l'écran montre**, crée des automatismes en brouillon et rédige les
 messages des automatismes. Il ne voit jamais d'image de caméra ni de secret, ni où est quelqu'un
 au mètre près : la position d'un téléphone (`latitude`, `longitude`, `accuracy`) et son Wi-Fi
@@ -10,21 +11,108 @@ consigne d'un nœud « Moli écrit » (`house::private`) ; il lit `home`, `zone`
 
 ## Configuration
 
+Avec Claude :
+
+```toml
+[assistant]
+provider = "anthropic"                 # "anthropic" | "openai"
+model = "claude-opus-5-5"              # la conversation (défaut) ; claude-sonnet-5-5, claude-haiku-5-5, claude-fable-5-1
+builder_model = "claude-opus-5-5"      # dessiner des automatismes
+effort = "low"                         # profondeur de réflexion en conversation : low (défaut) … max
+builder_effort = "high"                # … pour un brouillon d'automatisme
+# search_model = "claude-opus-5-5"     # recherche web ; défaut : model ; "" = pas de web
+# base_url = "https://api.anthropic.com"        # défaut ; avec ou sans /v1
+# base_url_voice = "https://api.openai.com/v1"  # la voix (Anthropic n'en fait pas)
+# timezone = "Europe/Paris"
+```
+
+Avec OpenAI (le défaut, pour ne rien casser : sans `provider`, c'est OpenAI, sauf si
+`base_url` est celui d'Anthropic) :
+
 ```toml
 [assistant]
 model = "gpt-4.1-mini"                 # la conversation
 builder_model = "gpt-4.1"              # dessiner des automatismes (rare, donc un modèle plus fort)
 transcribe_model = "gpt-4o-mini-transcribe"   # voix → texte ; "" = pas de voix
 # base_url = "https://api.openai.com/v1"      # http://… pour un modèle local (pas de clé exigée)
-# timezone = "Europe/Paris"
 ```
 
-Clé : `moli-os secrets set assistant api_key` (une clé déjà donnée à l'intégration
-`openai_conversation` de HA peut être reprise, toujours par tube). Elle ne part qu'en
-https : un `base_url` en `http://` ne la reçoit jamais, même rangée dans le coffre. Les modèles « à
-raisonnement » (gpt-5…, o…) sont reconnus (`max_completion_tokens`, `reasoning_effort: low`, pas de température).
+Deux clés, deux noms dans le coffre, toujours par un tube, jamais dans `moli.toml` ni au
+journal :
 
-### Pourquoi ces modèles (mesuré le 3 oct.)
+- Claude : `moli-os secrets set assistant anthropic_api_key` (une clé `sk-ant-…`, envoyée en
+  `x-api-key` avec `anthropic-version: 2023-06-01`) ;
+- OpenAI : `moli-os secrets set assistant api_key` (la réflexion quand OpenAI pense ; **la voix**
+  dans tous les cas). Une clé déjà donnée à l'intégration `openai_conversation` de HA peut être
+  reprise.
+
+Une clé ne part qu'en https : un `base_url` en `http://` ne la reçoit jamais, même rangée dans
+le coffre. Les modèles OpenAI « à raisonnement » (gpt-5…, o…) sont reconnus
+(`max_completion_tokens`, `reasoning_effort: low`, pas de température).
+
+### Claude (`claude.rs`)
+
+Moli construit sa conversation d'une seule façon (messages et outils au format OpenAI) ;
+`claude.rs` la traduit à l'aller et au retour, si bien que la boucle d'outils, la garde et les
+filets de sécurité sont les mêmes pour les deux fournisseurs. Pas de SDK Rust : du JSON sur
+`POST /v1/messages`, sans streaming, `max_tokens` 16 000.
+
+- **Système à part**, en trois blocs : les consignes (stables), puis la maison (pièces,
+  inventaire : ses valeurs bougent), puis le moment (date et électricité en direct). Un point de
+  cache (`cache_control: ephemeral`) après les consignes et un après la maison ; la date et
+  l'heure sont après le dernier. Les outils, rendus avant le système, sont dans le cache. D'un
+  tour à l'autre, les consignes et les outils sont relus du cache ; dans un tour (plusieurs
+  allers-retours), tout le système. `usage.cache_read_input_tokens` et
+  `cache_creation_input_tokens` sont comptés (journal `claude answered` en debug, coût de
+  l'échange).
+- **Outils** : `name`, `description`, `input_schema`, `strict: true`. Le schéma est ramené à ce
+  que le mode strict accepte : `additionalProperties: false` partout, pas de bornes numériques
+  ni de longueur (Moli les vérifie lui-même), une liste de types devient un `anyOf`. Le schéma
+  des brouillons d'automatismes passe par `output_config.format` (sortie JSON).
+- **`tool_choice`** : `auto`, ou `none` au dernier tour ; jamais `any`/`tool` (refusés en 400) :
+  le prompt dit quand appeler un outil. Jamais de réponse pré-remplie.
+- **Réflexion adaptative** : `thinking` n'est jamais envoyé (ni désactivé, ni `budget_tokens` :
+  400 sur Opus 5.5, Sonnet 5.5, Fable 5.1). La profondeur se règle par
+  `output_config.effort` : `effort` (défaut `low`, la latence d'une maison) pour la conversation
+  et les messages des automatismes, `builder_effort` (défaut `high`) pour les brouillons. Sur
+  Opus 5.5 l'effort par défaut serait `medium` : Moli le fixe toujours.
+- **Appels en parallèle** : plusieurs `tool_use` dans une réponse sont tous exécutés, et tous
+  leurs `tool_result` repartent dans **un seul** message `user`, après les blocs de la réponse
+  renvoyés tels quels (les blocs `thinking` compris, tant que la boucle continue sur le même
+  modèle). L'historique ne fait que s'allonger dans un tour : rien n'est réécrit.
+- **`stop_reason` lu avant `content`** : `refusal` → rien de ce que la réponse demandait n'est
+  exécuté, la famille entend « Je préfère ne pas répondre à cette demande. » (journal : la
+  catégorie) ; `max_tokens` → les mots arrivés sont dits, aucun appel n'est exécuté ;
+  `end_turn`, `tool_use` → comme d'habitude.
+- **Repli côté serveur** : sur l'API d'Anthropic elle-même, Opus 5.5, Sonnet 5.5 et Fable 5.1
+  envoient `fallbacks: "default"` (en-tête `anthropic-beta: server-side-fallback-2026-07-01`) :
+  une demande refusée par les garde-fous est rejouée par Anthropic sur le modèle qu'il
+  recommande pour ce cas. Pas pour Haiku (refusé), ni derrière un autre `base_url`.
+- **Recherche web** (`search_model`) : l'outil `web_search` de Moli pose la question à Claude
+  avec l'outil serveur `{"type": "web_search_20260209", "name": "web_search", "max_uses": 3}`
+  (`web_search_20250305` pour Haiku) et le fuseau de la maison. `pause_turn` : la réponse est
+  renvoyée telle quelle, sans « continue » ajouté (3 fois au plus). Les erreurs de la recherche
+  arrivent en HTTP 200, un objet à la place des résultats : journalisées. Coût : 0,01 $ par
+  recherche (`usage.server_tool_use.web_search_requests`) plus les jetons.
+- **La voix** : Anthropic ne transcrit ni ne parle. Avec `provider = "anthropic"`, l'écoute et
+  la voix utilisent **la clé OpenAI si elle est là** (`transcribe_model`, `speech_model`
+  inchangés, vers `base_url_voice`, OpenAI par défaut), sinon **Whisper et Piper locaux**
+  (`local_listen`, `local_speech`). Sans les deux, pas de conversation à voix haute ; l'écrit
+  marche. La carte Système le dit.
+
+Coûts estimés (`pricing.rs`, dollars par million de jetons, oct. 2026) :
+
+| Modèle | Entrée | Cache relu | Sortie |
+|---|---|---|---|
+| claude-opus-5-5 | 4 | 0,20 | 20 |
+| claude-sonnet-5-5 | 2 | 0,20 | 10 |
+| claude-haiku-5-5 (≤ 100 k jetons) | 0,10 | 0,01 | 0,50 |
+| claude-fable-5-1 | 10 | 0,25 | 50 |
+
+Une écriture dans le cache coûte 1,25 × l'entrée. Le modèle de chaque réponse est celui qui
+compte (`Reply.model`).
+
+### Pourquoi ces modèles OpenAI (mesuré le 3 oct.)
 
 | Modèle | Verdict |
 |---|---|
@@ -170,11 +258,21 @@ masqué raccroche.
 
 ### Réglages depuis le tableau de bord (page Système → « Moli, l'assistant »)
 
-- **Clé OpenAI** : `PUT /api/assistant/key` `{api_key}` (**humain**, code demandé) → vérifiée
-  par `GET /v1/models` (refusée = 400 avec la raison ; refusée d'emblée, sans rien envoyer,
-  si `base_url` est en `http://`), puis rangée chiffrée dans le coffre
-  (`assistant/api_key`), jamais renvoyée. Tuto pas à pas dans la carte (compte, crédit,
-  limite de dépense, création de la clé). Prise en compte immédiatement.
+- **Qui réfléchit** : `PUT /api/assistant/brain` `{provider, model?}` (**humain**, code
+  demandé : cela change ce que Moli coûte) → Claude (Anthropic) ou OpenAI, et un modèle parmi
+  ceux proposés (Claude : les quatre actuels ; OpenAI : gpt-4.1-mini, gpt-4.1, gpt-5-mini ; et
+  celui de `moli.toml`). Gardé dans `data/assistant.json`, appliqué tout de suite ; il prime sur
+  `moli.toml`. Les modèles de `moli.toml` (`model`, `builder_model`, `search_model`)
+  appartiennent à son fournisseur : passé à l'autre, ce sont les défauts de l'autre.
+- **Clés** : `PUT /api/assistant/key` `{api_key, provider?}` (**humain**, code demandé ; sans
+  `provider`, celui qui réfléchit) → vérifiée par `GET /v1/models` chez le fournisseur
+  (refusée = 400 avec la raison ; refusée d'emblée, sans rien envoyer, si l'adresse est en
+  `http://`), puis rangée chiffrée dans le coffre (`assistant/anthropic_api_key` ou
+  `assistant/api_key`), jamais renvoyée. Tuto pas à pas dans la carte, pour chacun (compte,
+  crédit, limite de dépense, création de la clé). Avec Claude, une ligne « Clé OpenAI pour la
+  voix (facultative) » dit ce que fera la voix sans elle. Prise en compte immédiatement.
+- **Coûts** : la carte montre le barème du modèle choisi et les échanges du jour avec leur coût
+  estimé (`GET /api/assistant/settings` : `rates`, `today`).
 - **Voix, ton et débit** : `GET|PUT /api/assistant/settings` `{voice?, style?, pace?}` (sans code :
   un goût, pas un pouvoir). Tons : `enjoue` (défaut), `pose`, `doux`. Débits : `normal` (1),
   `rapide` (1,2, le défaut de `speech_speed`), `tres_rapide` (1,4). Gardés dans

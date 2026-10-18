@@ -1,5 +1,7 @@
-//! OpenAI-compatible endpoints: OpenAI itself, Mistral, a local Ollama…
-//! Three calls: chat completions (with tools), transcription and speech.
+//! The providers' endpoints. OpenAI-compatible ones (OpenAI itself,
+//! Mistral, a local Ollama…): chat completions (with tools), web answers,
+//! transcription and speech. Anthropic's: Messages (`/v1/messages`), the
+//! conversation and the web alike (`claude.rs` translates).
 
 use std::time::Duration;
 
@@ -9,18 +11,29 @@ use http_body_util::{BodyExt as _, Full};
 use moli_net::Body as Bytes;
 use serde_json::Value as Json;
 
-const CHAT_LIMIT: Duration = Duration::from_secs(45);
+pub(crate) const CHAT_LIMIT: Duration = Duration::from_secs(45);
 /// A web search reads pages before it answers.
-const SEARCH_LIMIT: Duration = Duration::from_secs(30);
+pub(crate) const SEARCH_LIMIT: Duration = Duration::from_secs(30);
 const LISTEN_LIMIT: Duration = Duration::from_secs(30);
 const SPEAK_LIMIT: Duration = Duration::from_secs(20);
 /// A streamed voice: its first bytes come within this, or the house's voice speaks.
 const SPEAK_HEAD: Duration = Duration::from_secs(10);
 const CHECK_LIMIT: Duration = Duration::from_secs(10);
 const MAX_ANSWER: usize = 4 * 1024 * 1024;
+/// The version of Anthropic's API this client speaks.
+const ANTHROPIC_VERSION: &str = "2023-06-01";
+
+/// How a key travels: OpenAI's `Authorization: Bearer`, or Anthropic's
+/// `x-api-key` with its `anthropic-version`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Auth {
+    Bearer,
+    Anthropic,
+}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct Endpoint {
+    auth: Auth,
     tls: bool,
     host: String,
     port: u16,
@@ -29,7 +42,21 @@ pub(crate) struct Endpoint {
 }
 
 impl Endpoint {
+    /// An OpenAI-compatible endpoint.
     pub(crate) fn parse(url: &str) -> anyhow::Result<Self> {
+        Self::parse_as(url, Auth::Bearer)
+    }
+
+    /// Anthropic's API (`https://api.anthropic.com`, with or without `/v1`).
+    pub(crate) fn anthropic(url: &str) -> anyhow::Result<Self> {
+        let mut endpoint = Self::parse_as(url, Auth::Anthropic)?;
+        if let Some(base) = endpoint.base.strip_suffix("/v1") {
+            endpoint.base = base.to_owned();
+        }
+        Ok(endpoint)
+    }
+
+    pub(crate) fn parse_as(url: &str, auth: Auth) -> anyhow::Result<Self> {
         let (tls, rest) = if let Some(rest) = url.strip_prefix("https://") {
             (true, rest)
         } else if let Some(rest) = url.strip_prefix("http://") {
@@ -47,6 +74,7 @@ impl Endpoint {
         }
         let path = path.trim_matches('/');
         Ok(Self {
+            auth,
             tls,
             host: host.to_owned(),
             port,
@@ -64,6 +92,29 @@ impl Endpoint {
         !self.tls
     }
 
+    /// Anthropic's own API, not a proxy in front of it: what only it
+    /// accepts (server-side fallbacks) is asked there alone.
+    pub(crate) fn is_anthropic_api(&self) -> bool {
+        self.auth == Auth::Anthropic && self.tls && self.host == "api.anthropic.com"
+    }
+
+    /// The key's headers, over TLS only, whatever the vault holds.
+    fn authorize(
+        &self,
+        builder: http::request::Builder,
+        key: Option<&str>,
+    ) -> http::request::Builder {
+        let builder = match self.auth {
+            Auth::Bearer => builder,
+            Auth::Anthropic => builder.header("anthropic-version", ANTHROPIC_VERSION),
+        };
+        match (key.filter(|_| self.tls), self.auth) {
+            (Some(key), Auth::Bearer) => builder.header("authorization", format!("Bearer {key}")),
+            (Some(key), Auth::Anthropic) => builder.header("x-api-key", key),
+            (None, _) => builder,
+        }
+    }
+
     fn request(
         &self,
         key: Option<&str>,
@@ -72,16 +123,30 @@ impl Endpoint {
         accept: &str,
         body: Vec<u8>,
     ) -> anyhow::Result<Request<Full<Bytes>>> {
+        self.request_with(key, tail, content_type, accept, &[], body)
+    }
+
+    /// The same with extra headers (`anthropic-beta`).
+    fn request_with(
+        &self,
+        key: Option<&str>,
+        tail: &str,
+        content_type: &str,
+        accept: &str,
+        extra: &[(&str, &str)],
+        body: Vec<u8>,
+    ) -> anyhow::Result<Request<Full<Bytes>>> {
         let mut builder = Request::builder()
             .method(Method::POST)
             .uri(format!("{}{tail}", self.base))
             .header("content-type", content_type)
             .header("accept", accept);
-        // Over TLS only, whatever the vault holds.
-        if let Some(key) = key.filter(|_| self.tls) {
-            builder = builder.header("authorization", format!("Bearer {key}"));
+        for (name, value) in extra {
+            builder = builder.header(*name, *value);
         }
-        Ok(builder.body(Full::new(Bytes::from(body)))?)
+        Ok(self
+            .authorize(builder, key)
+            .body(Full::new(Bytes::from(body)))?)
     }
 
     /// The provider's own words, never the request (it holds the key).
@@ -105,6 +170,14 @@ impl Endpoint {
         limit: Duration,
     ) -> anyhow::Result<Bytes> {
         let request = self.request(key, tail, content_type, accept, body)?;
+        self.exchange(request, limit).await
+    }
+
+    async fn exchange(
+        &self,
+        request: Request<Full<Bytes>>,
+        limit: Duration,
+    ) -> anyhow::Result<Bytes> {
         let (status, answer) =
             moli_net::web(&self.host, self.port, self.tls, request, limit, MAX_ANSWER).await?;
         if !status.is_success() {
@@ -216,12 +289,53 @@ impl Endpoint {
     /// `GET /models` with `key`: over TLS only, a key never travels in clear.
     fn models(&self, key: &str) -> anyhow::Result<Request<Full<Bytes>>> {
         anyhow::ensure!(self.tls, "{}: a key is only sent over https", self.host);
-        Ok(Request::builder()
+        let builder = Request::builder()
             .method(Method::GET)
-            .uri(format!("{}/models", self.base))
-            .header("accept", "application/json")
-            .header("authorization", format!("Bearer {key}"))
+            .uri(format!("{}{}", self.base, self.path("/models")))
+            .header("accept", "application/json");
+        Ok(self
+            .authorize(builder, Some(key))
             .body(Full::new(Bytes::new()))?)
+    }
+
+    /// A path of the API: Anthropic's live under `/v1`, which its base
+    /// leaves out; an OpenAI-compatible base carries its own.
+    fn path(&self, tail: &str) -> String {
+        match self.auth {
+            Auth::Bearer => tail.to_owned(),
+            Auth::Anthropic => format!("/v1{tail}"),
+        }
+    }
+
+    /// Anthropic's Messages API (`POST /v1/messages`), `betas` in
+    /// `anthropic-beta`. The answer as it comes: `claude.rs` reads it.
+    pub(crate) async fn messages(
+        &self,
+        key: Option<&str>,
+        betas: &[&str],
+        body: &Json,
+        limit: Duration,
+    ) -> anyhow::Result<Json> {
+        let beta = betas.join(",");
+        let extra: Vec<(&str, &str)> = if beta.is_empty() {
+            Vec::new()
+        } else {
+            vec![("anthropic-beta", beta.as_str())]
+        };
+        let request = self.request_with(
+            key,
+            &self.path("/messages"),
+            "application/json",
+            "application/json",
+            &extra,
+            body.to_string().into_bytes(),
+        )?;
+        let answer = self.exchange(request, limit).await?;
+        let json: Json = serde_json::from_slice(&answer).unwrap_or(Json::Null);
+        if json.is_null() {
+            bail!("{}: the answer is not JSON", self.host);
+        }
+        Ok(json)
     }
 
     /// The provider's verdict on a key, by the status of its answer.
