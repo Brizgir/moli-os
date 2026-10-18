@@ -101,6 +101,10 @@ doc_markdown = "allow"
 # `assert!(x.is_empty())` reads better than an assert_eq! against a typed empty array.
 assert_is_empty = "allow"
 
+[profile.dev]
+# Line numbers in backtraces, without full debug info: target/ is several times smaller.
+debug = "line-tables-only"
+
 [profile.release]
 opt-level = "s"
 lto = "fat"
