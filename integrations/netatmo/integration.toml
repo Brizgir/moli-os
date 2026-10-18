@@ -1,0 +1,27 @@
+[integration]
+id = "netatmo"
+name = "Chauffage Netatmo Energy (thermostat, vannes)"
+# Official: Netatmo's own cloud API (dev.netatmo.com), with the person's own
+# app. The relay on the LAN has no usable local interface.
+brands = ["Netatmo", "Legrand"]
+models = ["Smart Thermostat", "Smart Radiator Valve", "Relay", "OpenTherm Thermostat"]
+transport = "https"
+driver = "netatmo"
+crate = "moli-netatmo"
+
+[discovery]
+# A cloud account: nothing to find on the home network.
+mdns = []
+ssdp = []
+ports = []
+
+[needs]
+# The app's keys, given by the dashboard (or `moli-os secrets set`), and the
+# refresh token the sign-in gives: never typed into a file.
+secrets = ["client_id", "client_secret", "refresh_token"]
+vars = []
+options = []
+
+[origin]
+reused = ""
+author = "agent"

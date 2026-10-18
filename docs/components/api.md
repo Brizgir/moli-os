@@ -291,6 +291,8 @@ Légende « Accès » : **libre** = aucune condition au-delà de la garde `Host`
 |---|---|---|---|---|---|
 | GET | `/api/integrations/tuya-cloud` | libre | aucune | `{instances:[{instance, configured}]}` (jamais les clés) | aucune |
 | PUT | `/api/integrations/tuya-cloud` | **humain** | `{access_id, access_secret, instance?}` (lettres et chiffres) | `{stored, instance}` ; le pilote redémarre avec elles en moins d'une minute | `403` ; `404` pas de pilote tuya ; `422` pas des clés Tuya ; `500` coffre |
+| GET | `/api/integrations/netatmo-app` | libre | aucune | `{instances:[{instance, configured}]}` (jamais les clés) | aucune |
+| PUT | `/api/integrations/netatmo-app` | **humain** | `{client_id, client_secret, instance?}` (l'app de dev.netatmo.com) | `{stored, instance}` ; le pilote, qui attend, les prend en moins de 5 s | `403` ; `404` pas de pilote netatmo ; `422` pas des clés d'app ; `500` coffre |
 | GET | `/api/ambiances` | libre | aucune | `[{id, name, icon, colors:["#rrggbb"], white (K), brightness (%), effect?}]` (`crates/moli-ambiance`) | aucune |
 | POST | `/api/ambiance` | libre ; chaque ordre passe par la garde comme `/api/command` | `{lights:[id…] (1 → 32, un groupe vaut ses membres), ambiance? \| color? ("#rrggbb") \| white? (1500 → 10000 K), actor?}` | `{done:[id], held:[{device, point, approval, reason}], failed:[{device, error}], skipped:[id]}` | `400` ; `404` ambiance inconnue |
 | POST | `/api/command` | libre ; origine via `x-moli-origin` (§ 1.3) | `{point, value, actor?}` | `200 {ok:true}` ; **`202 {ok:false, pending:<id>, reason}`** si retenu | `404` point inconnu ; `403` point en lecture seule ; `422` valeur invalide ; `503` pilote indisponible / file pleine ; `504` pas de réponse en 5 s ; `502` erreur du pilote |
