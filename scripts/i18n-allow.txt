@@ -11,3 +11,5 @@ web/src/maison/ui/PaperPrinterCard.svelte  STUCK = /papier
 web/src/maison/ui/PaperPrinterCard.svelte  /envoi\|en attente
 web/src/maison/ui/PaperPrinterCard.svelte  /(couleur|noire|jaune)
 web/src/maison/lib/paper.js  /pleine\|full/
+# L'identifiant du serveur de la maison, posé par le pilote hôte (comparé, jamais affiché).
+web/src/maison/accueil/MachineCard.svelte  'Serveur de la maison'

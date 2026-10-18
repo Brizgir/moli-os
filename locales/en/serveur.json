@@ -163,5 +163,21 @@
   "serveur.tls.raison.expire": "certificate expired on {date}",
   "serveur.tls.raison.pas_encore": "certificate not valid yet (before {date})",
   "serveur.maison.page_inconnue": "no page “{page}” in the menu",
-  "serveur.maison.choix_inconnu": "“{choice}”: automatic (auto), always or never"
+  "serveur.maison.choix_inconnu": "“{choice}”: automatic (auto), always or never",
+  "serveur.tableau.proprietaire": "only the owner changes the house's arrangement",
+  "serveur.tableau.personne": "sign in to keep an arrangement of your own",
+  "serveur.tableau.pas_de_dossier": "no data folder",
+  "serveur.tableau.fichier_illisible": "dashboards.json: {error}",
+  "serveur.tableau.forme": "malformed arrangement: {error}",
+  "serveur.tableau.defaut_manquant": "the “default” arrangement is missing",
+  "serveur.tableau.cle": "“{key}”: lower-case letters, digits and dashes only",
+  "serveur.tableau.nom_vide": "a named arrangement needs a name",
+  "serveur.tableau.trop_de_dispositions": "{max} arrangements at most",
+  "serveur.tableau.trop_de_cartes": "{max} cards at most on a screen",
+  "serveur.tableau.identifiant": "card id “{id}”: 4 to 16 lower-case letters or digits",
+  "serveur.tableau.doublon": "the card “{id}” appears twice",
+  "serveur.tableau.type_inconnu": "unknown card: {kind}",
+  "serveur.tableau.taille_inconnue": "unknown size: {size} (s, m or l)",
+  "serveur.tableau.titre_trop_long": "{max} characters at most for a title",
+  "serveur.tableau.options_trop_lourdes": "{max} characters at most for a card's settings"
 }

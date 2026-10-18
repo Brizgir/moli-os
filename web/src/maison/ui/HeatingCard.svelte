@@ -11,11 +11,17 @@
    *  make, the week's schedule, and « Mode absence » for the whole home. */
   onMount(useTimed);
 
-  const order = $derived((home.config?.rooms ?? []).map((r) => r.name));
+  /** From the home page's arrangement: `only` (the rooms to show, in that
+   *  order; null: all of them, the layout's order), what to show (`next`
+   *  change, the `planning` link, the `away` button), `title`. */
+  let { only = null, next: showNext = true, planning = true, away: showAway = true, title = null } = $props();
+
+  const order = $derived(only ?? (home.config?.rooms ?? []).map((r) => r.name));
   const rooms = $derived(
     Object.values(hub.devices)
       .filter((d) => !hidden(d.id) && heatedRoom(d))
       .map((d) => ({ id: d.id, name: roomOf(d) ?? nameOf(d.id) }))
+      .filter((r) => !only || only.includes(r.name))
       .sort((a, b) => {
         const i = (n) => (order.includes(n) ? order.indexOf(n) : order.length);
         return i(a.name) - i(b.name) || a.name.localeCompare(b.name);
@@ -105,14 +111,15 @@
   }
 </script>
 
+{#if rooms.length}
 <section class="card heating">
   <div class="card-head">
-    <h2><Icon name="radiator" size={18} />{t('maison.accueil.chauffage.titre')}</h2>
+    <h2><Icon name="radiator" size={18} />{title ?? t('maison.accueil.chauffage.titre')}</h2>
     {#if away}
       <span class="chip cool">{t('maison.accueil.chauffage.en_absence')}</span>
     {:else if mode === 'hg'}
       <span class="chip cool">{t('maison.accueil.chauffage.maison_hors_gel')}</span>
-    {:else if nextText}
+    {:else if nextText && showNext}
       <span class="next">{nextText}</span>
     {/if}
   </div>
@@ -166,15 +173,18 @@
       </div>
     </div>
   {/if}
-  <div class="actions">
-    <a class="primary" href="#/chauffage">{t('maison.accueil.chauffage.voir_planning')}</a>
-    {#if homeDevice}
-      <button class="secondary" class:on={away} aria-pressed={away} disabled={pending(homeDevice.id, 'mode')} onclick={toggleAway}>
-        {away ? t('maison.accueil.chauffage.retour_planning') : t('maison.accueil.chauffage.mode_absence')}
-      </button>
-    {/if}
-  </div>
+  {#if planning || (homeDevice && showAway)}
+    <div class="actions">
+      {#if planning}<a class="primary" href="#/chauffage">{t('maison.accueil.chauffage.voir_planning')}</a>{/if}
+      {#if homeDevice && showAway}
+        <button class="secondary" class:on={away} aria-pressed={away} disabled={pending(homeDevice.id, 'mode')} onclick={toggleAway}>
+          {away ? t('maison.accueil.chauffage.retour_planning') : t('maison.accueil.chauffage.mode_absence')}
+        </button>
+      {/if}
+    </div>
+  {/if}
 </section>
+{/if}
 
 <style>
   .heating {

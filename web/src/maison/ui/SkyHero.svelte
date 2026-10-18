@@ -14,6 +14,10 @@
   import WeatherMap from './WeatherMap.svelte';
   import SkyDetail from './SkyDetail.svelte';
 
+  /** `map`: the living map behind the weather (the home page's
+   *  arrangement can leave it out, a lighter card). */
+  let { map = true } = $props();
+
   const out = $derived(home.config?.outdoor ?? {});
   const w = $derived(out.weather);
   const day = $derived(value(w, 'daylight') !== false);
@@ -52,8 +56,8 @@
   </div>
 
   {#if w}
-    <button class="sky" class:live={sky.map} onclick={() => (open = true)} aria-label={t('maison.meteo.ouvrir', { label: now.label })}>
-      {#if sky.map}
+    <button class="sky" class:live={sky.map && map} onclick={() => (open = true)} aria-label={t('maison.meteo.ouvrir', { label: now.label })}>
+      {#if sky.map && map}
         <span class="space" aria-hidden="true">
           <WeatherMap map={sky.map} {hour} tx={narrow ? 0.17 : 0.34} ty={0.5} />
         </span>

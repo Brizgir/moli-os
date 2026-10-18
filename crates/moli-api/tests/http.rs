@@ -1696,3 +1696,279 @@ async fn a_service_is_read_freely_and_changed_by_a_person_only() {
     .await;
     assert_eq!(status, 404);
 }
+
+/// The home page's arrangement: the house's by the owner (the code, while
+/// nobody owns the house), each person's own once signed in with the code,
+/// never another person's; a guest has none.
+#[tokio::test]
+#[allow(clippy::too_many_lines)]
+async fn the_home_page_is_arranged_by_the_owner_and_by_each_person() {
+    let dir = std::env::temp_dir().join(format!("moli-http-dashboard-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let hub = Hub::new(HubOptions {
+        secrets: Some((
+            dir.join("secrets.enc"),
+            moli_runtime::MasterKey::generate().unwrap(),
+        )),
+        ..HubOptions::default()
+    })
+    .unwrap();
+    let options = moli_api::Options {
+        ui_pin: Some(moli_api::UiPin::new("482915")),
+        home_path: Some(dir.join("home.json")),
+        ..moli_api::Options::default()
+    };
+    let addr = serve(&hub, &options).await;
+    let ui = "x-moli-origin: ui\r\n";
+    let layouts = |kind: &str| {
+        json!({ "default": {
+            "desktop": { "cards": [{ "id": "ab12", "type": kind, "size": "l" }] },
+            "phone": { "cards": [{ "id": "ab12", "type": kind }] }
+        } })
+    };
+
+    // Nobody: the house has no arrangement yet, and nothing can be changed.
+    let (status, body) = request(&addr, "GET", "/api/dashboard", None).await;
+    assert_eq!(status, 200, "{body}");
+    let seen: Json = serde_json::from_str(&body).unwrap();
+    assert_eq!(
+        seen,
+        json!({ "house": null, "mine": null, "can_edit_house": false, "can_edit_mine": false })
+    );
+    let (status, _) = request_with(
+        &addr,
+        "PUT",
+        "/api/dashboard/house",
+        Some(&layouts("music")),
+        ui,
+    )
+    .await;
+    assert_eq!(status, 403, "a header is not a person");
+
+    // The house's code, from the house, while nobody owns it: the house's.
+    let pin = pin_session(&addr, "482915").await;
+    let human = format!("{ui}{pin}");
+    let mut events = hub.subscribe();
+    let (status, body) = request_with(
+        &addr,
+        "PUT",
+        "/api/dashboard/house",
+        Some(&layouts("music")),
+        &human,
+    )
+    .await;
+    assert_eq!(status, 200, "{body}");
+    assert!(dir.join("dashboards.json").exists());
+    let event = tokio::time::timeout(Duration::from_millis(500), events.recv())
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        serde_json::to_value(&event).unwrap(),
+        json!({ "type": "dashboard_changed", "scope": "house" })
+    );
+    let (status, body) = request_with(
+        &addr,
+        "PUT",
+        "/api/dashboard/house",
+        Some(&json!({})),
+        &human,
+    )
+    .await;
+    assert_eq!(status, 422, "{body}");
+    let (status, body) = request_with(
+        &addr,
+        "PUT",
+        "/api/dashboard/me",
+        Some(&layouts("today")),
+        &human,
+    )
+    .await;
+    assert_eq!(status, 403, "the code names nobody: {body}");
+    let (_, body) = request_with(&addr, "GET", "/api/dashboard", None, &human).await;
+    let seen: Json = serde_json::from_str(&body).unwrap();
+    assert_eq!(
+        seen["house"]["default"]["desktop"]["cards"][0]["type"],
+        "music"
+    );
+    assert_eq!(seen["mine"], Json::Null);
+    assert_eq!(seen["can_edit_house"], true);
+    assert_eq!(seen["can_edit_mine"], false);
+
+    // The owner, signed in from the Internet with their password.
+    let outside = "X-Forwarded-For: 203.0.113.9\r\n";
+    let signed_in = |name: &str, role: &str, by: String| {
+        let addr = addr.clone();
+        let person = json!({ "name": name, "role": role });
+        async move {
+            let (status, body) =
+                request_with(&addr, "POST", "/api/people", Some(&person), &by).await;
+            assert_eq!(status, 201, "{body}");
+            let id = serde_json::from_str::<Json>(&body).unwrap()["id"]
+                .as_str()
+                .unwrap()
+                .to_owned();
+            let (status, body) = request_with(
+                &addr,
+                "POST",
+                &format!("/api/people/{id}/invite"),
+                None,
+                &by,
+            )
+            .await;
+            assert_eq!(status, 200, "{body}");
+            let code = serde_json::from_str::<Json>(&body).unwrap()["code"].clone();
+            let (status, cookie, body) = request_cookie(
+                &addr,
+                "POST",
+                "/api/invitation",
+                &json!({ "code": code, "password": "le jardin fleuri" }),
+                outside,
+                "moli_person",
+            )
+            .await;
+            assert_eq!(status, 200, "{body}");
+            (id, format!("{outside}Cookie: {}\r\n", cookie.unwrap()))
+        }
+    };
+    let (owner, me) = signed_in("Moi", "owner", human.clone()).await;
+    let (_, body) = request_with(&addr, "GET", "/api/dashboard", None, &me).await;
+    let seen: Json = serde_json::from_str(&body).unwrap();
+    assert_eq!(seen["can_edit_house"], true, "the owner: {body}");
+    assert_eq!(seen["can_edit_mine"], false, "without the code yet: {body}");
+    let (status, _) = request_with(
+        &addr,
+        "PUT",
+        "/api/dashboard/me",
+        Some(&layouts("today")),
+        &me,
+    )
+    .await;
+    assert_eq!(status, 403, "signed in, but the code not given");
+    let (status, cookie, body) = request_cookie(
+        &addr,
+        "POST",
+        "/api/session",
+        &json!({ "pin": "482915" }),
+        &me,
+        "moli_session",
+    )
+    .await;
+    assert_eq!(status, 200, "{body}");
+    let me = format!("{me}{ui}Cookie: {}\r\n", cookie.unwrap());
+    let mut events = hub.subscribe();
+    let (status, body) = request_with(
+        &addr,
+        "PUT",
+        "/api/dashboard/me",
+        Some(&layouts("today")),
+        &me,
+    )
+    .await;
+    assert_eq!(status, 200, "{body}");
+    let event = tokio::time::timeout(Duration::from_millis(500), events.recv())
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        serde_json::to_value(&event).unwrap(),
+        json!({ "type": "dashboard_changed", "scope": format!("person:{owner}") })
+    );
+    let (_, body) = request_with(&addr, "GET", "/api/dashboard", None, &me).await;
+    let seen: Json = serde_json::from_str(&body).unwrap();
+    assert_eq!(
+        seen["mine"]["default"]["desktop"]["cards"][0]["type"],
+        "today"
+    );
+    assert_eq!(
+        seen["house"]["default"]["desktop"]["cards"][0]["type"],
+        "music"
+    );
+    assert_eq!(seen["can_edit_mine"], true);
+
+    // A member: their own, never the house's, and nothing of the owner's.
+    let (member, sam) = signed_in("Sam", "member", me.clone()).await;
+    let (status, cookie, _) = request_cookie(
+        &addr,
+        "POST",
+        "/api/session",
+        &json!({ "pin": "482915" }),
+        &sam,
+        "moli_session",
+    )
+    .await;
+    assert_eq!(status, 200);
+    let sam = format!("{sam}{ui}Cookie: {}\r\n", cookie.unwrap());
+    let (status, _) = request_with(
+        &addr,
+        "PUT",
+        "/api/dashboard/house",
+        Some(&layouts("routines")),
+        &sam,
+    )
+    .await;
+    assert_eq!(status, 403, "a member does not change the house's");
+    let (status, body) = request_with(
+        &addr,
+        "PUT",
+        "/api/dashboard/me",
+        Some(&layouts("routines")),
+        &sam,
+    )
+    .await;
+    assert_eq!(status, 200, "{body}");
+    let (_, body) = request_with(&addr, "GET", "/api/dashboard", None, &sam).await;
+    let seen: Json = serde_json::from_str(&body).unwrap();
+    assert_eq!(
+        seen["mine"]["default"]["desktop"]["cards"][0]["type"],
+        "routines"
+    );
+    assert_eq!(
+        seen["house"]["default"]["desktop"]["cards"][0]["type"],
+        "music"
+    );
+    assert_eq!(seen["can_edit_house"], false);
+    assert!(!body.contains("today"), "nothing of the owner's: {body}");
+    let (status, _) = request_with(&addr, "DELETE", "/api/dashboard/me", None, &sam).await;
+    assert_eq!(status, 200);
+    let (_, body) = request_with(&addr, "GET", "/api/dashboard", None, &sam).await;
+    assert_eq!(
+        serde_json::from_str::<Json>(&body).unwrap()["mine"],
+        Json::Null
+    );
+    let (status, _) = request_with(
+        &addr,
+        "PUT",
+        "/api/dashboard/me",
+        Some(&layouts("routines")),
+        &sam,
+    )
+    .await;
+    assert_eq!(status, 200);
+    let (status, _) =
+        request_with(&addr, "DELETE", &format!("/api/people/{member}"), None, &me).await;
+    assert_eq!(status, 200);
+    let file: Json =
+        serde_json::from_str(&std::fs::read_to_string(dir.join("dashboards.json")).unwrap())
+            .unwrap();
+    assert_eq!(file["version"], 1);
+    assert_eq!(file["people"].get(&member), None, "gone with them: {file}");
+    assert!(file["people"][&owner].is_object());
+
+    // A guest sees no arrangement at all (the guard keeps them to their
+    // rooms' commands): the dashboard shows them the default.
+    let (_, guest) = signed_in("Invité", "guest", me.clone()).await;
+    let (status, body) = request_with(&addr, "GET", "/api/dashboard", None, &guest).await;
+    assert_eq!(status, 403, "{body}");
+    let (status, _) = request_with(
+        &addr,
+        "PUT",
+        "/api/dashboard/me",
+        Some(&layouts("music")),
+        &guest,
+    )
+    .await;
+    assert_eq!(status, 403);
+    let _ = std::fs::remove_dir_all(&dir);
+}

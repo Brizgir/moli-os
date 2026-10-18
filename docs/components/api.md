@@ -444,6 +444,11 @@ a pour membres toutes ses pièces : une pièce protégée retient l'ordre d'un a
 | PUT | `/api/home/rooms/{name}` | **session humaine** | `{ name?, icon?, aliases? }` (absent = inchangé ; `icon: ""` = sans icône) sur la pièce `{name}` (nom ou alias) ; une pièce que seuls les appareils nommaient est déclarée au passage. **Renommer** : les étiquettes `room` des appareils rangés dedans suivent (`labels.toml` réécrit, un `label_changed` et une ligne de journal par appareil), et l'ancien nom reste en alias (ce que Hue, Alexa ou le plan appellent ainsi y reste rangé). Réponse `200` = le fichier entier |
 | DELETE | `/api/home/rooms/{name}` | **session humaine** | retire la déclaration (les appareils gardent leurs étiquettes) ; `404` pas dans la liste |
 | PUT | `/api/home/pages` | **session humaine** | `{ "<page>": "auto" \| "always" \| "never" }` : les pages du menu famille montrées ou masquées, fusionnées dans `pages` de `data/home.json` (`auto` efface le choix ; plus aucun choix : plus de `pages`), le reste du fichier intact ; pages acceptées : `PAGES` de `home.rs` (= `PAGE_IDS` de `web/src/maison/lib/pages.js`) ; réponse `200` = le fichier entier ; `403` ; `422` page ou choix inconnu ; `503`. Puis `home_changed` |
+| GET | `/api/dashboard` | foyer | aucune | la disposition de l'accueil (`data/dashboards.json`, `crates/moli-api/src/dashboard.rs`) : `{ house, mine, can_edit_house, can_edit_mine }`, `house` et `mine` = l'ensemble des dispositions (`default` et les nommées, chacune `desktop` et `phone`) ou `null` ; jamais celles d'une autre personne ; un invité est refusé par la garde (`403`) et voit le défaut | |
+| PUT | `/api/dashboard/house` | **propriétaire** (même règle que `/api/people` : rôle `owner` connecté, propriétaire Access, ou le code depuis le foyer tant qu'aucun propriétaire ne peut se connecter) | l'ensemble des dispositions : `{ "default": { "desktop": { "cards": [ { id, type, size?, hidden?, title?, options? } ] }, "phone": … }, "<clé>": { "name", "desktop", "phone" } }` ; `default` obligatoire, 12 dispositions au plus, clés `[a-z0-9-]`, 60 cartes par écran, `id` `[a-z0-9]{4,16}` unique, `type` parmi `CARD_TYPES` de `dashboard.rs` (= `CARD_TYPES` de `web/src/maison/lib/layout.js` ; un type inconnu déjà dans le fichier est gardé), `size` `s`/`m`/`l` (`m` par défaut), titre ≤ 60, `options` ≤ 2 Ko ; corps ≤ 256 Ko ; écriture atomique ; réponse `{ layouts }` tel qu'écrit ; `403` ; `422` ; `503` pas de dossier. Puis `dashboard_changed` |
+| DELETE | `/api/dashboard/house` | **propriétaire** | oublie la disposition de la maison (l'accueil revient à la page de Moli) | |
+| PUT | `/api/dashboard/me` | **personne connectée** (`Caller.person`, pas un invité) **avec une session humaine** (le code) | même corps, pour la personne qui appelle ; `403` sans personne ou sans le code | |
+| DELETE | `/api/dashboard/me` | idem | oublie sa disposition ; une personne retirée (`DELETE /api/people/{id}`) perd la sienne avec elle | |
 
 Notifier un téléphone : `POST /api/command` sur `telephones:<id>/push` (texte : une ligne de titre, puis le message), ou le canal « telephone » d'un automatisme. Envoi par le service push d'Expo (jeton de l'appli), qui relaie vers Apple ou Google.
 
@@ -640,6 +645,7 @@ rend sa place.
 | `approval_resolved` | `id`, `decision` : `approved` \| `denied` \| `expired` | décision ou expiration |
 | `notice` | `notice` : `{title?, message, from?, ts}` (`from` = nom de l'automatisme) | message pour la maison (nœud `notify`, canal `maison`) |
 | `home_changed` | aucun | `data/home.json` vient d'être écrit (une pièce déclarée, renommée, retirée) : le tableau de bord relit `GET /api/home` |
+| `dashboard_changed` | `scope` : `house` ou `person:<id>` | `data/dashboards.json` vient d'être écrit (la disposition de l'accueil) : les tableaux de bord ouverts relisent `GET /api/dashboard` (jamais envoyé à un invité) |
 
 Exemple :
 

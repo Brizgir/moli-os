@@ -6,6 +6,9 @@
   import { t } from '../../lib/i18n.svelte.js';
   import Icon from './Icon.svelte';
 
+  /** `title`: the person's own, from the home page's arrangement. */
+  let { title = null } = $props();
+
   /** « Aujourd'hui »: the automations with a time of day, today, by time;
    *  those already past are ticked. Nothing timed today: no card. */
   onMount(useTimed);
@@ -21,7 +24,7 @@
 {#if list.length}
   <section class="card today">
     <div class="card-head">
-      <h2><Icon name="clock" size={18} />{t('maison.accueil.aujourdhui')}</h2>
+      <h2><Icon name="clock" size={18} />{title ?? t('maison.accueil.aujourdhui')}</h2>
       <a class="more" href="#/automatismes" aria-label={t('automatismes.routines.tous')}><Icon name="arrow-top-right" size={18} /></a>
     </div>
     <ul>

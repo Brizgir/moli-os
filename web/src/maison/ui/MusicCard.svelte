@@ -4,12 +4,18 @@
   import Icon from './Icon.svelte';
 
   /** The music at a glance: the speaker that plays (else the one paused,
-   *  else the first), play/pause in one tap, and how many there are. */
+   *  else the first), play/pause in one tap, and how many there are.
+   *  `device`: a chosen speaker instead (the home page's arrangement);
+   *  `title`: the person's own. */
+  let { device = null, title: heading = null } = $props();
+
   const speakers = $derived(Object.values(hub.devices).filter((d) => !hidden(d.id) && deviceKind(d) === 'speaker'));
   const singles = $derived(speakers.filter((d) => !speakerGroup(d)));
   const groups = $derived(speakers.filter(speakerGroup));
   const rank = { playing: 0, paused: 1, unknown: 2, stopped: 3 };
-  const main = $derived([...singles].sort((a, b) => rank[speakerState(a.id)] - rank[speakerState(b.id)])[0] ?? null);
+  const main = $derived(
+    (device && speakers.find((d) => d.id === device)) ?? [...singles].sort((a, b) => rank[speakerState(a.id)] - rank[speakerState(b.id)])[0] ?? null,
+  );
   const state = $derived(main ? speakerState(main.id) : 'stopped');
   const playing = $derived(state === 'playing');
   const title = $derived(main ? value(main.id, 'title') : null);
@@ -19,7 +25,7 @@
 {#if main}
   <section class="card music">
     <div class="card-head">
-      <h2><Icon name="speaker" size={18} />{t('maison.accueil.musique')}</h2>
+      <h2><Icon name="speaker" size={18} />{heading ?? t('maison.accueil.musique')}</h2>
       <a class="more" href="#/pieces" aria-label={t('maison.accueil.toutes_pieces')}><Icon name="arrow-top-right" size={18} /></a>
     </div>
     <div class="now">

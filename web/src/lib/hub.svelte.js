@@ -44,6 +44,14 @@ export function onHomeChanged(fn) {
   return () => layoutListeners.delete(fn);
 }
 
+/** Told when a home page's arrangement (`dashboards.json`) is written,
+ *  with its scope (`house`, `person:<id>`). */
+const dashboardListeners = new Set();
+export function onDashboardChanged(fn) {
+  dashboardListeners.add(fn);
+  return () => dashboardListeners.delete(fn);
+}
+
 function applySnapshot(snapshot) {
   const devices = {};
   for (const d of snapshot.devices) devices[d.id] = d;
@@ -113,6 +121,9 @@ function applyEvent(e) {
     }
     case 'home_changed':
       for (const fn of layoutListeners) fn();
+      break;
+    case 'dashboard_changed':
+      for (const fn of dashboardListeners) fn(e.scope);
       break;
   }
 }

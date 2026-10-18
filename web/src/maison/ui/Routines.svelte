@@ -5,6 +5,9 @@
   import { t, locale } from '../../lib/i18n.svelte.js';
   import Icon from './Icon.svelte';
 
+  /** `title`: the person's own, from the home page's arrangement. */
+  let { title = null } = $props();
+
   /** The routines: approved automations that only run when someone launches
    *  them (Home Assistant's scripts: « Dodo », « Départ »…). One tap each;
    *  an approved routine asks no code from the household's dashboard. */
@@ -57,7 +60,7 @@
 {#if list.length}
   <section class="card routines">
     <div class="card-head">
-      <h2><Icon name="hand" size={18} />{t('automatismes.routines.titre')}</h2>
+      <h2><Icon name="hand" size={18} />{title ?? t('automatismes.routines.titre')}</h2>
       <a class="more" href="#/automatismes" aria-label={t('automatismes.routines.tous')}><Icon name="arrow-top-right" size={18} /></a>
     </div>
     <div class="buttons">

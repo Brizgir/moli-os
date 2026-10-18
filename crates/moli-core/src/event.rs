@@ -50,6 +50,12 @@ pub enum Event {
     /// The dashboard's layout (`home.json`: rooms, favourites…) was written:
     /// the dashboards read it again.
     HomeChanged,
+    /// A home page's arrangement (`dashboards.json`) was written for
+    /// `scope` (`house`, or `person:<id>`): the dashboards showing it read
+    /// it again.
+    DashboardChanged {
+        scope: String,
+    },
 }
 
 /// A message shown in the dashboard.

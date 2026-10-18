@@ -187,6 +187,7 @@ pub(crate) async fn remove(
     Extension(humans): Extension<Arc<Sessions>>,
     Extension(persons): Persons,
     Extension(crate::phones::PhonesGate(phones)): Extension<crate::phones::PhonesGate>,
+    Extension(dashboards): Extension<crate::dashboard::DashboardStore>,
     caller: Caller,
     headers: axum::http::HeaderMap,
     Path(id): Path<String>,
@@ -196,6 +197,10 @@ pub(crate) async fn remove(
     }
     if let Err(r) = persons.remove(&id).await {
         return refused(r);
+    }
+    // Their home pages go too (a leftover would come back with their id).
+    if let Err(e) = dashboards.forget_person(&id).await {
+        tracing::warn!(person = id, error = %e, "home pages of a removed person not forgotten");
     }
     // Not forgotten (the disk): still refused, as nobody's of the house.
     if let Some(Err(e)) = phones.map(|gate| gate.forget(&id)) {

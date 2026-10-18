@@ -1,329 +1,195 @@
 <script>
   import { onMount } from 'svelte';
-  import { home, hub, value, device, isOn, clock, num, relative, lastSeen, roomList, lampsOf, nameOf, doorOpen, leak, lowBattery, act, pending, hidden, heatedRoom, ringing } from '../lib/home.svelte.js';
-  import { isPrinter, phase } from '../lib/printers.js';
-  import { t, locale } from '../../lib/i18n.svelte.js';
+  import { hub, home, note } from '../lib/home.svelte.js';
+  import { asHuman, CANCELLED } from '../lib/auto.svelte.js';
+  import { dashboard, startDashboard, loadDashboard, current, canEdit, beginEditing, draftCards } from '../lib/dashboard.svelte.js';
+  import { move, shift, update, setHidden, add, remove, duplicate, defaultLayout, SPAN } from '../lib/layout.js';
+  import { CARDS, cardLabel } from '../accueil/cards.js';
+  import { t } from '../../lib/i18n.svelte.js';
   import Icon from '../ui/Icon.svelte';
-  import LightTile from '../ui/LightTile.svelte';
-  import ClimateCard from '../ui/ClimateCard.svelte';
-  import EnergyCard from '../ui/EnergyCard.svelte';
-  import CameraTile from '../ui/CameraTile.svelte';
-  import AmbiancePicker from '../ui/AmbiancePicker.svelte';
-  import Routines from '../ui/Routines.svelte';
-  import SkyHero from '../ui/SkyHero.svelte';
-  import HeatingCard from '../ui/HeatingCard.svelte';
-  import DoorbellEvents from '../ui/DoorbellEvents.svelte';
-  import RingModes from '../ui/RingModes.svelte';
-  import MusicCard from '../ui/MusicCard.svelte';
-  import Today from '../ui/Today.svelte';
+  import Card from '../accueil/Card.svelte';
+  import Chrome from '../accueil/Chrome.svelte';
+  import Toolbar from '../accueil/Toolbar.svelte';
+  import CardSettings from '../accueil/CardSettings.svelte';
+  import Catalogue from '../accueil/Catalogue.svelte';
 
-  // A card shows only when what it tells exists here (a TV for the remote,
-  // a meter for the electricity, an air sensor for the air…): its code
-  // stays, its condition decides.
+  // The home page is a list of cards, arranged by the person (the house's
+  // arrangement, or their own; `dashboards.json`), laid out as a grid that
+  // packs densely: a card has a width (a third, two thirds, the row), never
+  // a position. Without any arrangement, the list is the page as it always
+  // was. Each card still shows only when what it tells exists here.
+  onMount(startDashboard);
 
-  const cfg = $derived(home.config ?? {});
-  // The climate section is named after what it lists: radiators and
-  // thermostats (a `heating` point), air conditioners, or both.
-  // A heated room (Netatmo) is the heating card's: here, the clims.
-  const clims = $derived((cfg.favorites?.climate ?? []).filter((c) => hub.devices[c.id] && !heatedRoom(hub.devices[c.id])));
-  const heaters = $derived(clims.map((c) => hub.devices[c.id]).map((d) => d.points.some((p) => p.key === 'heating')));
-  const heated = $derived(Object.values(hub.devices).some((d) => !hidden(d.id) && heatedRoom(d)));
-  const rings = $derived(Object.values(hub.devices).some((d) => !hidden(d.id) && ringing(d)));
-  const climateTitle = $derived(
-    heaters.length && heaters.every(Boolean) ? 'maison.accueil.chauffage' : heaters.some(Boolean) ? 'maison.accueil.temperature' : 'maison.accueil.clim',
-  );
-  const climateIcon = $derived(heaters.length && heaters.every(Boolean) ? 'radiator' : 'air-conditioner');
-  const out = $derived(cfg.outdoor ?? {});
+  const editing = $derived(!!dashboard.editing);
+  const phone = $derived(dashboard.screen === 'phone');
+  const resolved = $derived(current());
+  // While a card is dragged, the list follows the finger before it is kept.
+  let drag = $state(null);
+  const cards = $derived(drag?.cards ?? resolved.cards);
+  const shown = $derived(cards.filter((c) => !c.hidden));
+  const hiddenOnes = $derived(cards.filter((c) => c.hidden));
 
-  // The favourite lights; without any, one tile per room that has lights
-  // (its Hue room when it has one, else its lamps together).
-  const lights = $derived.by(() => {
-    if (cfg.favorites?.lights?.length) return cfg.favorites.lights;
-    return roomList()
-      .filter((r) => r.group || r.lights.length)
-      .map((r) => {
-        const first = r.group ?? r.lights[0];
-        return { id: first.id, name: r.name, icon: r.icon, also: r.lights.map((d) => d.id).filter((id) => id !== first.id) };
-      });
-  });
-  const litCount = $derived(lights.filter((l) => [l.id, ...(l.also ?? [])].some((i) => isOn(i))).length);
+  // The button shows to the household; a guest only looks.
+  const guest = $derived(hub.session?.person?.role === 'guest');
 
-  // Ambiances, room by room (the last room chosen is remembered here).
-  const moodRooms = $derived(roomList().map((r) => ({ name: r.name, lamps: lampsOf(r) })).filter((r) => r.lamps.length));
-  let moodPick = $state((() => {
+  /** « Modifier »: with the right already, at once; else the code is asked
+   *  (a person of the house), then the right is read again. */
+  async function edit() {
+    if (canEdit()) {
+      beginEditing();
+      return;
+    }
     try {
-      return localStorage.getItem('moli.mood-room');
-    } catch {
-      return null;
-    }
-  })());
-  const mood = $derived(moodRooms.find((r) => r.name === moodPick) ?? moodRooms.find((r) => r.name === 'Salon') ?? moodRooms[0]);
-  function pickRoom(name) {
-    moodPick = name;
-    try {
-      localStorage.setItem('moli.mood-room', name);
-    } catch {
-      /* remembered for this visit only */
+      await asHuman(t('maison.modifier.titre'), async () => {
+        await loadDashboard();
+        if (!canEdit()) throw new Error(t('maison.modifier.refuse'));
+      }, 'disposition');
+      beginEditing();
+    } catch (err) {
+      if (err.message !== CANCELLED) note(err.message, 'error');
     }
   }
 
-  // The house's mode (a helper, « Mode Maison »): one tap, like Home
-  // Assistant's mode buttons.
-  const modeDevice = $derived(Object.values(hub.devices).find((d) => d.id.endsWith(':mode_maison')));
-  const modes = $derived(modeDevice?.points.find((p) => p.key === 'state')?.kind.values ?? []);
-  const mode = $derived(modeDevice ? value(modeDevice.id, 'state') : null);
-  const MODE_ICON = { Normal: 'home', Nuit: 'moon', Absent: 'lock', Vacances: 'palm' };
-  /** A mode's name in the house's language (an unknown one shows as it is). */
-  function modeName(m) {
-    const key = `maison.accueil.mode.${String(m).toLowerCase()}`;
-    const word = t(key);
-    return word === key ? m : word;
-  }
-  function setMode(m) {
-    if (m !== mode) act(`${modeDevice.id}/state`, m, t('maison.accueil.mode_action', { mode: modeName(m) }));
+  // ---- changes to the draft ---------------------------------------------------------
+
+  let settings = $state(null); // the card being set
+  let catalogue = $state(false);
+
+  const change = (next) => draftCards(next);
+
+  function applySettings(id, patch) {
+    change(update(cards, id, patch));
+    settings = null;
   }
 
-  // The speakers that talk (announcements): one tap silences them all, for
-  // four hours at most (they speak again by themselves).
-  const talkers = $derived(Object.values(hub.devices).filter((d) => d.points.some((p) => p.key === 'quiet' && p.access?.write)));
-  const quiet = $derived(talkers.some((d) => value(d.id, 'quiet') === true));
-  const quietUntil = $derived(Math.max(0, ...talkers.map((d) => Number(value(d.id, 'quiet_until') ?? 0))));
-  function toggleQuiet() {
-    for (const d of talkers) act(`${d.id}/quiet`, !quiet, quiet ? t('maison.accueil.annonces_retablies') : t('maison.accueil.annonces_coupees'));
+  function addEntry(entry) {
+    const def = CARDS[entry.type];
+    change(add(cards, { type: entry.type, size: phone ? 'l' : def && ['room', 'speaker', 'diffuser', 'camera', 'printer', 'presence', 'assistant', 'machine'].includes(entry.type) ? 's' : 'm', options: { ...(def?.options?.() ?? {}), ...entry.options } }));
+    catalogue = false;
+    note(t('maison.modifier.ajoutee', { name: entry.label ?? t(def?.label ?? entry.type) }));
   }
 
-  // What deserves a word right now. Silence when all is well.
-  const notices = $derived.by(() => {
-    const list = [];
-    // Smoke and water from any sensor that knows it, not only the listed ones.
-    const all = Object.values(hub.devices);
-    for (const d of all) {
-      if (value(d.id, 'smoke') === true) list.push({ tone: 'alert', icon: 'fire', text: t('maison.accueil.fumee', { name: nameOf(d.id) }), href: '#/pieces' });
-      if (leak(d.id)) list.push({ tone: 'alert', icon: 'water', text: t('maison.accueil.fuite', { name: nameOf(d.id) }), href: '#/pieces' });
-    }
-    if (hub.approvals?.length) list.push({ tone: 'cool', icon: 'lock', text: t('maison.accueil.demandes', { count: hub.approvals.length }), href: '#/atelier' });
-    for (const door of cfg.doors ?? []) {
-      const d = device(door.id);
-      if (!d) continue;
-      if (doorOpen(door.id) === true) list.push({ tone: 'warm', icon: 'door-open', text: t('maison.accueil.porte_ouverte', { name: door.name }), href: '#/pieces' });
-    }
-    const bell = (cfg.favorites?.cameras ?? [])[0]?.id;
-    if (bell && value(bell, 'doorbell') === true) list.push({ tone: 'alert', icon: 'bell', text: t('maison.accueil.sonnette'), href: '#/cameras' });
-    if (bell && value(bell, 'person') === true) list.push({ tone: 'warm', icon: 'account', text: t('maison.accueil.quelquun'), href: '#/cameras' });
-    for (const p of Object.values(hub.devices).filter(isPrinter)) {
-      if (p.online === false) continue;
-      const st = phase(value(p.id, 'state'));
-      const left = value(p.id, 'remaining');
-      const pct = Math.round(Number(value(p.id, 'progress') ?? 0));
-      if (st === 'printing') {
-        const text =
-          typeof left === 'number'
-            ? t('maison.accueil.impression_fin', { name: nameOf(p.id), pct, time: clock(home.now + left * 60_000) })
-            : t('maison.accueil.impression', { name: nameOf(p.id), pct });
-        list.push({ tone: 'cool', icon: 'printer3d', text, href: '#/impression' });
-      } else if (st === 'paused') {
-        list.push({ tone: 'warm', icon: 'printer3d', text: t('maison.accueil.impression_pause', { name: nameOf(p.id), pct }), href: '#/impression' });
-      } else if (st === 'error') {
-        list.push({ tone: 'alert', icon: 'printer3d', text: t('maison.accueil.impression_erreur', { name: nameOf(p.id) }), href: '#/impression' });
-      }
-    }
-    if (value('energie:maison', 'over_budget') === true) {
-      const bill = value('energie:maison', 'bill_projection');
-      list.push({ tone: 'warm', icon: 'bolt', text: t('maison.accueil.facture', { bill: num(bill) }), href: '#/energie' });
-    }
-    // A dead battery takes its sensor offline: count it all the same.
-    const flat = all.filter((d) => lowBattery(d.id));
-    if (flat.length) {
-      const text =
-        flat.length <= 3
-          ? t('maison.accueil.piles_liste', { count: flat.length, names: flat.map((d) => nameOf(d.id)).join(', ') })
-          : t('maison.accueil.piles', { count: flat.length });
-      list.push({ tone: 'cool', icon: 'alert', text, href: '#/pieces' });
-    }
-    if (out.pool && value(out.pool, 'action_required') === true) list.push({ tone: 'cool', icon: 'pool', text: t('maison.accueil.piscine_oeil'), href: '#/dehors' });
-    return list;
-  });
+  function reset() {
+    change(defaultLayout(dashboard.screen).cards);
+  }
 
-  // What keeps running: the services (drivers) whose devices answer.
-  const services = $derived(new Set(Object.values(hub.devices).filter((d) => d.online !== false).map((d) => d.instance)).size);
+  // ---- dragging a card by its handle (mouse or finger) ------------------------------
 
-  const tv = $derived(cfg.salon?.tv);
-  const speaker = $derived(cfg.salon?.speaker);
-  const tvOn = $derived(value(tv, 'power') === true);
-  const playing = $derived(value(speaker, 'playing') === true);
-  const aqi = $derived(value(out.air, 'aqi'));
-  const aqiWord = $derived(
-    aqi == null
-      ? '—'
-      : aqi <= 20
-        ? t('maison.air.tres_bon')
-        : aqi <= 40
-          ? t('maison.air.bon')
-          : aqi <= 60
-            ? t('maison.air.moyen')
-            : aqi <= 80
-              ? t('maison.air.mediocre')
-              : t('maison.air.mauvais'),
-  );
-  // The door: the layout's first camera, else a doorbell with an image
-  // (Ring): on battery, its last image, a touch asks a fresh one.
-  const bell = $derived.by(() => {
-    const listed = (cfg.favorites?.cameras ?? [])[0];
-    if (listed) return listed;
-    const d = Object.values(hub.devices).find((d) => d.camera && !hidden(d.id) && d.points.some((p) => p.key === 'doorbell'));
-    return d ? { id: d.id, name: nameOf(d.id), battery: d.points.some((p) => p.key === 'battery') } : undefined;
-  });
-  const humidity = $derived(value(out.weather, 'humidity'));
-  const poolTemp = $derived(value(out.pool, 'temperature'));
-  const uv = $derived(value(out.air, 'uv_index'));
-  // The outside card sums up the air and the pool: without them, the sky
-  // above says the rest.
-  const outside = $derived(aqi != null || uv != null || poolTemp != null);
+  function dragStart(id, e) {
+    if (e.button != null && e.button !== 0) return;
+    e.preventDefault();
+    drag = { id, cards: cards.slice(), y: e.clientY };
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+    window.addEventListener('pointermove', dragMove);
+    window.addEventListener('pointerup', dragEnd);
+    window.addEventListener('pointercancel', dragEnd);
+  }
 
-  // The last real passage at the door (the history knows; the live value
-  // is refreshed every few seconds whatever happens).
-  let passage = $state(null);
-  onMount(() => {
-    const refresh = () => bell && lastSeen(bell.id).then((ts) => (passage = ts));
-    const t = setInterval(refresh, 120_000);
-    return () => clearInterval(t);
-  });
-  $effect(() => {
-    if (bell) lastSeen(bell.id).then((ts) => (passage = ts));
-  });
+  function dragMove(e) {
+    if (!drag) return;
+    drag.y = e.clientY;
+    // Near an edge of the window, the page scrolls along.
+    const edge = 72;
+    if (e.clientY < edge) window.scrollBy(0, -14);
+    else if (e.clientY > window.innerHeight - edge) window.scrollBy(0, 14);
+    const over = document.elementsFromPoint(e.clientX, e.clientY).find((el) => el.dataset?.card && el.dataset.card !== drag.id);
+    if (!over) return;
+    const from = drag.cards.findIndex((c) => c.id === drag.id);
+    const to = drag.cards.findIndex((c) => c.id === over.dataset.card);
+    if (from >= 0 && to >= 0) drag.cards = move(drag.cards, from, to);
+  }
+
+  function dragEnd() {
+    window.removeEventListener('pointermove', dragMove);
+    window.removeEventListener('pointerup', dragEnd);
+    window.removeEventListener('pointercancel', dragEnd);
+    if (!drag) return;
+    const moved = drag.cards;
+    const was = resolved.cards;
+    drag = null;
+    if (moved.some((c, i) => c.id !== was[i]?.id)) change(moved);
+  }
+
+  const span = (card) => (phone ? 1 : (SPAN[card.size] ?? 2));
 </script>
 
-<div class="accueil">
-  <SkyHero />
-
-  {#if modes.length}
-    <div class="modes" role="radiogroup" aria-label={t('maison.accueil.mode_maison')}>
-      {#each modes as m (m)}
-        <button role="radio" aria-checked={m === mode} class:on={m === mode} disabled={pending(modeDevice.id, 'state')} onclick={() => setMode(m)}>
-          <Icon name={MODE_ICON[m] ?? 'home'} size={16} />{modeName(m)}
-        </button>
-      {/each}
-      {#if talkers.length}
-        <span class="sep" aria-hidden="true"></span>
-        <button class="hush" class:on={quiet} aria-pressed={quiet} onclick={toggleQuiet} title={quiet ? t('maison.accueil.sonos_reparle') : t('maison.accueil.sonos_coupe')}>
-          <Icon name={quiet ? 'volume-off' : 'speaker'} size={16} />{quiet && quietUntil ? t('maison.accueil.sonos_muette_jusqua', { time: new Date(quietUntil).toLocaleTimeString(locale(), { hour: '2-digit', minute: '2-digit' }) }) : t('maison.accueil.sonos_muette')}
-        </button>
-      {/if}
+<div class="accueil" class:editing>
+  {#if editing}
+    <Toolbar ondefault={reset} oncatalogue={() => (catalogue = true)} />
+  {:else if !guest}
+    <div class="edit-row">
+      <button class="edit" onclick={edit} aria-label={t('maison.modifier.bouton')} title={t('maison.modifier.bouton')}>
+        <Icon name="pencil" size={18} /><span>{t('maison.modifier.bouton')}</span>
+      </button>
     </div>
   {/if}
 
-  {#if notices.length}
-    <section class="notices" aria-label={t('maison.accueil.a_savoir')}>
-      {#each notices as n (n.text)}
-        <a class="chip {n.tone}" href={n.href}><Icon name={n.icon} size={16} />{n.text}</a>
-      {/each}
-    </section>
-  {:else}
-    <section class="all-good" aria-label={t('maison.accueil.a_savoir')}>
-      <Icon name="ok" size={20} />
-      <span>{services ? t('maison.accueil.tout_va_bien', { count: services }) : t('maison.accueil.tout_va_bien_court')}</span>
-    </section>
-  {/if}
-
-  <!-- Two columns: what the house does (heating, lights, clims…) and, beside
-       it, the door, the music, the day. Cards come and go with the house. -->
-  <div class="grid">
-    <div class="main">
-      {#if heated}
-        <div class="heating"><HeatingCard /></div>
-      {/if}
-
-      {#if lights.length || mood}
-        <section class="card lights">
-          <div class="card-head">
-            <h2><Icon name="light" size={18} />{t('maison.accueil.lumieres')} <span class="count">{litCount ? t('maison.accueil.allumees', { count: litCount }) : t('maison.accueil.tout_eteint')}</span></h2>
-            <a class="more" href="#/pieces" aria-label={t('maison.accueil.toutes_pieces')}><Icon name="arrow-top-right" size={18} /></a>
-          </div>
-          <div class="tiles">
-            {#each lights as l (l.id)}
-              <LightTile id={l.id} name={l.name} icon={l.icon} also={l.also ?? []} />
-            {/each}
-          </div>
-          {#if mood}
-            <div class="moods">
-              <div class="moods-head">
-                <span class="moods-title"><Icon name="palette" size={16} />{t('maison.accueil.ambiance')}</span>
-                <div class="rooms" role="group" aria-label={t('maison.accueil.piece')}>
-                  {#each moodRooms as r (r.name)}
-                    <button class:on={r.name === mood.name} onclick={() => pickRoom(r.name)} aria-pressed={r.name === mood.name}>{r.name}</button>
-                  {/each}
-                </div>
-              </div>
-              <AmbiancePicker lights={mood.lamps} label={mood.name} />
+  <div class="grid" class:editing>
+    {#each shown as card, i (card.id)}
+      {#if editing}
+        <div class="slot edit s{span(card)}" class:dragging={drag?.id === card.id} data-card={card.id}>
+          <Chrome
+            {card}
+            first={i === 0}
+            last={i === shown.length - 1}
+            {phone}
+            ondrag={(e) => dragStart(card.id, e)}
+            onsize={(size) => change(update(cards, card.id, { size }))}
+            onhide={() => change(setHidden(cards, card.id, true))}
+            onsettings={() => (settings = card.id)}
+            onshift={(delta) => change(shift(cards, card.id, delta))}
+          />
+          {#if CARDS[card.type]}
+            <div class="preview" aria-hidden="true" inert>
+              <Card {card} screen={dashboard.screen} />
             </div>
           {/if}
-        </section>
-      {/if}
-
-      {#if clims.length}
-        <section class="card climate">
-          <div class="card-head"><h2><Icon name={climateIcon} size={18} />{t(climateTitle)}</h2></div>
-          <div class="clims">
-            {#each clims as c (c.id)}
-              <ClimateCard id={c.id} name={c.name} />
-            {/each}
-          </div>
-        </section>
-      {/if}
-
-      {#if tv}
-        <a class="card remote" href="#/salon">
-          <span class="tv-object" aria-hidden="true">
-            <span class="screen" class:lit={tvOn}></span>
-            <span class="stand"></span>
-          </span>
-          <span class="remote-text">
-            <strong>{t('maison.accueil.telecommande')}</strong>
-            <span class="muted">{tvOn ? t('maison.accueil.tele_allumee') : t('maison.accueil.tele_veille')}{playing ? ` · ${t('maison.accueil.son_joue')}` : ''}</span>
-          </span>
-          <span class="go"><Icon name="arrow-top-right" size={20} /></span>
-        </a>
-      {/if}
-
-      {#if outside}
-        <a class="card outside" href="#/dehors">
-          <div class="card-head"><h2><Icon name="flower-outline" size={18} />{t('maison.accueil.dehors')}</h2><span class="more" aria-hidden="true"><Icon name="arrow-top-right" size={18} /></span></div>
-          <div class="facts">
-            {#if aqi != null}<div><small>{t('maison.accueil.air')}</small><b>{aqiWord}</b></div>{/if}
-            {#if uv != null}<div><small>UV</small><b class="num">{num(uv, 0)}</b></div>{/if}
-            {#if humidity != null}<div><small>{t('maison.accueil.humidite')}</small><b class="num">{`${num(humidity)} %`}</b></div>{/if}
-            {#if poolTemp != null}<div><small>{t('maison.accueil.piscine')}</small><b class="num">{`${num(poolTemp, 1)}°`}</b></div>{/if}
-          </div>
-        </a>
-      {/if}
-    </div>
-
-    <div class="side">
-      {#if bell}
-        <section class="card doorbell">
-          <div class="card-head">
-            <h2><Icon name="bell" size={18} />{t('maison.accueil.devant_porte')}</h2>
-            <a class="more" href="#/cameras" aria-label={t('maison.accueil.toutes_cameras')}><Icon name="arrow-top-right" size={18} /></a>
-          </div>
-          <CameraTile id={bell.id} name={bell.name} refresh={bell.battery ? 0 : 15} battery={!!bell.battery} />
-          <p class="muted small">{passage ? t('maison.accueil.dernier_passage', { when: relative(passage, home.now) }) : t('maison.accueil.personne')}</p>
-          <RingModes compact />
-        </section>
-      {:else if rings}
-        <div class="doorbell"><DoorbellEvents /><RingModes compact /></div>
+        </div>
       {:else}
-        <RingModes />
+        <div class="slot s{span(card)}">
+          <Card {card} screen={dashboard.screen} />
+        </div>
       {/if}
-
-      <MusicCard />
-      <Today />
-      {#if home.energy?.available}
-        <EnergyCard />
-      {/if}
-      <Routines />
-    </div>
+    {/each}
   </div>
+
+  {#if editing}
+    <section class="hidden-tray" aria-label={t('maison.modifier.masquees')}>
+      <h2>{hiddenOnes.length ? t('maison.modifier.masquees_aide') : t('maison.modifier.masquees_aucune')}</h2>
+      {#if hiddenOnes.length}
+        <div class="chips">
+          {#each hiddenOnes as card (card.id)}
+            <button onclick={() => change(setHidden(cards, card.id, false))}><Icon name="plus" size={16} />{cardLabel(card)}</button>
+          {/each}
+        </div>
+      {/if}
+    </section>
+  {/if}
 </div>
+
+{#if settings}
+  {@const card = cards.find((c) => c.id === settings)}
+  {#if card}
+    <CardSettings
+      {card}
+      {phone}
+      onclose={() => (settings = null)}
+      onapply={(patch) => applySettings(card.id, patch)}
+      onduplicate={() => {
+        change(duplicate(cards, card.id));
+        settings = null;
+      }}
+      onremove={() => {
+        change(remove(cards, card.id));
+        settings = null;
+      }}
+    />
+  {/if}
+{/if}
+
+{#if catalogue}
+  <Catalogue {cards} onadd={addEntry} onclose={() => (catalogue = false)} />
+{/if}
 
 <style>
   .accueil {
@@ -331,301 +197,186 @@
     gap: 22px;
   }
 
-  .modes {
+  .edit-row {
     display: flex;
+    justify-content: flex-end;
+    margin-bottom: -14px;
+  }
+
+  .edit {
+    display: inline-flex;
+    align-items: center;
     gap: 8px;
-    overflow-x: auto;
-    scrollbar-width: none;
+    min-height: 44px;
+    padding: 0 16px;
+    border: 0;
+    border-radius: 18px;
+    background: var(--surface);
+    color: var(--ink-2);
+    font: inherit;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: var(--shadow);
+  }
+
+  /* Three columns that pack densely: a card spans a third, two thirds or
+     the row, and the next small one fills what is left. */
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-auto-flow: dense;
+    gap: 20px;
+    align-items: start;
+  }
+
+  /* A slot is nothing by itself: its card (when it shows) is the grid's
+     item, so a silent card leaves no hole. */
+  .slot {
+    display: contents;
+  }
+
+  .slot > :global(*) {
+    min-width: 0;
+    margin-top: 0;
+  }
+
+  .slot.s1 > :global(*) {
+    grid-column: span 1;
+  }
+
+  .slot.s2 > :global(*) {
+    grid-column: span 2;
+  }
+
+  .slot.s3 > :global(*) {
+    grid-column: span 3;
+  }
+
+  /* While changing: the slot is the item, with the card's handle and a
+     glimpse of it. */
+  .slot.edit {
+    display: grid;
+    gap: 10px;
+    padding: 12px 14px;
+    border-radius: var(--r-lg);
+    background: var(--surface);
+    outline: 2px dashed var(--line);
+    outline-offset: -2px;
     min-width: 0;
   }
 
-  .modes button {
-    flex: none;
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    border: 0;
-    border-radius: 999px;
-    padding: 8px 14px;
-    font: inherit;
+  .slot.edit.s1 {
+    grid-column: span 1;
+  }
+
+  .slot.edit.s2 {
+    grid-column: span 2;
+  }
+
+  .slot.edit.s3 {
+    grid-column: span 3;
+  }
+
+  .slot.edit > :global(*) {
+    grid-column: auto;
+  }
+
+  .slot.dragging {
+    outline: 3px solid var(--warm);
+    box-shadow: var(--shadow-lift);
+    z-index: 2;
+  }
+
+  .preview {
+    max-height: 150px;
+    overflow: hidden;
+    opacity: 0.55;
+    pointer-events: none;
+    mask-image: linear-gradient(#000 55%, transparent);
+    border-radius: var(--r-md);
+  }
+
+  .preview > :global(*) {
+    margin-top: 0;
+  }
+
+  .hidden-tray {
+    display: grid;
+    gap: 10px;
+  }
+
+  .hidden-tray h2 {
+    margin: 0;
     font-size: 14px;
-    font-weight: 650;
-    background: var(--surface-2);
+    font-weight: 700;
     color: var(--ink-3);
-    cursor: pointer;
   }
 
-  .modes button.on {
-    background: var(--warm-soft);
-    color: var(--warm-ink);
-  }
-
-  .modes .sep {
-    flex: none;
-    width: 1px;
-    margin: 6px 4px;
-    background: var(--line, color-mix(in srgb, var(--ink) 14%, transparent));
-  }
-
-  .modes button.hush.on {
-    background: color-mix(in srgb, var(--alert) 16%, var(--surface-2));
-    color: var(--alert);
-  }
-
-  .notices {
+  .chips {
     display: flex;
     flex-wrap: wrap;
     gap: 10px;
   }
 
-  .notices a {
-    text-decoration: none;
-  }
-
-  .notices .chip {
-    padding: 9px 14px;
-    font-size: 14px;
-  }
-
-  /* « Tout va bien »: in place of the alerts, when there are none. */
-  .all-good {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 14px 18px;
-    border-radius: 16px;
-    background: var(--good-soft);
-    color: var(--good);
-    font-weight: 600;
-  }
-
-  .grid {
-    display: grid;
-    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
-    gap: 20px;
-    align-items: start;
-  }
-
-  .main,
-  .side {
-    display: grid;
-    gap: 20px;
-    min-width: 0;
-  }
-
-  /* The clims, the remote, the outside: side by side under the lights. */
-  .main {
-    grid-template-columns: repeat(12, minmax(0, 1fr));
-    align-items: start;
-  }
-
-  .heating,
-  .lights,
-  .climate {
-    grid-column: span 12;
-  }
-
-  .remote,
-  .outside {
-    grid-column: span 6;
-  }
-
-  /* Routines keeps its own margin elsewhere: here the column's gap. */
-  .side :global(.card) {
-    margin-top: 0;
-  }
-
-  .moods {
-    grid-template-columns: minmax(0, 1fr);
-    margin-top: 18px;
-    padding-top: 16px;
-    border-top: 1px solid var(--line);
-    display: grid;
-    gap: 12px;
-  }
-
-  .moods-head {
-    min-width: 0;
-    display: flex;
-    align-items: center;
-    gap: 10px 14px;
-    flex-wrap: wrap;
-  }
-
-  .moods-title {
+  .chips button {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
-    font-weight: 700;
-    font-size: 14px;
-  }
-
-  .rooms {
-    display: flex;
-    gap: 6px;
-    overflow-x: auto;
-    scrollbar-width: none;
-    min-width: 0;
-    flex: 1;
-  }
-
-  .rooms button {
-    flex: none;
-    border: 0;
-    border-radius: 999px;
-    padding: 6px 12px;
+    gap: 8px;
+    min-height: 44px;
+    padding: 0 16px;
+    border: 1px dashed var(--ink-3);
+    border-radius: 14px;
+    background: transparent;
+    color: var(--ink-2);
     font: inherit;
-    font-size: 13px;
-    font-weight: 650;
-    background: var(--surface-2);
-    color: var(--ink-3);
+    font-size: 14px;
+    font-weight: 600;
     cursor: pointer;
   }
 
-  .rooms button.on {
-    background: var(--warm-soft);
-    color: var(--warm-ink);
-  }
-
-  .count {
-    font-weight: 550;
-    color: var(--ink-3);
-    margin-left: 4px;
-  }
-
-  .tiles {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 12px;
-  }
-
-  .clims {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 12px;
-  }
-
-  .small {
-    font-size: 13px;
-    margin-top: 10px;
-  }
-
-  .remote {
-    display: grid;
-    grid-template-columns: 1fr auto;
-    gap: 14px;
-    color: inherit;
-    text-decoration: none;
-    min-height: 168px;
-    align-content: space-between;
-    transition: transform 0.2s var(--ease);
-  }
-
-  .remote:hover,
-  .outside:hover {
-    transform: translateY(-2px);
-  }
-
-  .tv-object {
-    grid-column: 1 / -1;
-    display: grid;
-    justify-items: center;
-  }
-
-  .screen {
-    width: 96px;
-    height: 56px;
-    border-radius: 8px;
-    background: #171c28;
-    box-shadow: inset 0 0 0 3px #2a3142;
-    transition: background 0.4s;
-  }
-
-  .screen.lit {
-    background: linear-gradient(135deg, #5fb4f0, #8f8cf5 55%, #f0a53a);
-    box-shadow: inset 0 0 0 3px #2a3142, 0 8px 26px -6px #8f8cf5aa;
-  }
-
-  .stand {
-    width: 30px;
-    height: 6px;
-    border-radius: 0 0 6px 6px;
-    background: #2a3142;
-  }
-
-  .remote-text {
-    display: grid;
-  }
-
-  .remote-text strong {
-    font-size: 18px;
-  }
-
-  .remote-text span {
-    font-size: 13px;
-  }
-
-  .go {
-    align-self: end;
-    width: 36px;
-    height: 36px;
-    border-radius: 50%;
-    background: var(--surface-2);
-    display: grid;
-    place-items: center;
-    color: var(--ink-2);
-  }
-
-  .outside {
-    color: inherit;
-    text-decoration: none;
-    transition: transform 0.2s var(--ease);
-  }
-
-  .facts {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 8px;
-  }
-
-  .facts small {
-    display: block;
-    font-size: 11px;
-    color: var(--ink-3);
-    font-weight: 650;
-  }
-
-  .facts b {
-    font-size: 17px;
-    font-weight: 650;
-  }
-
-  @media (max-width: 1180px) {
+  @media (max-width: 1179.98px) {
     .grid {
-      grid-template-columns: minmax(0, 1fr);
+      grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
-    .side {
-      grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
+    .slot.s3 > :global(*),
+    .slot.edit.s3,
+    .slot.edit.s2 {
+      grid-column: span 2;
+    }
+
+    .slot.edit.s3 > :global(*),
+    .slot.edit.s2 > :global(*) {
+      grid-column: auto;
     }
   }
 
   @media (max-width: 767.98px) {
-    .all-good {
-      padding: 12px 14px;
-      font-size: 15px;
+    .grid {
+      grid-template-columns: minmax(0, 1fr);
+      gap: 16px;
     }
 
-    .main > * {
-      grid-column: span 12 !important;
+    .slot > :global(*),
+    .slot.edit {
+      grid-column: span 1 !important;
     }
 
-    .tiles {
-      grid-template-columns: 1fr 1fr;
+    .slot.edit > :global(*) {
+      grid-column: auto !important;
     }
 
-    .clims {
-      grid-template-columns: 1fr;
+    .preview {
+      display: none;
+    }
+
+    .edit span {
+      display: none;
+    }
+
+    .edit {
+      padding: 0 13px;
     }
   }
 </style>

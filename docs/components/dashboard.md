@@ -14,7 +14,7 @@ Le flux SSE `/api/events` est ouvert **une seule fois** et partagé (`web/src/li
 
 | Page | Route | Contenu |
 |---|---|---|
-| Accueil | `#/` | date, salut, heure, météo ; alertes seulement quand il y a un souci (fumée, eau, portes, sonnette, piscine, approbations) ; lumières favorites, et dessous **Ambiance** : le choix de la pièce (pastilles, la dernière choisie est retenue sur l'appareil) et le bandeau d'ambiances ; électricité (jauge du jour vs hier, et à côté la jauge **en direct** du Linky sur l'abonnement, `[energy.live]` : sa couleur dit combien on tire, pas la distance à l'abonnement, verte au calme, orange dès `warn` (par exemple 2 kVA), rouge au double ; mot « calme / modérée / soutenue / forte ») ; clims (cadran **tactile** : on fait glisser le doigt sur l'anneau pour la consigne, le point gris = la température de la pièce, la perle = la consigne, visibles même clim éteinte ; une consigne glissée clim éteinte part tout de suite et la clim démarre dessus ; marche/arrêt, consigne ± 0,5 °C regroupée en un seul ordre, mode, dès que le profil sait écrire) ; sonnette (image + dernier passage réel, lu dans l'historique) ; télécommande ; dehors en bref **Mise à jour du 7 oct.** : une tuile de lumière peut en commander plusieurs (`favorites.lights[].also` : par exemple une pièce et son couloir) ; Électricité : les plus gros consommateurs du moment en légende ; Climatisation : coût du jour et du mois par clim (compteur de son circuit, sinon « coût non mesuré ») ; Dehors : l'humidité à la place de la couleur Tempo. |
+| Accueil | `#/` | **une liste de cartes que chacun dispose à sa main** (bouton Modifier, voir « Disposer l'accueil soi-même ») ; par défaut : date, salut, heure, météo ; alertes seulement quand il y a un souci (fumée, eau, portes, sonnette, piscine, approbations) ; lumières favorites, et dessous **Ambiance** : le choix de la pièce (pastilles, la dernière choisie est retenue sur l'appareil) et le bandeau d'ambiances ; électricité (jauge du jour vs hier, et à côté la jauge **en direct** du Linky sur l'abonnement, `[energy.live]` : sa couleur dit combien on tire, pas la distance à l'abonnement, verte au calme, orange dès `warn` (par exemple 2 kVA), rouge au double ; mot « calme / modérée / soutenue / forte ») ; clims (cadran **tactile** : on fait glisser le doigt sur l'anneau pour la consigne, le point gris = la température de la pièce, la perle = la consigne, visibles même clim éteinte ; une consigne glissée clim éteinte part tout de suite et la clim démarre dessus ; marche/arrêt, consigne ± 0,5 °C regroupée en un seul ordre, mode, dès que le profil sait écrire) ; sonnette (image + dernier passage réel, lu dans l'historique) ; télécommande ; dehors en bref **Mise à jour du 7 oct.** : une tuile de lumière peut en commander plusieurs (`favorites.lights[].also` : par exemple une pièce et son couloir) ; Électricité : les plus gros consommateurs du moment en légende ; Climatisation : coût du jour et du mois par clim (compteur de son circuit, sinon « coût non mesuré ») ; Dehors : l'humidité à la place de la couleur Tempo. |
 | Moli | `#/moli` | l'assistant plein écran : la conversation à gauche, **l'écran se compose** à droite avec les cartes choisies par Moli (voir [moli.md](moli.md)) |
 | Salon | `#/salon` | télécommande porcelaine (touches ou **pavé tactile** : glisser = flèches, toucher = OK ; clavier), « à l'écran », barre de son, Ambilight, lampes |
 | Pièces | `#/pieces` | une carte par pièce : groupe Hue, lampes (curseur de luminosité ; lampe couleur : pastille qui ouvre une palette, trois blancs par température et huit couleurs + « autre couleur » ; en mode couleur l'ampoule de la tuile prend la teinte ; la tuile « Toute la pièce » a la même palette, appliquée à chaque lampe de la pièce qui sait la prendre) ; bouton **Ambiances** : un bandeau (Feu de cheminée, Bougies, Fin de journée, Cocooning, Fête, Océan, Forêt, Aurore boréale, Romantique, Cinéma, Lecture, Veilleuse), aussi sur la page Salon, volets, clims, prises, médias, capteurs en pastilles ; « Protégée » sur les chambres ; « Tout éteindre » **Depuis le 7 oct., cartes compactes** (`ui/RoomCard.svelte`) : en-tête = température de la pièce (moyenne de ses sondes et clims, jauge froid → chaud), ambiances (pastille), petit interrupteur de toutes ses lumières (jamais télé ni prises) ; lumières, télé, enceinte, prises en petites pastilles côte à côte, icônes parlantes (suspension, spot, lampe, ventilateur, prise…), ⚙ pour les réglages d'une lampe (luminosité, couleurs, ampoule par ampoule, ventilateur) ; une clim sur une ligne (le cadran au toucher) ; affichage « Aa » (noms) ou icônes seules, retenu par appareil (`pieces-look`). **Enceintes (17 oct.)** : un appui sur la pastille d'une enceinte (Sonos, Echo) ouvre sa carte sur place (`ui/SpeakerCard.svelte`, `inline`), comme le ⚙ d'une lampe : ce qui joue (titre, artiste), lecture/pause (`playing`), volume et sourdine si l'enceinte les a, et un champ « Mets… » (`play` : un genre, un artiste, une radio) / « Dis… » (`say`, 250 caractères) pour celles qui prennent des mots ; plusieurs enceintes par pièce, une carte à la fois. La pastille dit « En lecture », « En pause » (`state` `paused` d'Alexa ou `paused_playback` de Sonos, `speakerState`) ou « À l'arrêt ». Un groupe multi-pièces Alexa (« Partout ») est une enceinte sans volume (`speakerGroup`, icône à plusieurs enceintes) ; les enceintes et groupes sans pièce sont réunis dans une carte « Toute la maison » en bas de la page (`roamingSpeakers`). « Le son de la télé » n'est dit que par l'enceinte `salon.speaker` (la barre de son). |
@@ -109,6 +109,56 @@ test.
   « sans thermomètre » dans la ligne d'état d'une pièce qui n'en a pas ; une pièce protégée
   dit « Protégée : un automatisme ou Moli y attend ton code » ; une carte en pointillés
   **« Nouvelle pièce »** en fin de liste ouvre la fiche (`ui/RoomForm.svelte`).
+
+## Disposer l'accueil soi-même : `data/dashboards.json`
+
+**Pour la famille.** Sur l'accueil, le bouton **Modifier** (crayon, en haut à droite) ouvre
+le mode de modification sur la page même, au doigt comme à la souris. Chaque carte montre
+alors sa poignée : la prendre pour la déplacer (ou les flèches ▲▼), choisir sa largeur
+**S / M / L** (un tiers, deux tiers, toute la rangée ; sur téléphone une colonne, la taille
+règle ce que la carte dit), l'œil la **masque** (elle reste en bas, un appui la remet), la
+roue ouvre ses **réglages** : titre, taille, ce qu'elle affiche (par exemple les pièces de la
+carte Chauffage et leur ordre, les tuiles de lumières, la caméra de la sonnette, les faits de
+Dehors), **Dupliquer**, **Retirer**. **Ajouter** ouvre le catalogue de ce que la maison
+expose : ses pièces, ses enceintes, diffuseurs, caméras, imprimantes, et les cartes de la
+maison (présence, assistant, électricité, état de la machine…) ; ce qui est déjà là le dit.
+**Défaire** annule la dernière action, **Par défaut** remet la page de Moli dans le
+brouillon, rien n'est enregistré avant **Terminé** (le code est demandé une fois) ;
+**Abandonner** jette le brouillon. Deux dispositions par appareil, **grand écran** (≥ 768 px)
+et **téléphone**, choisies par la largeur et modifiées chacune de leur côté ; des
+**dispositions nommées** (« Matin », « Soir », « Absent »…, douze au plus) se créent dans la
+barre et se choisissent à la main (le choix est celui de l'appareil, comme le thème). « Oublier
+tout ce qui est enregistré » revient à la page de Moli. Une installation sans disposition
+enregistrée affiche la page telle qu'elle a toujours été.
+
+**Qui.** La disposition **de la maison** est celle du propriétaire (même règle que les
+personnes : rôle `owner`, propriétaire Access, ou le code depuis le foyer tant qu'aucun
+propriétaire ne peut se connecter). Une **personne connectée** (mot de passe, Access) qui a
+donné le code garde **la sienne**, qui remplace celle de la maison pour elle ; un membre part
+d'une copie de ce qu'il voit, le propriétaire choisit dans la barre « la mienne » ou « celle
+de la maison ». Un invité voit le défaut, sans bouton (la garde lui refuse `/api/dashboard`). La disposition ne donne aucun droit :
+une pièce protégée reste gardée carte par carte.
+
+**Comment.** `pages/Accueil.svelte` est une liste de cartes posée sur une grille de trois
+colonnes qui comble les trous (`grid-auto-flow: dense`) : une carte a une largeur, jamais une
+position, donc rien ne se chevauche et rien à calculer. Chaque carte garde sa condition
+d'affichage (pas de télé : pas de télécommande), si bien que la liste par défaut, calculée
+par `lib/layout.js` (`defaultLayout`, pure, testée par `layout.test.js`), redonne la page
+d'avant. `accueil/cards.js` dit ce qu'est chaque type de carte (`CARD_TYPES` : nom, icône,
+réglages et leurs choix lus dans la maison), `accueil/Card.svelte` monte le composant
+(`SkyHero`, `HeatingCard`, `MusicCard`… et les nouveaux : pièce, enceinte, diffuseur, caméra,
+présence, assistant, état de la machine, imprimante). L'état et les appels sont dans
+`lib/dashboard.svelte.js` ; le brouillon y porte son historique (50 pas). Serveur :
+`crates/moli-api/src/dashboard.rs` (`GET /api/dashboard`, `PUT|DELETE /api/dashboard/house`
+et `/me`, voir [api.md](api.md)), fichier `data/dashboards.json` versionné (`version`, migré
+à la lecture ; un fichier plus récent est lu tel quel, une carte d'un type inconnu est gardée
+sans être affichée), écriture atomique, `dashboard_changed` sur le flux. Le fichier :
+
+```json
+{ "version": 1,
+  "house":  { "layouts": { "default": { "desktop": { "cards": [ { "id": "k7f2", "type": "heating", "size": "l", "options": { "only": ["Cuisine", "Bureau"] } } ] }, "phone": { "cards": [] } } } },
+  "people": { "<id>": { "layouts": { "default": …, "soir": { "name": "Soir", "desktop": …, "phone": … } } } } }
+```
 
 ## La mise en page de la maison : `data/home.json`
 

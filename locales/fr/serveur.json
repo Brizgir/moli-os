@@ -163,5 +163,21 @@
   "serveur.tls.raison.expire": "certificat expiré le {date}",
   "serveur.tls.raison.pas_encore": "certificat pas encore valable (avant le {date})",
   "serveur.maison.page_inconnue": "pas de page « {page} » dans le menu",
-  "serveur.maison.choix_inconnu": "« {choice} » : automatique (auto), toujours (always) ou jamais (never)"
+  "serveur.maison.choix_inconnu": "« {choice} » : automatique (auto), toujours (always) ou jamais (never)",
+  "serveur.tableau.proprietaire": "seul le propriétaire change la disposition de la maison",
+  "serveur.tableau.personne": "connecte-toi pour garder une disposition à toi",
+  "serveur.tableau.pas_de_dossier": "pas de dossier de données",
+  "serveur.tableau.fichier_illisible": "dashboards.json : {error}",
+  "serveur.tableau.forme": "disposition mal formée : {error}",
+  "serveur.tableau.defaut_manquant": "la disposition « default » manque",
+  "serveur.tableau.cle": "« {key} » : minuscules, chiffres et tirets seulement",
+  "serveur.tableau.nom_vide": "une disposition nommée a besoin d'un nom",
+  "serveur.tableau.trop_de_dispositions": "{max} dispositions au plus",
+  "serveur.tableau.trop_de_cartes": "{max} cartes au plus sur un écran",
+  "serveur.tableau.identifiant": "identifiant de carte « {id} » : 4 à 16 minuscules ou chiffres",
+  "serveur.tableau.doublon": "la carte « {id} » est en double",
+  "serveur.tableau.type_inconnu": "carte inconnue : {kind}",
+  "serveur.tableau.taille_inconnue": "taille inconnue : {size} (s, m ou l)",
+  "serveur.tableau.titre_trop_long": "{max} caractères au plus pour un titre",
+  "serveur.tableau.options_trop_lourdes": "{max} caractères au plus pour les réglages d'une carte"
 }

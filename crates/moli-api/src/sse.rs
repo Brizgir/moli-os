@@ -179,8 +179,11 @@ impl View {
             Event::DriverStatus { .. } | Event::ApprovalResolved { .. } | Event::HomeChanged => {
                 return Pass::Event;
             }
-            // The house's journal and notices are the household's.
-            Event::Journal { .. } | Event::Notice { .. } => return Pass::Drop,
+            // The house's journal, notices and home pages are the
+            // household's: a guest has none of its own.
+            Event::DashboardChanged { .. } | Event::Journal { .. } | Event::Notice { .. } => {
+                return Pass::Drop;
+            }
         };
         // Described anew, moved, gone: what the guest sees may have changed.
         if moved && guest.guest_devices(hub, &hub.snapshot()) != self.sight {

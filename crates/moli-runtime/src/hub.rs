@@ -1176,6 +1176,14 @@ impl Hub {
         self.emit(Event::HomeChanged);
     }
 
+    /// A home page's arrangement was written: the dashboards showing it
+    /// read it again.
+    pub fn dashboard_changed(&self, scope: &str) {
+        self.emit(Event::DashboardChanged {
+            scope: scope.to_owned(),
+        });
+    }
+
     /// Resolves and validates an order without sending it.
     fn prepare(&self, point: &PointId, value: &Value) -> Result<Prepared, CommandError> {
         let (device_id, key) = point.split().ok_or(CommandError::UnknownPoint)?;

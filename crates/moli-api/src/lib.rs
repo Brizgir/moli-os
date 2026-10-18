@@ -21,6 +21,7 @@ mod assets;
 mod assistant;
 mod automations;
 mod caller;
+mod dashboard;
 mod guard;
 mod home;
 mod integrations;
@@ -185,6 +186,19 @@ fn house_routes(humans: &Arc<session::Sessions>, options: &Options) -> Router<Hu
         .route("/api/plan", get(plan::get).put(plan::put))
         .route("/api/home/rooms", post(home::create))
         .route("/api/home/pages", put(home::pages))
+        .route("/api/dashboard", get(dashboard::get))
+        .route(
+            "/api/dashboard/house",
+            put(dashboard::put_house)
+                .delete(dashboard::delete_house)
+                .layer(DefaultBodyLimit::max(dashboard::MAX_BODY)),
+        )
+        .route(
+            "/api/dashboard/me",
+            put(dashboard::put_me)
+                .delete(dashboard::delete_me)
+                .layer(DefaultBodyLimit::max(dashboard::MAX_BODY)),
+        )
         .route(
             "/api/home/rooms/{name}",
             put(home::update).delete(home::delete),
@@ -371,6 +385,13 @@ pub fn router(hub: Hub, shutdown: CancellationToken, options: &Options) -> Route
         .layer(Extension(rest::BenchFile(options.bench_path.clone())))
         .layer(Extension(rest::HomeFile(options.home_path.clone())))
         .layer(Extension(home::HomeStore::new(options.home_path.clone())))
+        .layer(Extension(dashboard::DashboardStore::new(
+            options
+                .home_path
+                .as_deref()
+                .and_then(std::path::Path::parent)
+                .map(|dir| dir.join("dashboards.json")),
+        )))
         .layer(Extension(plan::PlanDir(
             options
                 .home_path

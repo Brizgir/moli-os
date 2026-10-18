@@ -5,6 +5,9 @@
   import { t } from '../../lib/i18n.svelte.js';
   import Icon from './Icon.svelte';
 
+  /** `title`: the person's own, from the home page's arrangement. */
+  let { title = null } = $props();
+
   onMount(useEnergy);
 
   const s = $derived(energy.summary);
@@ -49,7 +52,7 @@
 
 <a class="card energy" href="#/energie" aria-label={t('energie.carte.detail')}>
   <div class="card-head">
-    <h2><Icon name="bolt" size={18} />{t('energie.carte.titre')}</h2>
+    <h2><Icon name="bolt" size={18} />{title ?? t('energie.carte.titre')}</h2>
     <span class="more" aria-hidden="true"><Icon name="arrow-top-right" size={18} /></span>
   </div>
   {#if s}
