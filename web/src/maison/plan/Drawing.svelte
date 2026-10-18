@@ -26,6 +26,12 @@
     layer = 'items',
     /** Edit: the grid and the lines around catch what moves. */
     magnet = true,
+    /** Edit: the next tap picks the reference to measure from (any layer). */
+    aiming = false,
+    /** Edit: the reference measured from, `{ type, i }`; the cotes go from it
+     *  to what is chosen. */
+    ruler = null,
+    onpick = () => {},
     /** Edit: a change starts (to undo it), and ends. */
     onbegin = () => {},
     onend = () => {},
@@ -156,6 +162,7 @@
       if (!moved) {
         const p = toWorld(e.clientX, e.clientY);
         if (editing && picking) onplace(Math.round(p.x), Math.round(p.y));
+        else if (editing && aiming) onpick(pickOf(e.target.closest?.('[data-pick]')));
         else if (editing) choose(e.target.closest?.('[data-pick]'));
         else ontap(p);
       }
@@ -188,14 +195,42 @@
   const LISTS = { item: 'items', room: 'rooms', wall: 'walls', opening: 'openings' };
   const is = (type, i) => editing && selection?.type === type && selection.i === i;
 
+  const pickOf = (el) => (el ? { type: el.dataset.pick, i: Number(el.dataset.i) } : null);
+
   function choose(el) {
-    selection = el ? { type: el.dataset.pick, i: Number(el.dataset.i) } : null;
+    selection = pickOf(el);
     vertex = null;
   }
 
+  /** The box a thing covers (a room: around its corners). */
+  function boxOf(sel) {
+    const s = sel ? floor[LISTS[sel.type]]?.[sel.i] : null;
+    if (!s) return null;
+    return sel.type === 'room' ? bbox(s.poly) : E.footprint(s);
+  }
+  const refBox = $derived(editing && ruler ? boxOf(ruler) : null);
+  const selBox = $derived(editing && selection && refBox && !(selection.type === ruler.type && selection.i === ruler.i) ? boxOf(selection) : null);
+  const cotes = $derived(refBox && selBox ? E.gaps(refBox, selBox) : null);
+  /** Where a cote shows, in cm. */
+  const cote = (axis) => {
+    const c = cotes[axis];
+    const a = refBox;
+    const b = selBox;
+    if (axis === 'x') {
+      const y = b.y + b.h / 2;
+      return c.after ? { x1: a.x + a.w, x2: b.x, y1: y, y2: y } : { x1: b.x + b.w, x2: a.x, y1: y, y2: y };
+    }
+    const x = b.x + b.w / 2;
+    return c.after ? { x1: x, x2: x, y1: a.y + a.h, y2: b.y } : { x1: x, x2: x, y1: b.y + b.h, y2: a.y };
+  };
+
   function grab(e, apply = () => {}) {
     e.stopPropagation();
-    box.setPointerCapture?.(e.pointerId);
+    try {
+      box.setPointerCapture?.(e.pointerId);
+    } catch {
+      // A pointer already gone: the drag ends with it.
+    }
     onbegin();
     hold = { id: e.pointerId, sx: e.clientX, sy: e.clientY, apply, moved: false };
     return hold;
@@ -211,7 +246,7 @@
   const snap = (v) => (magnet ? E.toGrid(v) : Math.round(v));
 
   function grabItem(e, i, mode = 'move') {
-    if (!editing || layer !== 'items') return;
+    if (!editing || layer !== 'items' || aiming) return;
     selection = { type: 'item', i };
     const start = $state.snapshot(floor.items[i]);
     const p0 = toWorld(e.clientX, e.clientY);
@@ -404,7 +439,18 @@
   {@const line = { stroke: skin.glow, 'stroke-width': 2.5, 'vector-effect': 'non-scaling-stroke', fill: 'none' }}
   <g class="edit">
     <!-- the layer's hit boxes: thin walls, easy to touch -->
-    {#if layer === 'walls'}
+    {#if aiming}
+      <!-- any wall, opening or fixture may be the reference (rooms answer by themselves) -->
+      {#each floor.walls ?? [] as w, i (i)}
+        <rect class="hit" data-pick="wall" data-i={i} x={w.x - hit} y={w.y - hit} width={w.w + 2 * hit} height={w.h + 2 * hit} transform={w.r ? `rotate(${w.r} ${w.x + w.w / 2} ${w.y + w.h / 2})` : null} />
+      {/each}
+      {#each floor.openings ?? [] as o, i (i)}
+        <rect class="hit" data-pick="opening" data-i={i} x={o.x - hit} y={o.y - hit} width={o.w + 2 * hit} height={o.h + 2 * hit} />
+      {/each}
+      {#each floor.items ?? [] as it, i (i)}
+        <rect class="hit" data-pick="item" data-i={i} x={it.x} y={it.y} width={it.w} height={it.h} transform={it.r ? `rotate(${it.r} ${it.x + it.w / 2} ${it.y + it.h / 2})` : null} />
+      {/each}
+    {:else if layer === 'walls'}
       {#each floor.walls ?? [] as w, i (i)}
         <!-- svelte-ignore a11y_no_static_element_interactions -->
         <rect class="hit" data-pick="wall" data-i={i} x={w.x - hit} y={w.y - hit} width={w.w + 2 * hit} height={w.h + 2 * hit} transform={w.r ? `rotate(${w.r} ${w.x + w.w / 2} ${w.y + w.h / 2})` : null} onpointerdown={(e) => is('wall', i) && grabWall(e, i)} />
@@ -416,7 +462,33 @@
       {/each}
     {/if}
 
-    {#if sel && selection.type === 'room'}
+    {#if refBox}
+      <!-- the reference, and the cotes from it to what is chosen -->
+      <rect x={refBox.x - 3 / cam.k} y={refBox.y - 3 / cam.k} width={refBox.w + 6 / cam.k} height={refBox.h + 6 / cam.k} fill="none" stroke={skin.window} stroke-width="2.5" stroke-dasharray="2 4" vector-effect="non-scaling-stroke" pointer-events="none" />
+      {#if cotes}
+        {#each ['x', 'y'] as axis (axis)}
+          {#if cotes[axis].gap > 0}
+            {@const l = cote(axis)}
+            <g class="cote" pointer-events="none">
+              <line x1={l.x1} y1={l.y1} x2={l.x2} y2={l.y2} stroke={skin.label} stroke-width="1.5" vector-effect="non-scaling-stroke" />
+              {#if axis === 'x'}
+                <line x1={l.x1} x2={l.x1} y1={l.y1 - 8 / cam.k} y2={l.y1 + 8 / cam.k} stroke={skin.label} stroke-width="1.5" vector-effect="non-scaling-stroke" />
+                <line x1={l.x2} x2={l.x2} y1={l.y1 - 8 / cam.k} y2={l.y1 + 8 / cam.k} stroke={skin.label} stroke-width="1.5" vector-effect="non-scaling-stroke" />
+                <text class="label" x={(l.x1 + l.x2) / 2} y={l.y1 - 6 / cam.k} font-size={fs} fill={skin.label} stroke={skin.bg} stroke-width={3 / cam.k} text-anchor="middle">{cotes.x.gap} cm</text>
+              {:else}
+                <line y1={l.y1} y2={l.y1} x1={l.x1 - 8 / cam.k} x2={l.x1 + 8 / cam.k} stroke={skin.label} stroke-width="1.5" vector-effect="non-scaling-stroke" />
+                <line y1={l.y2} y2={l.y2} x1={l.x1 - 8 / cam.k} x2={l.x1 + 8 / cam.k} stroke={skin.label} stroke-width="1.5" vector-effect="non-scaling-stroke" />
+                <text class="label" x={l.x1 + 6 / cam.k} y={(l.y1 + l.y2) / 2 + fs * 0.35} font-size={fs} fill={skin.label} stroke={skin.bg} stroke-width={3 / cam.k}>{cotes.y.gap} cm</text>
+              {/if}
+            </g>
+          {/if}
+        {/each}
+      {/if}
+    {/if}
+
+    {#if aiming}
+      <!-- the handles wait: the tap picks the reference -->
+    {:else if sel && selection.type === 'room'}
       <polygon points={points(sel.poly)} {...line} pointer-events="none" />
       {#if sel.poly.length < E.MAX_POINTS}
         {#each sel.poly as [x, y], j (j)}
@@ -472,7 +544,7 @@
 <div
   class="drawing"
   class:fill
-  class:picking={!!picking}
+  class:picking={!!picking || aiming}
   bind:this={box}
   bind:clientWidth={W}
   bind:clientHeight={H}
@@ -521,7 +593,7 @@
 
       <!-- rooms, their texture, their warmth -->
       {#each floor.rooms ?? [] as r, i (r.id)}
-        <polygon class="room" data-pick={editing && layer === 'rooms' ? 'room' : null} data-i={i} points={points(r.poly)} fill={skin.rooms[r.kind] ?? skin.rooms.other} stroke={skin.roomLine} stroke-width="1.2" vector-effect="non-scaling-stroke" stroke-dasharray={skin.roomLine === 'none' ? null : '6 4'} />
+        <polygon class="room" data-pick={editing && (layer === 'rooms' || aiming) ? 'room' : null} data-i={i} points={points(r.poly)} fill={skin.rooms[r.kind] ?? skin.rooms.other} stroke={skin.roomLine} stroke-width="1.2" vector-effect="non-scaling-stroke" stroke-dasharray={skin.roomLine === 'none' ? null : '6 4'} />
         {#if TEXTURE[r.kind]}
           <polygon class="texture" points={points(r.poly)} fill="url(#{TEXTURE[r.kind]}-{uid})" />
         {/if}

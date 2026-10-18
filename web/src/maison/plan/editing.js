@@ -171,15 +171,10 @@ export function stretchWall(b, end, [px, py], guides, tol) {
   return out;
 }
 
-/** A wall as thick as `t`, on the same middle line. */
+/** A wall as thick as `t`, from the same corner (X and Y typed stay). */
 export function setThickness(b, t) {
   const v = Math.max(1, t);
-  if (horizontal(b)) {
-    const cy = b.y + b.h / 2;
-    return { ...b, y: round(cy - v / 2), h: v };
-  }
-  const cx = b.x + b.w / 2;
-  return { ...b, x: round(cx - v / 2), w: v };
+  return horizontal(b) ? { ...b, h: v } : { ...b, w: v };
 }
 
 /** A wall as long as `len`, from the same start. */
@@ -254,6 +249,25 @@ export function resizeOpening(walls, o, width) {
   return { ...o, ...fitOpening(near.box, width, horizontal(near.box) ? cx : cy) };
 }
 
+/** The wall an opening sits in (its plain box), or `null`. */
+export function wallOf(o, walls) {
+  const [cx, cy] = centerOf(o);
+  const near = nearestWall(walls, cx, cy);
+  return near && near.d <= thicknessOf(near.box) ? near.box : null;
+}
+
+/** How far an opening starts from its wall's start (the left end of a wall
+ *  along x, the top end otherwise), cm. */
+export function offsetOf(o, wall) {
+  return horizontal(wall) ? o.x - wall.x : o.y - wall.y;
+}
+
+/** An opening `width` wide starting `offset` cm from its wall's start (kept
+ *  inside the wall). */
+export function openingAt(wall, width, offset) {
+  return fitOpening(wall, width, (horizontal(wall) ? wall.x : wall.y) + offset + width / 2);
+}
+
 /** The openings that sit in a wall (their middle in it). */
 export function openingsOn(wall, openings) {
   const b = straight(wall) ?? wall;
@@ -269,6 +283,47 @@ export function carryOpening(o, wallBefore, wallAfter, dx = 0, dy = 0) {
   const width = horizontal(wallBefore) ? o.w : o.h;
   const [cx, cy] = centerOf(o);
   return { ...o, ...fitOpening(wallAfter, width, horizontal(wallAfter) ? cx + dx : cy + dy) };
+}
+
+// ---- measuring --------------------------------------------------------------------------
+
+/** The box a shape covers on the floor: itself for a quarter turn (or
+ *  none), else the box around its turned corners. */
+export function footprint(s) {
+  const b = straight(s);
+  if (b) return b;
+  const a = (s.r * Math.PI) / 180;
+  const [cx, cy] = centerOf(s);
+  const xs = [];
+  const ys = [];
+  for (const [px, py] of [[s.x, s.y], [s.x + s.w, s.y], [s.x + s.w, s.y + s.h], [s.x, s.y + s.h]]) {
+    const dx = px - cx;
+    const dy = py - cy;
+    xs.push(cx + dx * Math.cos(a) - dy * Math.sin(a));
+    ys.push(cy + dx * Math.sin(a) + dy * Math.cos(a));
+  }
+  const x = Math.min(...xs);
+  const y = Math.min(...ys);
+  return { x: round(x), y: round(y), w: round(Math.max(...xs) - x), h: round(Math.max(...ys) - y) };
+}
+
+/** Face to face, from box `a` (the reference) to box `b`, along x and
+ *  y: `{ x: { gap, after }, y: { gap, after } }`. `after`: b is right of
+ *  (below) a, by their middles; a negative gap: they overlap. */
+export function gaps(a, b) {
+  const along = (p, s, q, t) => {
+    const after = q + t / 2 >= p + s / 2;
+    return { after, gap: round(after ? q - (p + s) : p - (q + t)) };
+  };
+  return { x: along(a.x, a.w, b.x, b.w), y: along(a.y, a.h, b.y, b.h) };
+}
+
+/** Box `b` moved along `axis` so that its gap from `a` is `gap`, on the
+ *  side it already is. */
+export function withGap(a, b, axis, gap) {
+  const { after } = gaps(a, b)[axis];
+  const [p, s, t] = axis === 'x' ? [a.x, a.w, b.w] : [a.y, a.h, b.h];
+  return { ...b, [axis]: round(after ? p + s + gap : p - t - gap) };
 }
 
 // ---- rooms -----------------------------------------------------------------------------
