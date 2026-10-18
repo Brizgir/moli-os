@@ -7,8 +7,12 @@ set -eu
 root=$(cd "$(dirname "$0")/.." && pwd)
 set -- moli-os-dev "$@"
 # The house's private lists (scripts/leak-check.sh), when a house folder sits
-# next to the repository: read-only, never copied into it.
-house=$(dirname "$root")/moli-maison
+# next to the main repository (also from a worktree): read-only, never copied into it.
+main=$root
+if common=$(git -C "$root" rev-parse --git-common-dir 2>/dev/null); then
+  main=$(cd "$root" && cd "$common/.." && pwd) || main=$root
+fi
+house=$(dirname "$main")/moli-maison
 for pair in leak-denylist.txt:MOLI_DENYLIST leak-allow.txt:MOLI_ALLOWLIST; do
   list=${pair%%:*}
   if [ -f "$house/$list" ]; then

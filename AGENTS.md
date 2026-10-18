@@ -5,7 +5,7 @@ Ce fichier est lu par n'importe quel agent (Claude Code, Codex…). Rien ici ne 
 ## Avant tout
 
 1. Lire `docs/README.md` (index, état, règles), puis `docs/ARCHITECTURE.md` (les décisions prises, à ne pas rediscuter sans raison nouvelle) et la doc du composant touché (`docs/components/`).
-2. **La maison de l'utilisateur** : si un dossier `../moli-maison/` existe à côté de ce dépôt, lire son `AGENTS.md`. Il décrit l'installation de cette maison (machine, déploiement, règles de la famille). Rien de ce dossier n'entre jamais dans ce dépôt.
+2. **La maison de l'utilisateur** : si un dossier `../moli-maison/` existe à côté de ce dépôt (du dépôt principal quand on travaille dans un worktree `.claude/worktrees/…`), lire son `AGENTS.md`. Il décrit l'installation de cette maison (machine, déploiement, règles de la famille). Rien de ce dossier n'entre jamais dans ce dépôt.
 3. `git pull --ff-only` avant de commencer.
 4. **Installer Moli chez quelqu'un** (pas modifier son code) : suivre `.claude/skills/installer-moli/SKILL.md`, lisible par tout agent.
 

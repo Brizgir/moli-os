@@ -8,9 +8,9 @@
 # - des motifs génériques, pour tout le monde : clés privées, jetons d'API, adresses MAC et
 #   e-mails réels (les exemples restent permis : aa:bb:cc:dd:ee:ff, user@example.com) ;
 # - une liste noire privée, hors du dépôt, quand elle existe : $MOLI_DENYLIST, sinon
-#   ../moli-maison/leak-denylist.txt. Ce que votre maison seule connaît (prénoms, domaine,
-#   adresses du réseau, identifiants d'appareils). Une expression régulière étendue par ligne,
-#   insensible à la casse ; lignes vides et commentaires (#) ignorés.
+#   ../moli-maison/leak-denylist.txt (à côté du dépôt principal, même depuis un worktree).
+#   Ce que votre maison seule connaît (prénoms, domaine, adresses du réseau, identifiants
+#   d'appareils). Une expression régulière étendue par ligne, insensible à la casse ; lignes vides et commentaires (#) ignorés.
 # Et ses exceptions, à côté : $MOLI_ALLOWLIST, sinon ../moli-maison/leak-allow.txt, des
 # expressions qui s'appliquent à l'occurrence entière (`chemin:ligne:texte`), par exemple
 # le nom de l'auteur dans NOTICE et nulle part ailleurs.
@@ -36,13 +36,19 @@ EOF
 # Examples everyone may write: documentation MACs and addresses, placeholders.
 allowed='sk-(proj-)?abcdefghij|aa[:-]?bb[:-]?cc[:-]?dd[:-]?ee[:-]?[0-9a-f]{2}|00([:-]00){5}|ff([:-]ff){5}|02([:-]00){4}[:-][0-9a-f]{2}|@(example|exemple)\.(com|org|net|fr)|@localhost|@test([^a-z.]|$)|noreply@anthropic\.com|git@github\.com|testrealm@host\.com'
 
-denylist=${MOLI_DENYLIST:-../moli-maison/leak-denylist.txt}
+# The house folder sits next to the main repository: from a worktree (.claude/worktrees/…),
+# the common git dir leads back to it. Without git (the dev container), next to this tree.
+house=../moli-maison
+if common=$(git rev-parse --git-common-dir 2>/dev/null) && main=$(cd "$common/.." 2>/dev/null && pwd); then
+    house=$(dirname "$main")/moli-maison
+fi
+denylist=${MOLI_DENYLIST:-$house/leak-denylist.txt}
 : >"$tmp/private"
 if [ -f "$denylist" ]; then
     # Written on Windows maybe: a trailing CR would make every pattern miss.
     tr -d '\r' <"$denylist" | grep -v -E '^[[:space:]]*(#|$)' >"$tmp/private" || true
 fi
-allowlist=${MOLI_ALLOWLIST:-../moli-maison/leak-allow.txt}
+allowlist=${MOLI_ALLOWLIST:-$house/leak-allow.txt}
 : >"$tmp/exceptions"
 if [ -f "$allowlist" ]; then
     tr -d '\r' <"$allowlist" | grep -v -E '^[[:space:]]*(#|$)' >"$tmp/exceptions" || true
