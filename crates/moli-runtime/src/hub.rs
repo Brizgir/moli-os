@@ -199,6 +199,9 @@ pub struct DeviceView {
     /// Prints documents (`/api/devices/{id}/print`).
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub printer: bool,
+    /// Has a document and actions of its own (`/api/devices/{id}/service/…`).
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub service: bool,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -252,6 +255,8 @@ struct Inner {
 
 /// Two screens showing the same camera live cost one fetch, not two.
 const IMAGE_FRESH: Duration = Duration::from_secs(1);
+/// A service's document or action: a cloud round trip or two, no more.
+const SERVICE_LIMIT: Duration = Duration::from_secs(25);
 
 /// How long a published media stays reachable, and how many at most.
 const PUBLISHED_TTL: Duration = Duration::from_secs(5 * 60);
@@ -278,6 +283,7 @@ struct Model {
     labels: BTreeMap<DeviceId, Label>,
     snapshots: HashMap<DeviceId, Arc<dyn crate::media::SnapshotSource>>,
     printers: HashMap<DeviceId, Arc<dyn crate::media::PrintSink>>,
+    services: HashMap<DeviceId, Arc<dyn crate::service::Service>>,
 }
 
 #[derive(Debug)]
@@ -1421,6 +1427,7 @@ impl Hub {
             model.availability.remove(id);
             model.snapshots.remove(id);
             model.printers.remove(id);
+            model.services.remove(id);
             model.devices.remove(id).is_some()
         };
         self.0
@@ -1447,6 +1454,84 @@ impl Hub {
         sink: Arc<dyn crate::media::PrintSink>,
     ) {
         self.write().printers.insert(device.clone(), sink);
+    }
+
+    pub(crate) fn provide_service(
+        &self,
+        device: &DeviceId,
+        service: Arc<dyn crate::service::Service>,
+    ) {
+        self.write().services.insert(device.clone(), service);
+    }
+
+    fn service_of(
+        &self,
+        device: &DeviceId,
+    ) -> Result<Arc<dyn crate::service::Service>, crate::service::ServiceError> {
+        use crate::service::ServiceError;
+        let model = self.read();
+        if !model.devices.contains_key(device) {
+            return Err(ServiceError::UnknownDevice);
+        }
+        model
+            .services
+            .get(device)
+            .cloned()
+            .ok_or(ServiceError::NoService)
+    }
+
+    /// A device's own document (`what`), as its driver gives it now. The
+    /// service is called without the model lock.
+    pub async fn service_read(
+        &self,
+        device: &DeviceId,
+        what: &str,
+    ) -> Result<serde_json::Value, crate::service::ServiceError> {
+        let service = self.service_of(device)?;
+        match tokio::time::timeout(SERVICE_LIMIT, service.read(what)).await {
+            Ok(result) => result,
+            Err(_) => Err(crate::service::ServiceError::Unavailable(moli_i18n::tr!(
+                "serveur.service.sans_reponse"
+            ))),
+        }
+    }
+
+    /// An action on a device's own document, by a person (`origin` is
+    /// what the surface established, journaled with the outcome).
+    pub async fn service_write(
+        &self,
+        device: &DeviceId,
+        action: &str,
+        input: serde_json::Value,
+        origin: Origin,
+        actor: Option<String>,
+    ) -> Result<serde_json::Value, crate::service::ServiceError> {
+        let started = Instant::now();
+        let result = match self.service_of(device) {
+            Ok(service) => {
+                match tokio::time::timeout(SERVICE_LIMIT, service.write(action, input)).await {
+                    Ok(result) => result,
+                    Err(_) => Err(crate::service::ServiceError::Unavailable(moli_i18n::tr!(
+                        "serveur.service.sans_reponse"
+                    ))),
+                }
+            }
+            Err(e) => Err(e),
+        };
+        self.record(
+            origin,
+            actor,
+            Action::Service {
+                device: device.clone(),
+                action: action.to_owned(),
+            },
+            match &result {
+                Ok(_) => Outcome::Ok,
+                Err(e) => Outcome::Err(e.to_string()),
+            },
+            started,
+        );
+        result
     }
 
     /// Hands a document to a printer (queued there: this returns once it is
@@ -1683,6 +1768,7 @@ impl Model {
             state: self.states.get(&device.id).cloned().unwrap_or_default(),
             camera: self.snapshots.contains_key(&device.id),
             printer: self.printers.contains_key(&device.id),
+            service: self.services.contains_key(&device.id),
         }
     }
 }

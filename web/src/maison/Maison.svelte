@@ -152,6 +152,8 @@
     {:else if page === 'carte'}
       <!-- The map (Leaflet): loaded only when visited. -->
       {#await import('./pages/Carte.svelte') then { default: Carte }}<Carte />{/await}
+    {:else if page === 'chauffage'}
+      {#await import('./pages/Chauffage.svelte') then { default: Chauffage }}<Chauffage {route} />{/await}
     {:else if page === 'cameras'}
       <Cameras />
     {:else if page === 'parler'}

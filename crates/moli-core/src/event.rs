@@ -165,6 +165,12 @@ pub enum Action {
         from: String,
         to: String,
     },
+    /// An action on a device's own document (a heating schedule…), by a
+    /// person.
+    Service {
+        device: DeviceId,
+        action: String,
+    },
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]

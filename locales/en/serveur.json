@@ -153,5 +153,9 @@
   "serveur.personnes.point_tous_partis": "Everyone has left",
   "serveur.cle.netatmo_humain": "only a person (code) gives the Netatmo app’s keys",
   "serveur.cle.netatmo_pilote_inconnu": "no netatmo driver of this name",
-  "serveur.cle.netatmo_invalide": "these are not Netatmo app keys (client ID, then client secret, as dev.netatmo.com shows them)"
+  "serveur.cle.netatmo_invalide": "these are not Netatmo app keys (client ID, then client secret, as dev.netatmo.com shows them)",
+
+  "serveur.service.sans_reponse": "the device did not answer in time",
+
+  "serveur.service.humain": "only a person (code), from the dashboard, changes this setting"
 }

@@ -153,5 +153,9 @@
   "serveur.personnes.point_tous_partis": "Tout le monde est parti",
   "serveur.cle.netatmo_humain": "seule une personne (code) donne les clés de l'app Netatmo",
   "serveur.cle.netatmo_pilote_inconnu": "pas de pilote netatmo de ce nom",
-  "serveur.cle.netatmo_invalide": "ce ne sont pas des clés d'app Netatmo (client ID puis client secret, tels que dev.netatmo.com les affiche)"
+  "serveur.cle.netatmo_invalide": "ce ne sont pas des clés d'app Netatmo (client ID puis client secret, tels que dev.netatmo.com les affiche)",
+
+  "serveur.service.sans_reponse": "l'appareil n'a pas répondu à temps",
+
+  "serveur.service.humain": "seule une personne (code), depuis le tableau de bord, change ce réglage"
 }

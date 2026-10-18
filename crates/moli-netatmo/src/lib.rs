@@ -14,24 +14,35 @@
 //! quiet longer each time it says its quota is reached. An order that could
 //! not leave within the hub's deadline is never sent later: a radiator
 //! heating hours after a « failed » is worse than a refusal.
+//!
+//! The home's heating schedules are the home device's own document (a
+//! [`Service`]): read by anyone, changed by a person only (the dashboard,
+//! with the code), never by an agent nor an automation; each change is
+//! checked strictly, sent alone, then `homesdata` is read again.
 
 mod api;
 mod auth;
 mod encode;
 mod model;
+mod schedule;
 
 use std::collections::HashSet;
+use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use http::Method;
 use moli_core::{Device, DeviceId, Kind, PointSpec, Semantic, Value};
+use moli_runtime::service::{Service, ServiceError};
 use moli_runtime::{BoxFuture, CommandRequest, Driver, DriverCtx};
 use serde::Deserialize;
+use serde_json::Value as Json;
+use tokio::sync::{mpsc, oneshot};
 use tokio::time::Instant;
 
-use crate::api::{Client, Failure, Https, Transport as _, Vault};
+use crate::api::{Client, Failure, Https, Payload, Transport as _, Vault};
 use crate::auth::App;
 use crate::model::{Home, Target};
+use crate::schedule::Draft;
 
 const CLIENT_ID: &str = "client_id";
 const CLIENT_SECRET: &str = "client_secret";
@@ -42,6 +53,9 @@ const STRUCTURE: Duration = Duration::from_secs(6 * 3600);
 const LOOK: Duration = Duration::from_secs(5);
 /// Never asked more often than this, whatever the config says.
 const POLL_MIN: u64 = 120;
+/// The schedules a dashboard reads are read again from Netatmo when older
+/// than this (changed in the Netatmo app meanwhile).
+const SCHEDULES_FRESH: Duration = Duration::from_secs(60);
 const RETRY_MIN: Duration = Duration::from_secs(30);
 const RETRY_MAX: Duration = Duration::from_secs(30 * 60);
 
@@ -327,7 +341,7 @@ async fn exchange(app: &App, code: &str, redirect: &str) -> Result<auth::Tokens,
             Method::POST,
             auth::TOKEN_PATH,
             None,
-            Some(auth::code_form(app, code, redirect)),
+            Some(Payload::Form(auth::code_form(app, code, redirect))),
         )
         .await
         .map_err(|e| format!("{e:#}"))?;
@@ -356,6 +370,79 @@ impl Vault for Store<'_> {
 #[derive(Debug, Default)]
 struct House {
     homes: Vec<Home>,
+    /// When `homesdata` was last read.
+    fetched: Option<Instant>,
+}
+
+/// What a surface asks of a home's schedules (see [`Desk`]).
+#[derive(Debug)]
+enum Request {
+    Read,
+    Sync(Json),
+    Create(Json),
+    Activate(Json),
+}
+
+/// One question or action, and where its answer goes.
+#[derive(Debug)]
+struct Ask {
+    home: String,
+    request: Request,
+    reply: oneshot::Sender<Result<Json, ServiceError>>,
+}
+
+/// The home device's service: the schedules. Each ask is handed to the
+/// driver's loop (the one holder of the client: one request at a time,
+/// paced like the rest), which answers once Netatmo has.
+#[derive(Debug)]
+struct Desk {
+    home: String,
+    asks: mpsc::Sender<Ask>,
+}
+
+impl Desk {
+    fn ask(&self, request: Request) -> BoxFuture<'_, Result<Json, ServiceError>> {
+        Box::pin(async move {
+            let (reply, answer) = oneshot::channel();
+            let ask = Ask {
+                home: self.home.clone(),
+                request,
+                reply,
+            };
+            self.asks
+                .try_send(ask)
+                .map_err(|_| ServiceError::Unavailable(moli_i18n::tr!("pilotes.netatmo.occupe")))?;
+            answer.await.unwrap_or_else(|_| {
+                Err(ServiceError::Unavailable(moli_i18n::tr!(
+                    "pilotes.netatmo.occupe"
+                )))
+            })
+        })
+    }
+}
+
+impl Service for Desk {
+    fn read(&self, what: &str) -> BoxFuture<'_, Result<Json, ServiceError>> {
+        match what {
+            "schedules" => self.ask(Request::Read),
+            other => {
+                let other = other.to_owned();
+                Box::pin(async move { Err(ServiceError::UnknownAction(other)) })
+            }
+        }
+    }
+
+    fn write(&self, action: &str, input: Json) -> BoxFuture<'_, Result<Json, ServiceError>> {
+        match action {
+            "sync" => self.ask(Request::Sync(input)),
+            "create" => self.ask(Request::Create(input)),
+            "activate" => self.ask(Request::Activate(input)),
+            other => {
+                let other = other.to_owned();
+                Box::pin(async move { Err(ServiceError::UnknownAction(other)) })
+            }
+        }
+    }
 }
 
 impl House {
@@ -392,7 +479,11 @@ async fn connected(
 ) -> Result<(), Stop> {
     let mut client = Client::new(Https, app, refresh);
     let mut house = House::default();
-    discover(ctx, &mut client, &mut house).await.map_err(stop)?;
+    // A few asks wait at most: a dashboard is not a queue.
+    let (asks, mut asked) = mpsc::channel::<Ask>(4);
+    discover(ctx, &mut client, &mut house, &asks)
+        .await
+        .map_err(stop)?;
     set_text(ctx, account, "status", "connected");
     ctx.ready();
     let poll = config.poll();
@@ -403,12 +494,16 @@ async fn connected(
         tokio::select! {
             command = ctx.next_command() => {
                 let Some(command) = command else { return Ok(()) };
-                order(config, ctx, &mut client, &house, command).await?;
+                order(config, ctx, &mut client, &mut house, &asks, command).await?;
+            }
+            ask = asked.recv() => {
+                let Some(ask) = ask else { return Ok(()) };
+                serve(ctx, &mut client, &mut house, &asks, ask).await?;
             }
             () = tokio::time::sleep_until(next_poll) => {
                 let result = if Instant::now() >= next_structure {
                     next_structure = Instant::now() + STRUCTURE;
-                    discover(ctx, &mut client, &mut house).await
+                    discover(ctx, &mut client, &mut house, &asks).await
                 } else {
                     Ok(())
                 };
@@ -450,10 +545,12 @@ async fn discover(
     ctx: &DriverCtx,
     client: &mut Client<Https>,
     house: &mut House,
+    asks: &mpsc::Sender<Ask>,
 ) -> Result<(), Failure> {
     let answer = client
         .call(&Store(ctx), Method::GET, "/api/homesdata", None, &|| true)
         .await?;
+    house.fetched = Some(Instant::now());
     let homes = model::homes(&answer);
     if homes.is_empty() {
         tracing::warn!(instance = %ctx.instance(), "no Netatmo Energy home in this account");
@@ -474,6 +571,19 @@ async fn discover(
         let id = ctx.device_id(&home.native());
         ctx.upsert_device(home_device(ctx, &id, home, rooms));
         ctx.set_availability(&id, true);
+        ctx.set_state(
+            &id,
+            "schedule",
+            home.active_schedule()
+                .map_or(Value::Null, |s| Value::Text(s.name.as_str().into())),
+        );
+        ctx.provide_service(
+            &id,
+            Arc::new(Desk {
+                home: home.id.clone(),
+                asks: asks.clone(),
+            }),
+        );
         shown.insert(id);
         for module in &home.modules {
             let id = ctx.device_id(&module.native());
@@ -522,7 +632,7 @@ fn home_device(ctx: &DriverCtx, id: &DeviceId, home: &Home, rooms: Vec<DeviceId>
         native_room: None,
         // The mode reaches every room: the guard checks them all.
         members: rooms,
-        points: model::home_points(),
+        points: model::home_points(&home.schedule_names()),
     }
 }
 
@@ -614,6 +724,175 @@ async fn read_home(
     Ok(())
 }
 
+/// What a person reads when a schedule is refused before leaving.
+fn wrong_schedule(wrong: &schedule::Wrong) -> String {
+    use moli_i18n::tr;
+    use schedule::Wrong;
+    match wrong {
+        Wrong::Shape(field) => tr!("pilotes.netatmo.planning_forme", field = field),
+        Wrong::Name => tr!("pilotes.netatmo.planning_nom", max = schedule::MAX_NAME),
+        Wrong::Temperature(what) => tr!(
+            "pilotes.netatmo.planning_temperature",
+            what = what,
+            min = model::SETPOINT_MIN,
+            max = model::SETPOINT_MAX
+        ),
+        Wrong::NoZone => tr!("pilotes.netatmo.planning_sans_zone"),
+        Wrong::TooManyZones => tr!(
+            "pilotes.netatmo.planning_trop_de_zones",
+            max = schedule::MAX_ZONES
+        ),
+        Wrong::ZoneTwice(id) => tr!("pilotes.netatmo.planning_zone_double", id = id),
+        Wrong::ZoneKind(kind) => tr!("pilotes.netatmo.planning_zone_type", kind = kind),
+        Wrong::UnknownRoom(room) => tr!("pilotes.netatmo.planning_piece_inconnue", room = room),
+        Wrong::RoomMissing(zone, room) => tr!(
+            "pilotes.netatmo.planning_piece_manquante",
+            zone = zone,
+            room = room
+        ),
+        Wrong::NoSlot => tr!("pilotes.netatmo.planning_sans_creneau"),
+        Wrong::TooManySlots => tr!(
+            "pilotes.netatmo.planning_trop_de_creneaux",
+            max = schedule::MAX_SLOTS
+        ),
+        Wrong::NotFromMonday => tr!("pilotes.netatmo.planning_lundi"),
+        Wrong::SlotOrder(start) => tr!("pilotes.netatmo.planning_ordre", start = start),
+        Wrong::UnknownZone(zone) => tr!("pilotes.netatmo.planning_zone_inconnue", zone = zone),
+    }
+}
+
+/// A failure, for a person at the dashboard.
+fn service_failure(failure: &Failure) -> ServiceError {
+    match failure {
+        Failure::Refused(_) => ServiceError::Refused(failure_text(failure)),
+        other => ServiceError::Unavailable(failure_text(other)),
+    }
+}
+
+/// The schedule a person names in `input["id"]`, in `home`.
+fn schedule_id<'a>(home: &'a Home, input: &Json) -> Result<&'a str, ServiceError> {
+    let id = input["id"].as_str().unwrap_or_default();
+    home.schedules
+        .iter()
+        .find(|s| s.id == id)
+        .map(|s| s.id.as_str())
+        .ok_or_else(|| {
+            ServiceError::Invalid(moli_i18n::tr!(
+                "pilotes.netatmo.planning_inconnu",
+                name = id
+            ))
+        })
+}
+
+/// The request a schedule ask becomes: its path and body, once checked.
+fn schedule_request(
+    home: &Home,
+    request: &Request,
+) -> Result<Option<(&'static str, Payload)>, ServiceError> {
+    let heated: Vec<&str> = home.rooms.iter().map(|r| r.id.as_str()).collect();
+    Ok(Some(match request {
+        Request::Read => return Ok(None),
+        Request::Sync(input) => {
+            let id = schedule_id(home, input)?;
+            let draft = Draft::parse(input, &home.all_rooms, &heated)
+                .map_err(|w| ServiceError::Invalid(wrong_schedule(&w)))?;
+            (
+                "/api/synchomeschedule",
+                Payload::Json(draft.body(&home.id, Some(id))),
+            )
+        }
+        Request::Create(input) => {
+            let draft = Draft::parse(input, &home.all_rooms, &heated)
+                .map_err(|w| ServiceError::Invalid(wrong_schedule(&w)))?;
+            (
+                "/api/createnewhomeschedule",
+                Payload::Json(draft.body(&home.id, None)),
+            )
+        }
+        Request::Activate(input) => {
+            let id = schedule_id(home, input)?;
+            (
+                "/api/switchhomeschedule",
+                Payload::Form(schedule::switch_form(&home.id, id)),
+            )
+        }
+    }))
+}
+
+/// One ask about a home's schedules: a read (from Netatmo again when the
+/// last one is old), or one write, checked first, then `homesdata` again
+/// so that the answer is what Netatmo now holds.
+async fn serve(
+    ctx: &DriverCtx,
+    client: &mut Client<Https>,
+    house: &mut House,
+    asks: &mpsc::Sender<Ask>,
+    ask: Ask,
+) -> Result<(), Stop> {
+    let Ask {
+        home: home_id,
+        request,
+        reply,
+    } = ask;
+    let Some(home) = house.home(&home_id) else {
+        let _ = reply.send(Err(ServiceError::UnknownDevice));
+        return Ok(());
+    };
+    let sent = match schedule_request(home, &request) {
+        Ok(Some((path, body))) => {
+            let sent = client
+                .call(&Store(ctx), Method::POST, path, Some(body), &|| true)
+                .await;
+            match sent {
+                Ok(_) => {
+                    tracing::info!(instance = %ctx.instance(), path, "netatmo schedule written");
+                    Ok(true)
+                }
+                Err(f) => Err(f),
+            }
+        }
+        Ok(None) => Ok(false),
+        Err(e) => {
+            let _ = reply.send(Err(e));
+            return Ok(());
+        }
+    };
+    let written = match sent {
+        Ok(written) => written,
+        Err(f) => {
+            tracing::warn!(instance = %ctx.instance(), error = %f, "netatmo schedule not written");
+            let _ = reply.send(Err(service_failure(&f)));
+            fatal(f)?;
+            return Ok(());
+        }
+    };
+    let stale = house
+        .fetched
+        .is_none_or(|at| at.elapsed() > SCHEDULES_FRESH);
+    if (written || stale)
+        && let Err(f) = discover(ctx, client, house, asks).await
+    {
+        tracing::warn!(instance = %ctx.instance(), error = %f, "netatmo schedules after a change");
+        if written {
+            // Written, but what Netatmo holds now is unknown: say so.
+            let _ = reply.send(Err(ServiceError::Unavailable(moli_i18n::tr!(
+                "pilotes.netatmo.planning_relecture",
+                why = failure_text(&f)
+            ))));
+            fatal(f)?;
+            return Ok(());
+        }
+        fatal(f)?;
+    }
+    let _ = reply.send(
+        house
+            .home(&home_id)
+            .map(Home::schedules_json)
+            .ok_or(ServiceError::UnknownDevice),
+    );
+    Ok(())
+}
+
 fn unix_now() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -641,7 +920,8 @@ async fn order(
     config: &Config,
     ctx: &DriverCtx,
     client: &mut Client<Https>,
-    house: &House,
+    house: &mut House,
+    asks: &mpsc::Sender<Ask>,
     command: CommandRequest,
 ) -> Result<(), Stop> {
     let Some(target) = house.target(ctx, &command.device.id) else {
@@ -650,37 +930,59 @@ async fn order(
     };
     let home = house.home(target.home());
     let minutes = config.minutes(home);
-    let (path, form) =
-        match model::order(&target, &command.key, &command.value, minutes, unix_now()) {
-            Ok(request) => request,
-            Err(wrong) => {
-                command.reply(Err(match wrong {
-                    model::Wrong::OutOfBounds => moli_i18n::tr!(
-                        "pilotes.netatmo.hors_bornes",
-                        min = model::SETPOINT_MIN,
-                        max = model::SETPOINT_MAX
-                    ),
-                    model::Wrong::RoomMode => moli_i18n::tr!("pilotes.netatmo.mode_piece"),
-                    model::Wrong::ReadOnly(key) => {
-                        moli_i18n::tr!("pilotes.netatmo.lecture_seule", key = key)
-                    }
-                }));
-                return Ok(());
-            }
-        };
+    let request = model::order(
+        &target,
+        &command.key,
+        &command.value,
+        minutes,
+        unix_now(),
+        home,
+    );
+    let (path, form) = match request {
+        Ok(request) => request,
+        Err(wrong) => {
+            command.reply(Err(match wrong {
+                model::Wrong::OutOfBounds => moli_i18n::tr!(
+                    "pilotes.netatmo.hors_bornes",
+                    min = model::SETPOINT_MIN,
+                    max = model::SETPOINT_MAX
+                ),
+                model::Wrong::RoomMode => moli_i18n::tr!("pilotes.netatmo.mode_piece"),
+                model::Wrong::ReadOnly(key) => {
+                    moli_i18n::tr!("pilotes.netatmo.lecture_seule", key = key)
+                }
+                model::Wrong::NoSuchSchedule(name) => {
+                    moli_i18n::tr!("pilotes.netatmo.planning_inconnu", name = name)
+                }
+            }));
+            return Ok(());
+        }
+    };
     let sent = client
-        .call(&Store(ctx), Method::POST, path, Some(form), &|| {
-            !command.abandoned()
-        })
+        .call(
+            &Store(ctx),
+            Method::POST,
+            path,
+            Some(Payload::Form(form)),
+            &|| !command.abandoned(),
+        )
         .await;
     match sent {
         Ok(_) => {
             tracing::info!(instance = %ctx.instance(), point = %command.point, value = ?command.value, minutes, "netatmo order sent");
+            let switched = &*command.key == "schedule";
             command.reply(Ok(()));
-            // What Netatmo now says, at once.
-            if let Some(home) = home
-                && let Err(f) = read_home(ctx, client, home).await
-            {
+            // What Netatmo now says, at once (a switched schedule shows in
+            // `homesdata`, the rest in `homestatus`).
+            let read = if switched {
+                discover(ctx, client, house, asks).await
+            } else {
+                match house.home(target.home()) {
+                    Some(home) => read_home(ctx, client, home).await,
+                    None => Ok(()),
+                }
+            };
+            if let Err(f) = read {
                 let f = fatal(f)?;
                 tracing::warn!(instance = %ctx.instance(), error = %f, "netatmo state after an order");
             }
@@ -710,6 +1012,8 @@ mod tests {
             rooms: Vec::new(),
             modules: Vec::new(),
             default_minutes: Some(120),
+            all_rooms: Vec::new(),
+            schedules: Vec::new(),
         };
         assert_eq!(config.minutes(Some(&home)), 120);
         let config: Config = serde_json::from_value(
@@ -724,6 +1028,62 @@ mod tests {
         // The app's keys never go into moli.toml.
         assert!(
             serde_json::from_value::<Config>(serde_json::json!({ "client_secret": "x" })).is_err()
+        );
+    }
+
+    #[test]
+    fn a_schedule_ask_is_checked_before_it_becomes_a_request() {
+        let answer: Json = serde_json::from_str(include_str!("fixtures/homesdata.json")).unwrap();
+        let homes = model::homes(&answer);
+        let home = &homes[0];
+        assert!(schedule_request(home, &Request::Read).unwrap().is_none());
+        let (path, body) = schedule_request(
+            home,
+            &Request::Activate(serde_json::json!({ "id": "sched-2" })),
+        )
+        .unwrap()
+        .unwrap();
+        assert_eq!(path, "/api/switchhomeschedule");
+        assert_eq!(
+            body,
+            Payload::Form("home_id=home-1&schedule_id=sched-2".into())
+        );
+        assert!(matches!(
+            schedule_request(
+                home,
+                &Request::Activate(serde_json::json!({ "id": "nope" }))
+            ),
+            Err(ServiceError::Invalid(_))
+        ));
+        // A schedule sent back as read, edited: the body Netatmo reads.
+        let mut edited = home.schedules[0].to_json();
+        edited["name"] = serde_json::json!("Semaine 2");
+        edited["zones"][0]["rooms"][2]["temp"] = serde_json::json!(21);
+        let (path, body) = schedule_request(home, &Request::Sync(edited.clone()))
+            .unwrap()
+            .unwrap();
+        assert_eq!(path, "/api/synchomeschedule");
+        let Payload::Json(text) = body else {
+            panic!("a JSON body")
+        };
+        let sent: Json = serde_json::from_str(&text).unwrap();
+        assert_eq!(sent["schedule_id"], "sched-1");
+        assert_eq!(sent["name"], "Semaine 2");
+        assert_eq!(
+            sent["zones"][0]["rooms"][2]["therm_setpoint_temperature"],
+            21.0
+        );
+        assert_eq!(sent["timetable"].as_array().unwrap().len(), 23);
+        let (path, body) = schedule_request(home, &Request::Create(edited.clone()))
+            .unwrap()
+            .unwrap();
+        assert_eq!(path, "/api/createnewhomeschedule");
+        assert!(!body.text().contains("schedule_id"));
+        edited["zones"][1]["rooms"][0]["temp"] = serde_json::json!(6);
+        let refused = schedule_request(home, &Request::Sync(edited)).unwrap_err();
+        assert!(
+            matches!(refused, ServiceError::Invalid(ref why) if why.contains("Nuit")),
+            "{refused}"
         );
     }
 

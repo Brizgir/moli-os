@@ -5,16 +5,45 @@
         "id": "home-1",
         "name": "Maison",
         "altitude": 100,
-        "coordinates": [0.0, 0.0],
+        "coordinates": [
+          0.0,
+          0.0
+        ],
         "country": "FR",
         "timezone": "Europe/Paris",
         "therm_setpoint_default_duration": 180,
         "therm_mode": "schedule",
         "rooms": [
-          { "id": "1001", "name": "Salon", "type": "livingroom", "module_ids": ["aa:bb:cc:dd:ee:02"] },
-          { "id": "1002", "name": "Chambre", "type": "bedroom", "module_ids": ["aa:bb:cc:dd:ee:03"] },
-          { "id": "1003", "name": "Bureau", "type": "office", "module_ids": ["aa:bb:cc:dd:ee:04"] },
-          { "id": "1004", "name": "Garage", "type": "garage", "module_ids": [] }
+          {
+            "id": "1001",
+            "name": "Salon",
+            "type": "livingroom",
+            "module_ids": [
+              "aa:bb:cc:dd:ee:02"
+            ]
+          },
+          {
+            "id": "1002",
+            "name": "Chambre",
+            "type": "bedroom",
+            "module_ids": [
+              "aa:bb:cc:dd:ee:03"
+            ]
+          },
+          {
+            "id": "1003",
+            "name": "Bureau",
+            "type": "office",
+            "module_ids": [
+              "aa:bb:cc:dd:ee:04"
+            ]
+          },
+          {
+            "id": "1004",
+            "name": "Garage",
+            "type": "garage",
+            "module_ids": []
+          }
         ],
         "modules": [
           {
@@ -22,7 +51,11 @@
             "type": "NAPlug",
             "name": "Relais",
             "setup_date": 1600000000,
-            "modules_bridged": ["aa:bb:cc:dd:ee:02", "aa:bb:cc:dd:ee:03", "aa:bb:cc:dd:ee:04"]
+            "modules_bridged": [
+              "aa:bb:cc:dd:ee:02",
+              "aa:bb:cc:dd:ee:03",
+              "aa:bb:cc:dd:ee:04"
+            ]
           },
           {
             "id": "aa:bb:cc:dd:ee:02",
@@ -49,13 +82,287 @@
             "bridge": "aa:bb:cc:dd:ee:01"
           }
         ],
-        "schedules": []
+        "schedules": [
+          {
+            "timetable": [
+              {
+                "zone_id": 1,
+                "m_offset": 0
+              },
+              {
+                "zone_id": 0,
+                "m_offset": 390
+              },
+              {
+                "zone_id": 1,
+                "m_offset": 1320
+              },
+              {
+                "zone_id": 1,
+                "m_offset": 1440
+              },
+              {
+                "zone_id": 0,
+                "m_offset": 1830
+              },
+              {
+                "zone_id": 1,
+                "m_offset": 2760
+              },
+              {
+                "zone_id": 1,
+                "m_offset": 2880
+              },
+              {
+                "zone_id": 0,
+                "m_offset": 3270
+              },
+              {
+                "zone_id": 1,
+                "m_offset": 4200
+              },
+              {
+                "zone_id": 1,
+                "m_offset": 4320
+              },
+              {
+                "zone_id": 0,
+                "m_offset": 4710
+              },
+              {
+                "zone_id": 1,
+                "m_offset": 5640
+              },
+              {
+                "zone_id": 1,
+                "m_offset": 5760
+              },
+              {
+                "zone_id": 0,
+                "m_offset": 6150
+              },
+              {
+                "zone_id": 1,
+                "m_offset": 7080
+              },
+              {
+                "zone_id": 1,
+                "m_offset": 7200
+              },
+              {
+                "zone_id": 0,
+                "m_offset": 7590
+              },
+              {
+                "zone_id": 2,
+                "m_offset": 7920
+              },
+              {
+                "zone_id": 0,
+                "m_offset": 8280
+              },
+              {
+                "zone_id": 1,
+                "m_offset": 8520
+              },
+              {
+                "zone_id": 1,
+                "m_offset": 8640
+              },
+              {
+                "zone_id": 0,
+                "m_offset": 9030
+              },
+              {
+                "zone_id": 1,
+                "m_offset": 9960
+              }
+            ],
+            "zones": [
+              {
+                "id": 0,
+                "name": "Confort",
+                "type": 0,
+                "rooms_temp": [
+                  {
+                    "room_id": "1001",
+                    "temp": 20
+                  },
+                  {
+                    "room_id": "1002",
+                    "temp": 18
+                  },
+                  {
+                    "room_id": "1003",
+                    "temp": 19.5
+                  }
+                ],
+                "rooms": [
+                  {
+                    "id": "1001",
+                    "therm_setpoint_temperature": 20
+                  },
+                  {
+                    "id": "1002",
+                    "therm_setpoint_temperature": 18
+                  },
+                  {
+                    "id": "1003",
+                    "therm_setpoint_temperature": 19.5
+                  }
+                ]
+              },
+              {
+                "id": 1,
+                "name": "Nuit",
+                "type": 1,
+                "rooms_temp": [
+                  {
+                    "room_id": "1001",
+                    "temp": 17
+                  },
+                  {
+                    "room_id": "1002",
+                    "temp": 17
+                  },
+                  {
+                    "room_id": "1003",
+                    "temp": 16
+                  }
+                ],
+                "rooms": [
+                  {
+                    "id": "1001",
+                    "therm_setpoint_temperature": 17
+                  },
+                  {
+                    "id": "1002",
+                    "therm_setpoint_temperature": 17
+                  },
+                  {
+                    "id": "1003",
+                    "therm_setpoint_temperature": 16
+                  }
+                ]
+              },
+              {
+                "id": 2,
+                "name": "Éco",
+                "type": 5,
+                "rooms_temp": [
+                  {
+                    "room_id": "1001",
+                    "temp": 18
+                  },
+                  {
+                    "room_id": "1002",
+                    "temp": 17
+                  },
+                  {
+                    "room_id": "1003",
+                    "temp": 17
+                  }
+                ],
+                "rooms": [
+                  {
+                    "id": "1001",
+                    "therm_setpoint_temperature": 18
+                  },
+                  {
+                    "id": "1002",
+                    "therm_setpoint_temperature": 17
+                  },
+                  {
+                    "id": "1003",
+                    "therm_setpoint_temperature": 17
+                  }
+                ]
+              }
+            ],
+            "name": "Semaine",
+            "default": true,
+            "away_temp": 12,
+            "hg_temp": 7,
+            "id": "sched-1",
+            "selected": true,
+            "type": "therm"
+          },
+          {
+            "timetable": [
+              {
+                "zone_id": 0,
+                "m_offset": 0
+              }
+            ],
+            "zones": [
+              {
+                "id": 0,
+                "name": "Confort",
+                "type": 0,
+                "rooms_temp": [
+                  {
+                    "room_id": "1001",
+                    "temp": 19
+                  },
+                  {
+                    "room_id": "1002",
+                    "temp": 18
+                  },
+                  {
+                    "room_id": "1003",
+                    "temp": 18
+                  }
+                ],
+                "rooms": [
+                  {
+                    "id": "1001",
+                    "therm_setpoint_temperature": 19
+                  },
+                  {
+                    "id": "1002",
+                    "therm_setpoint_temperature": 18
+                  },
+                  {
+                    "id": "1003",
+                    "therm_setpoint_temperature": 18
+                  }
+                ]
+              }
+            ],
+            "name": "Vacances",
+            "default": false,
+            "away_temp": 12,
+            "id": "sched-2",
+            "selected": false,
+            "type": "therm"
+          },
+          {
+            "timetable": [],
+            "zones": [],
+            "name": "Événement",
+            "id": "sched-3",
+            "type": "event"
+          }
+        ]
       },
       {
         "id": "home-2",
         "name": "Chalet",
-        "rooms": [{ "id": "2001", "name": "Entrée", "type": "lobby" }],
-        "modules": [{ "id": "aa:bb:cc:dd:ee:05", "type": "NACamera", "name": "Caméra", "room_id": "2001" }]
+        "rooms": [
+          {
+            "id": "2001",
+            "name": "Entrée",
+            "type": "lobby"
+          }
+        ],
+        "modules": [
+          {
+            "id": "aa:bb:cc:dd:ee:05",
+            "type": "NACamera",
+            "name": "Caméra",
+            "room_id": "2001"
+          }
+        ]
       }
     ],
     "user": {
