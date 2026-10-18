@@ -15,10 +15,12 @@ Tout tourne en conteneur, aucune toolchain locale requise :
 
 ```
 .\scripts\dev.ps1 sh scripts/check.sh   # Windows : fmt + clippy pedantic -D warnings + tests + catalogue + fuites, obligatoire avant chaque commit
-sh scripts/check.sh                     # Linux, macOS : la même chose, dans l'image docker/dev.Dockerfile
+sh scripts/dev.sh sh scripts/check.sh   # Linux, macOS : la même chose, dans l'image docker/dev.Dockerfile
 cd web && npm run build && cd .. && node scripts/i18n-check.mjs   # si l'interface a changé : build et traductions
 docker build -t moli-os .               # l'image (Svelte → Rust musl → scratch)
 ```
+
+Toujours passer par `scripts/dev.ps1` ou `scripts/dev.sh` : ils partagent un seul volume `moli-target` entre tous les worktrees. Ne jamais créer un volume `target` par tâche (10 à 15 Go chacun).
 
 La CI de GitHub (`.github/workflows/check.yml`) refait tout cela sur chaque pull request.
 
