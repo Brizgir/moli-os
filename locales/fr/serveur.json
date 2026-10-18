@@ -154,5 +154,7 @@
   "serveur.maison.trop_de_pieces": "{max} pièces au plus",
   "serveur.maison.inconnue": "pas de pièce « {name} » dans la liste",
   "serveur.service.sans_reponse": "l'appareil n'a pas répondu à temps",
-  "serveur.service.humain": "seule une personne (code), depuis le tableau de bord, change ce réglage"
+  "serveur.service.humain": "seule une personne (code), depuis le tableau de bord, change ce réglage",
+  "serveur.maison.page_inconnue": "pas de page « {page} » dans le menu",
+  "serveur.maison.choix_inconnu": "« {choice} » : automatique (auto), toujours (always) ou jamais (never)"
 }

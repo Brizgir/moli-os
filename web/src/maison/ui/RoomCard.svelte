@@ -1,5 +1,5 @@
 <script>
-  import { hub, value, act, isOn, powerKey, protectedRoom, num, nameOf, deviceKind, lampsOf, doorOpen, leak, motion, lowBattery, unpowered, isFixture, note, reachable, quiet, outletsOf, speakerState, speakerGroup } from '../lib/home.svelte.js';
+  import { hub, value, act, isOn, powerKey, protectedRoom, num, nameOf, deviceKind, lampsOf, doorOpen, leak, motion, lowBattery, unpowered, isFixture, note, reachable, quiet, outletsOf, speakerState, speakerGroup, heatedRoom, deg } from '../lib/home.svelte.js';
   import { t } from '../../lib/i18n.svelte.js';
   import Icon from './Icon.svelte';
   import LightTile from './LightTile.svelte';
@@ -81,6 +81,14 @@
       .filter((x) => typeof x === 'number');
     return readings.length ? readings.reduce((a, b) => a + b, 0) / readings.length : null;
   });
+  // What the heating aims at here (a Netatmo room), beside the temperature.
+  const setpoint = $derived.by(() => {
+    const d = room.sensors.find((x) => heatedRoom(x) && x.online !== false);
+    const sp = d ? value(d.id, 'setpoint') : null;
+    return typeof sp === 'number' && !['off', 'hg'].includes(value(d.id, 'setpoint_mode')) ? sp : null;
+  });
+  // A room that could say its temperature but has nothing to read it with.
+  const noThermometer = $derived(temp == null && !room.note && !room.empty);
   const tone = (deg) => (deg < 18 ? 'cold' : deg < 20 ? 'cool' : deg <= 24 ? 'good' : deg <= 27 ? 'warm' : 'hot');
   const gaugeAt = (deg) => Math.min(100, Math.max(0, ((deg - 14) / 16) * 100));
 
@@ -183,11 +191,16 @@
     <span class="room-icon" class:lit={room.lit}><Icon name={room.icon} size={22} /></span>
     <div class="title">
       <h2>{room.name}{#if locked}<span class="lock" title={t('commun.piece.protegee_titre')}><Icon name="lock" size={13} /></span>{/if}</h2>
-      <span class="muted">{room.note ?? (room.lit ? t('commun.piece.allumees', { count: room.lit }) : t('commun.piece.tout_eteint'))}</span>
+      <span class="sub">
+        <span class="muted">{room.note ?? (room.lit ? t('commun.piece.allumees', { count: room.lit }) : t('commun.piece.tout_eteint'))}{noThermometer ? ` · ${t('commun.piece.sans_thermometre')}` : ''}</span>
+        {#if temp != null}
+          <span class="temp {tone(temp)}" title={setpoint != null ? t('commun.piece.temperature_consigne', { temp: num(temp, 1), aim: deg(setpoint) }) : t('commun.piece.temperature')}>
+            <b class="num">{num(temp, 1)}°</b>
+            {#if setpoint != null}<span class="aim num" aria-label={t('commun.piece.consigne', { aim: deg(setpoint) })}>→ {deg(setpoint)}°</span>{:else}<i class="gauge"><i style="left:{gaugeAt(temp)}%"></i></i>{/if}
+          </span>
+        {/if}
+      </span>
     </div>
-    {#if temp != null}
-      <span class="temp {tone(temp)}" title={t('commun.piece.temperature')}><b class="num">{num(temp, 1)}°</b><i class="gauge"><i style="left:{gaugeAt(temp)}%"></i></i></span>
-    {/if}
     {#if lamps.length}
       <button class="round" class:open={showLooks} onclick={() => (showLooks = !showLooks)} aria-expanded={showLooks} title={t('commun.piece.ambiances')} aria-label={t('commun.piece.ambiances_de', { name: room.name })}>
         <Icon name="palette" size={17} />
@@ -202,6 +215,10 @@
       </button>
     {/if}
   </div>
+
+  {#if locked}
+    <p class="guarded"><Icon name="lock" size={14} />{t('commun.piece.protegee_phrase')}</p>
+  {/if}
 
   {#if room.empty}
     <p class="empty">
@@ -348,7 +365,14 @@
     color: var(--cool);
   }
 
-  .title span {
+  .title .sub {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 8px;
+  }
+
+  .sub > .muted {
     font-size: 12.5px;
   }
 
@@ -366,6 +390,24 @@
 
   .temp b {
     font-weight: 700;
+  }
+
+  .temp .aim {
+    font-weight: 550;
+    color: var(--ink-3);
+  }
+
+  /* A protected room, said in a sentence (the lock is in the title). */
+  .guarded {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+    padding: 8px 12px;
+    border-radius: 12px;
+    background: var(--cool-soft);
+    color: var(--cool);
+    font-size: 13px;
   }
 
   .gauge {

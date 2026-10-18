@@ -1,5 +1,6 @@
 <script>
-  import { home, hub, roomOf, hidden, protectedRoom, nameOf, clock, relative } from '../lib/home.svelte.js';
+  import { untrack } from 'svelte';
+  import { home, hub, roomOf, hidden, protectedRoom, nameOf, clock, relative, ringing, camerasAsDoorbell, lastSeen, dayAndTime, value, num } from '../lib/home.svelte.js';
   import { t } from '../../lib/i18n.svelte.js';
   import Icon from '../ui/Icon.svelte';
   import CameraTile from '../ui/CameraTile.svelte';
@@ -14,6 +15,24 @@
       .map((d) => ({ id: d.id, name: nameOf(d.id), refresh: 15 }));
     return [...listed, ...others].map((c) => ({ ...c, locked: protectedRoom(roomOf(hub.devices[c.id]) ?? '') }));
   });
+
+  // A doorbell and cameras that tell their events without an image (Ring):
+  // the last press and motion of each, from the history.
+  const rings = $derived(Object.values(hub.devices).filter((d) => !hidden(d.id) && ringing(d)));
+  let ringSeen = $state({});
+  const ringIds = $derived(rings.map((d) => d.id).join());
+  $effect(() => {
+    void ringIds;
+    untrack(readRings);
+  });
+  function readRings() {
+    for (const d of rings) {
+      const keys = ['doorbell', 'motion'].filter((k) => d.points.some((p) => p.key === k));
+      Promise.all(keys.map((k) => lastSeen(d.id, [k], 24 * 7).then((ts) => [k, ts]))).then((pairs) => {
+        ringSeen = { ...ringSeen, [d.id]: Object.fromEntries(pairs) };
+      });
+    }
+  }
 
   let open = $state(null);
   const current = $derived(cameras.find((c) => c.id === open));
@@ -68,7 +87,7 @@
 
 <div class="cameras">
   <header>
-    <h1 class="page-title">{t('salon.cameras.titre')}</h1>
+    <h1 class="page-title">{camerasAsDoorbell() ? t('commun.nav.sonnette_cameras') : t('salon.cameras.titre')}</h1>
     <p class="page-sub">{t('salon.cameras.sous_titre')}</p>
   </header>
 
@@ -81,9 +100,28 @@
         {#if cam.locked}<span class="chip cool lock"><Icon name="lock" size={14} />{t('salon.cameras.protegee')}</span>{/if}
       </div>
     {:else}
-      <p class="muted">{t('salon.cameras.aucune')}</p>
+      {#if !rings.length}<p class="muted">{t('salon.cameras.aucune')}</p>{/if}
     {/each}
   </div>
+
+  {#if rings.length}
+    <section class="rings">
+      {#each rings as d (d.id)}
+        {@const seenOf = ringSeen[d.id] ?? {}}
+        <div class="card ring">
+          <div class="card-head">
+            <h2><Icon name={d.points.some((p) => p.key === 'doorbell') ? 'bell' : 'cctv'} size={18} />{nameOf(d.id)}</h2>
+            {#if typeof value(d.id, 'battery') === 'number'}<span class="chip">{t('commun.pourcent', { n: num(value(d.id, 'battery')) })}</span>{/if}
+          </div>
+          <div class="picture">{t('maison.accueil.sonnette_image')}</div>
+          {#if d.points.some((p) => p.key === 'doorbell')}
+            <p><b>{seenOf.doorbell ? t('maison.accueil.dernier_appui', { when: dayAndTime(seenOf.doorbell, home.now) }) : t('maison.accueil.aucun_appui')}</b></p>
+          {/if}
+          <p class="muted">{seenOf.motion ? t('salon.cameras.mouvement', { when: dayAndTime(seenOf.motion, home.now) }) : t('maison.accueil.aucun_mouvement')}</p>
+        </div>
+      {/each}
+    </section>
+  {/if}
 </div>
 
 {#if current}
@@ -119,6 +157,34 @@
   .cameras {
     display: grid;
     gap: 22px;
+  }
+
+  .rings {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
+    gap: 20px;
+  }
+
+  .ring {
+    display: grid;
+    gap: 10px;
+  }
+
+  .ring p {
+    margin: 0;
+    font-size: 14px;
+  }
+
+  .picture {
+    aspect-ratio: 16 / 10;
+    border-radius: 18px;
+    background: var(--surface-2);
+    display: grid;
+    place-items: center;
+    padding: 12px;
+    color: var(--ink-3);
+    font-size: 14px;
+    text-align: center;
   }
 
   .wall {

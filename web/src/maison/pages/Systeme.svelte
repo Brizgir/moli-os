@@ -9,6 +9,7 @@
   import RingAccount from '../ui/RingAccount.svelte';
   import DashboardCode from '../ui/DashboardCode.svelte';
   import PeopleCard from '../ui/PeopleCard.svelte';
+  import PagesSetting from '../ui/PagesSetting.svelte';
   import { hub, home } from '../lib/home.svelte.js';
   import { t, locale } from '../../lib/i18n.svelte.js';
 
@@ -159,6 +160,18 @@
   </header>
 
   {#if error}<p class="muted">{error}</p>{/if}
+
+  <!-- The Atelier: every device, every value, to tinker (no longer in the menu). -->
+  <a class="card atelier-link" href="#/atelier">
+    <span class="atelier-icon"><Icon name="atelier" size={20} /></span>
+    <span class="atelier-what">
+      <b>{t('commun.nav.atelier')}</b>
+      <span class="muted">{t('commun.nav.atelier_titre')}</span>
+    </span>
+    <Icon name="arrow-top-right" size={18} />
+  </a>
+
+  <PagesSetting />
 
   <PeopleCard />
 
@@ -312,6 +325,32 @@
 </div>
 
 <style>
+  .atelier-link {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    color: inherit;
+    text-decoration: none;
+  }
+
+  .atelier-icon {
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    background: var(--surface-2);
+    color: var(--ink-2);
+  }
+
+  .atelier-what {
+    flex: 1;
+    display: grid;
+    gap: 2px;
+    font-size: 14px;
+  }
+
   .systeme {
     display: grid;
     grid-template-columns: minmax(0, 1fr);

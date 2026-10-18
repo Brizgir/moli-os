@@ -1,6 +1,6 @@
 <script>
   import { onMount } from 'svelte';
-  import { home, hub, value, device, isOn, clock, num, relative, lastSeen, roomList, lampsOf, nameOf, doorOpen, leak, lowBattery, act, pending } from '../lib/home.svelte.js';
+  import { home, hub, value, device, isOn, clock, num, relative, lastSeen, roomList, lampsOf, nameOf, doorOpen, leak, lowBattery, act, pending, hidden, heatedRoom, ringing } from '../lib/home.svelte.js';
   import { isPrinter, phase } from '../lib/printers.js';
   import { t, locale } from '../../lib/i18n.svelte.js';
   import Icon from '../ui/Icon.svelte';
@@ -11,18 +11,40 @@
   import AmbiancePicker from '../ui/AmbiancePicker.svelte';
   import Routines from '../ui/Routines.svelte';
   import SkyHero from '../ui/SkyHero.svelte';
+  import HeatingCard from '../ui/HeatingCard.svelte';
+  import DoorbellEvents from '../ui/DoorbellEvents.svelte';
+  import MusicCard from '../ui/MusicCard.svelte';
+  import Today from '../ui/Today.svelte';
+
+  // A card shows only when what it tells exists here (a TV for the remote,
+  // a meter for the electricity, an air sensor for the air…): its code
+  // stays, its condition decides.
 
   const cfg = $derived(home.config ?? {});
   // The climate section is named after what it lists: radiators and
   // thermostats (a `heating` point), air conditioners, or both.
-  const heaters = $derived((cfg.favorites?.climate ?? []).map((c) => hub.devices[c.id]).filter(Boolean).map((d) => d.points.some((p) => p.key === 'heating')));
+  // A heated room (Netatmo) is the heating card's: here, the clims.
+  const clims = $derived((cfg.favorites?.climate ?? []).filter((c) => hub.devices[c.id] && !heatedRoom(hub.devices[c.id])));
+  const heaters = $derived(clims.map((c) => hub.devices[c.id]).map((d) => d.points.some((p) => p.key === 'heating')));
+  const heated = $derived(Object.values(hub.devices).some((d) => !hidden(d.id) && heatedRoom(d)));
+  const rings = $derived(Object.values(hub.devices).some((d) => !hidden(d.id) && ringing(d)));
   const climateTitle = $derived(
     heaters.length && heaters.every(Boolean) ? 'maison.accueil.chauffage' : heaters.some(Boolean) ? 'maison.accueil.temperature' : 'maison.accueil.clim',
   );
   const climateIcon = $derived(heaters.length && heaters.every(Boolean) ? 'radiator' : 'air-conditioner');
   const out = $derived(cfg.outdoor ?? {});
 
-  const lights = $derived(cfg.favorites?.lights ?? []);
+  // The favourite lights; without any, one tile per room that has lights
+  // (its Hue room when it has one, else its lamps together).
+  const lights = $derived.by(() => {
+    if (cfg.favorites?.lights?.length) return cfg.favorites.lights;
+    return roomList()
+      .filter((r) => r.group || r.lights.length)
+      .map((r) => {
+        const first = r.group ?? r.lights[0];
+        return { id: first.id, name: r.name, icon: r.icon, also: r.lights.map((d) => d.id).filter((id) => id !== first.id) };
+      });
+  });
   const litCount = $derived(lights.filter((l) => [l.id, ...(l.also ?? [])].some((i) => isOn(i))).length);
 
   // Ambiances, room by room (the last room chosen is remembered here).
@@ -121,6 +143,9 @@
     return list;
   });
 
+  // What keeps running: the services (drivers) whose devices answer.
+  const services = $derived(new Set(Object.values(hub.devices).filter((d) => d.online !== false).map((d) => d.instance)).size);
+
   const tv = $derived(cfg.salon?.tv);
   const speaker = $derived(cfg.salon?.speaker);
   const tvOn = $derived(value(tv, 'power') === true);
@@ -140,6 +165,12 @@
               : t('maison.air.mauvais'),
   );
   const bell = $derived((cfg.favorites?.cameras ?? [])[0]);
+  const humidity = $derived(value(out.weather, 'humidity'));
+  const poolTemp = $derived(value(out.pool, 'temperature'));
+  const uv = $derived(value(out.air, 'uv_index'));
+  // The outside card sums up the air and the pool: without them, the sky
+  // above says the rest.
+  const outside = $derived(aqi != null || uv != null || poolTemp != null);
 
   // The last real passage at the door (the history knows; the live value
   // is refreshed every few seconds whatever happens).
@@ -173,86 +204,113 @@
     </div>
   {/if}
 
-  <section class="notices" aria-label={t('maison.accueil.a_savoir')}>
-    {#each notices as n (n.text)}
-      <a class="chip {n.tone}" href={n.href}><Icon name={n.icon} size={16} />{n.text}</a>
-    {:else}
-      <span class="chip good"><Icon name="leaf" size={16} />{t('maison.accueil.calme')}</span>
-    {/each}
-  </section>
-
-  <div class="grid">
-    <section class="card lights">
-      <div class="card-head">
-        <h2><Icon name="light" size={18} />{t('maison.accueil.lumieres')} <span class="count">{litCount ? t('maison.accueil.allumees', { count: litCount }) : t('maison.accueil.tout_eteint')}</span></h2>
-        <a class="more" href="#/pieces" aria-label={t('maison.accueil.toutes_pieces')}><Icon name="arrow-top-right" size={18} /></a>
-      </div>
-      <div class="tiles">
-        {#each lights as l (l.id)}
-          <LightTile id={l.id} name={l.name} icon={l.icon} also={l.also ?? []} />
-        {/each}
-      </div>
-      {#if mood}
-        <div class="moods">
-          <div class="moods-head">
-            <span class="moods-title"><Icon name="palette" size={16} />{t('maison.accueil.ambiance')}</span>
-            <div class="rooms" role="group" aria-label={t('maison.accueil.piece')}>
-              {#each moodRooms as r (r.name)}
-                <button class:on={r.name === mood.name} onclick={() => pickRoom(r.name)} aria-pressed={r.name === mood.name}>{r.name}</button>
-              {/each}
-            </div>
-          </div>
-          <AmbiancePicker lights={mood.lamps} label={mood.name} />
-        </div>
-      {/if}
+  {#if notices.length}
+    <section class="notices" aria-label={t('maison.accueil.a_savoir')}>
+      {#each notices as n (n.text)}
+        <a class="chip {n.tone}" href={n.href}><Icon name={n.icon} size={16} />{n.text}</a>
+      {/each}
     </section>
+  {:else}
+    <section class="all-good" aria-label={t('maison.accueil.a_savoir')}>
+      <Icon name="ok" size={20} />
+      <span>{services ? t('maison.accueil.tout_va_bien', { count: services }) : t('maison.accueil.tout_va_bien_court')}</span>
+    </section>
+  {/if}
 
-    <div class="side">
-      <EnergyCard />
-      <Routines />
+  <!-- Two columns: what the house does (heating, lights, clims…) and, beside
+       it, the door, the music, the day. Cards come and go with the house. -->
+  <div class="grid">
+    <div class="main">
+      {#if heated}
+        <div class="heating"><HeatingCard /></div>
+      {/if}
+
+      {#if lights.length || mood}
+        <section class="card lights">
+          <div class="card-head">
+            <h2><Icon name="light" size={18} />{t('maison.accueil.lumieres')} <span class="count">{litCount ? t('maison.accueil.allumees', { count: litCount }) : t('maison.accueil.tout_eteint')}</span></h2>
+            <a class="more" href="#/pieces" aria-label={t('maison.accueil.toutes_pieces')}><Icon name="arrow-top-right" size={18} /></a>
+          </div>
+          <div class="tiles">
+            {#each lights as l (l.id)}
+              <LightTile id={l.id} name={l.name} icon={l.icon} also={l.also ?? []} />
+            {/each}
+          </div>
+          {#if mood}
+            <div class="moods">
+              <div class="moods-head">
+                <span class="moods-title"><Icon name="palette" size={16} />{t('maison.accueil.ambiance')}</span>
+                <div class="rooms" role="group" aria-label={t('maison.accueil.piece')}>
+                  {#each moodRooms as r (r.name)}
+                    <button class:on={r.name === mood.name} onclick={() => pickRoom(r.name)} aria-pressed={r.name === mood.name}>{r.name}</button>
+                  {/each}
+                </div>
+              </div>
+              <AmbiancePicker lights={mood.lamps} label={mood.name} />
+            </div>
+          {/if}
+        </section>
+      {/if}
+
+      {#if clims.length}
+        <section class="card climate">
+          <div class="card-head"><h2><Icon name={climateIcon} size={18} />{t(climateTitle)}</h2></div>
+          <div class="clims">
+            {#each clims as c (c.id)}
+              <ClimateCard id={c.id} name={c.name} />
+            {/each}
+          </div>
+        </section>
+      {/if}
+
+      {#if tv}
+        <a class="card remote" href="#/salon">
+          <span class="tv-object" aria-hidden="true">
+            <span class="screen" class:lit={tvOn}></span>
+            <span class="stand"></span>
+          </span>
+          <span class="remote-text">
+            <strong>{t('maison.accueil.telecommande')}</strong>
+            <span class="muted">{tvOn ? t('maison.accueil.tele_allumee') : t('maison.accueil.tele_veille')}{playing ? ` · ${t('maison.accueil.son_joue')}` : ''}</span>
+          </span>
+          <span class="go"><Icon name="arrow-top-right" size={20} /></span>
+        </a>
+      {/if}
+
+      {#if outside}
+        <a class="card outside" href="#/dehors">
+          <div class="card-head"><h2><Icon name="flower-outline" size={18} />{t('maison.accueil.dehors')}</h2><span class="more" aria-hidden="true"><Icon name="arrow-top-right" size={18} /></span></div>
+          <div class="facts">
+            {#if aqi != null}<div><small>{t('maison.accueil.air')}</small><b>{aqiWord}</b></div>{/if}
+            {#if uv != null}<div><small>UV</small><b class="num">{num(uv, 0)}</b></div>{/if}
+            {#if humidity != null}<div><small>{t('maison.accueil.humidite')}</small><b class="num">{`${num(humidity)} %`}</b></div>{/if}
+            {#if poolTemp != null}<div><small>{t('maison.accueil.piscine')}</small><b class="num">{`${num(poolTemp, 1)}°`}</b></div>{/if}
+          </div>
+        </a>
+      {/if}
     </div>
 
-    <section class="card climate">
-      <div class="card-head"><h2><Icon name={climateIcon} size={18} />{t(climateTitle)}</h2></div>
-      <div class="clims">
-        {#each cfg.favorites?.climate ?? [] as c (c.id)}
-          <ClimateCard id={c.id} name={c.name} />
-        {/each}
-      </div>
-    </section>
+    <div class="side">
+      {#if bell}
+        <section class="card doorbell">
+          <div class="card-head">
+            <h2><Icon name="bell" size={18} />{t('maison.accueil.devant_porte')}</h2>
+            <a class="more" href="#/cameras" aria-label={t('maison.accueil.toutes_cameras')}><Icon name="arrow-top-right" size={18} /></a>
+          </div>
+          <CameraTile id={bell.id} name={bell.name} refresh={15} />
+          <p class="muted small">{passage ? t('maison.accueil.dernier_passage', { when: relative(passage, home.now) }) : t('maison.accueil.personne')}</p>
+        </section>
+      {:else if rings}
+        <div class="doorbell"><DoorbellEvents /></div>
+      {/if}
 
-    {#if bell}
-      <section class="card doorbell">
-        <div class="card-head">
-          <h2><Icon name="bell" size={18} />{t('maison.accueil.devant_porte')}</h2>
-          <a class="more" href="#/cameras" aria-label={t('maison.accueil.toutes_cameras')}><Icon name="arrow-top-right" size={18} /></a>
-        </div>
-        <CameraTile id={bell.id} name={bell.name} refresh={15} />
-        <p class="muted small">{passage ? t('maison.accueil.dernier_passage', { when: relative(passage, home.now) }) : t('maison.accueil.personne')}</p>
-      </section>
-    {/if}
-
-    <a class="card remote" href="#/salon">
-      <span class="tv-object" aria-hidden="true">
-        <span class="screen" class:lit={tvOn}></span>
-        <span class="stand"></span>
-      </span>
-      <span class="remote-text">
-        <strong>{t('maison.accueil.telecommande')}</strong>
-        <span class="muted">{tvOn ? t('maison.accueil.tele_allumee') : t('maison.accueil.tele_veille')}{playing ? ` · ${t('maison.accueil.son_joue')}` : ''}</span>
-      </span>
-      <span class="go"><Icon name="arrow-top-right" size={20} /></span>
-    </a>
-
-    <a class="card outside" href="#/dehors">
-      <div class="card-head"><h2><Icon name="flower-outline" size={18} />{t('maison.accueil.dehors')}</h2><span class="more" aria-hidden="true"><Icon name="arrow-top-right" size={18} /></span></div>
-      <div class="facts">
-        <div><small>{t('maison.accueil.air')}</small><b>{aqiWord}</b></div>
-        <div><small>UV</small><b class="num">{num(value(out.air, 'uv_index'), 0)}</b></div>
-        <div><small>{t('maison.accueil.humidite')}</small><b class="num">{value(out.weather, 'humidity') != null ? `${num(value(out.weather, 'humidity'))} %` : '—'}</b></div>
-        <div><small>{t('maison.accueil.piscine')}</small><b class="num">{value(out.pool, 'temperature') != null ? `${num(value(out.pool, 'temperature'), 1)}°` : '—'}</b></div>
-      </div>
-    </a>
+      <MusicCard />
+      <Today />
+      {#if home.energy?.available}
+        <EnergyCard />
+      {/if}
+      <Routines />
+    </div>
   </div>
 </div>
 
@@ -318,36 +376,52 @@
     font-size: 14px;
   }
 
+  /* « Tout va bien »: in place of the alerts, when there are none. */
+  .all-good {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 18px;
+    border-radius: 16px;
+    background: var(--good-soft);
+    color: var(--good);
+    font-weight: 600;
+  }
+
   .grid {
     display: grid;
-    grid-template-columns: repeat(12, minmax(0, 1fr));
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
     gap: 20px;
     align-items: start;
   }
 
-  .lights {
-    grid-column: span 8;
-  }
-
+  .main,
   .side {
-    grid-column: span 4;
+    display: grid;
+    gap: 20px;
+    min-width: 0;
   }
 
+  /* The clims, the remote, the outside: side by side under the lights. */
+  .main {
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    align-items: start;
+  }
+
+  .heating,
+  .lights,
   .climate {
-    grid-column: span 7;
+    grid-column: span 12;
   }
 
-  .doorbell {
-    grid-column: span 5;
-    grid-row: span 2;
-  }
-
-  .remote {
-    grid-column: span 3;
-  }
-
+  .remote,
   .outside {
-    grid-column: span 4;
+    grid-column: span 6;
+  }
+
+  /* Routines keeps its own margin elsewhere: here the column's gap. */
+  .side :global(.card) {
+    margin-top: 0;
   }
 
   .moods {
@@ -516,25 +590,22 @@
   }
 
   @media (max-width: 1180px) {
-    .lights,
-    .climate {
-      grid-column: span 12;
+    .grid {
+      grid-template-columns: minmax(0, 1fr);
     }
 
-    .side,
-    .doorbell {
-      grid-column: span 6;
-      grid-row: auto;
-    }
-
-    .remote,
-    .outside {
-      grid-column: span 6;
+    .side {
+      grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
     }
   }
 
-  @media (max-width: 760px) {
-    .grid > * {
+  @media (max-width: 767.98px) {
+    .all-good {
+      padding: 12px 14px;
+      font-size: 15px;
+    }
+
+    .main > * {
       grid-column: span 12 !important;
     }
 

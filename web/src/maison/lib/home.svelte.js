@@ -3,8 +3,9 @@
 
 import { hub, connect, login, decide, refreshSession, onHomeChanged } from '../../lib/hub.svelte.js';
 import { t, locale } from '../../lib/i18n.svelte.js';
+import { justified, visiblePages, camerasOnlyRing, heatedRoom, ringing, PAGE_IDS, PAGE_CHOICES } from './pages.js';
 
-export { hub };
+export { hub, justified, visiblePages, heatedRoom, ringing, PAGE_IDS, PAGE_CHOICES };
 
 export const home = $state({
   /** @type {any} layout from /api/home ({} = automatic) */
@@ -18,6 +19,10 @@ export const home = $state({
   /** theme preference: 'auto' follows daylight */
   theme: readPref('maison-theme', 'auto'),
   now: Date.now(),
+  /** `/api/plan` (its floors say whether the house has a plan) */
+  plan: null,
+  /** `/api/energy`: `{ available, meters }` (404: no `[energy]`) */
+  energy: null,
 });
 
 function readPref(key, fallback) {
@@ -46,7 +51,25 @@ export async function start() {
   setInterval(() => (home.now = Date.now()), 15_000);
   // Written from another screen (a room declared): read again at once.
   onHomeChanged(loadLayout);
+  loadFacts();
   await loadLayout();
+}
+
+/** What the menu reads once to know the house: its plan, its meters. */
+async function loadFacts() {
+  try {
+    const res = await fetch('/api/plan');
+    home.plan = res.ok ? await res.json() : null;
+  } catch {
+    home.plan = null;
+  }
+  try {
+    const res = await fetch('/api/energy');
+    const body = res.ok ? await res.json().catch(() => ({})) : {};
+    home.energy = { available: res.ok, meters: body.meters ?? [] };
+  } catch {
+    home.energy = { available: false, meters: [] };
+  }
 }
 
 /** The layout (`/api/home`); `{}` when the house has none. */
@@ -379,6 +402,34 @@ export async function saveRoom(room, previous = null) {
   return layout;
 }
 
+// ---- the menu's pages ----------------------------------------------------------
+
+/** What the menu's pages are decided on (`pages.js`): the devices shown,
+ *  the layout, the plan, the meters; `extra`: `people`, `voice`. */
+export function pageFacts(extra = {}) {
+  return {
+    devices: Object.values(hub.devices).filter((d) => !hidden(d.id)),
+    kindOf: deviceKind,
+    config: home.config ?? {},
+    plan: home.plan,
+    energy: home.energy,
+    ...extra,
+  };
+}
+
+/** A person's choices (`home.json` `pages`): `{ energie: 'never', … }`. */
+export const pageChoices = () => home.config?.pages ?? {};
+
+/** The cameras' page is the doorbell's when only Ring tells its events. */
+export const camerasAsDoorbell = () => camerasOnlyRing(Object.values(hub.devices).filter((d) => !hidden(d.id)), home.config);
+
+/** Shows or hides pages (`{ energie: 'never', infra: 'auto' }`), as a
+ *  person (403: the caller asks for the code first, see `asHuman`). */
+export async function savePages(choices) {
+  home.config = await roomCall('PUT', '/api/home/pages', choices);
+  return home.config;
+}
+
 /** Forgets a declared room (its devices keep their labels). */
 export async function removeRoom(name) {
   home.config = await roomCall('DELETE', `/api/home/rooms/${encodeURIComponent(name)}`);
@@ -476,8 +527,23 @@ export function num(v, digits = 0) {
   return Number(v).toLocaleString(locale(), { maximumFractionDigits: digits, minimumFractionDigits: digits });
 }
 
+/** A temperature: « 18 » when whole, « 19,5 » otherwise. */
+export function deg(v) {
+  return Number.isInteger(Number(v)) ? num(v, 0) : num(v, 1);
+}
+
 export function clock(ts) {
   return new Date(ts).toLocaleTimeString(locale(), { hour: '2-digit', minute: '2-digit' });
+}
+
+/** « aujourd'hui à 07:42 », « hier à 22:24 », « le 12 oct. à 08:10 ». */
+export function dayAndTime(ts, now = Date.now()) {
+  const day = (x) => new Date(x).toDateString();
+  const time = clock(ts);
+  if (day(ts) === day(now)) return t('commun.quand.aujourdhui', { time });
+  if (day(ts) === day(now - 86_400_000)) return t('commun.quand.hier', { time });
+  const date = new Date(ts).toLocaleDateString(locale(), { day: 'numeric', month: 'short' });
+  return t('commun.quand.le', { date, time });
 }
 
 /** « Samedi 3 octobre »: only the first letter up. */

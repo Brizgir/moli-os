@@ -265,5 +265,17 @@
   "commun.piece.modifier": "Modifier la pièce",
   "commun.piece.modifier_nom": "Modifier {name}",
   "commun.piece.vide": "Aucun appareil ici pour l'instant.",
-  "commun.piece.vide_invitation": "Ranger un appareil dans cette pièce (Atelier)"
+  "commun.piece.vide_invitation": "Ranger un appareil dans cette pièce (Atelier)",
+  "commun.nav.chauffage": "Chauffage",
+  "commun.nav.sonnette_cameras": "Sonnette et caméras",
+  "commun.nav.solaire": "Solaire",
+  "commun.nav.plus": "Plus",
+  "commun.nav.plus_titre": "Le reste du menu",
+  "commun.quand.aujourdhui": "aujourd’hui à {time}",
+  "commun.quand.hier": "hier à {time}",
+  "commun.quand.le": "le {date} à {time}",
+  "commun.piece.sans_thermometre": "sans thermomètre",
+  "commun.piece.temperature_consigne": "{temp}° dans la pièce, consigne {aim}°",
+  "commun.piece.consigne": "consigne {aim}°",
+  "commun.piece.protegee_phrase": "Protégée : un automatisme ou Moli y attend ton code."
 }

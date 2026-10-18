@@ -154,5 +154,7 @@
   "serveur.maison.trop_de_pieces": "{max} rooms at most",
   "serveur.maison.inconnue": "no room “{name}” in the list",
   "serveur.service.sans_reponse": "the device did not answer in time",
-  "serveur.service.humain": "only a person (code), from the dashboard, changes this setting"
+  "serveur.service.humain": "only a person (code), from the dashboard, changes this setting",
+  "serveur.maison.page_inconnue": "no page “{page}” in the menu",
+  "serveur.maison.choix_inconnu": "“{choice}”: automatic (auto), always or never"
 }

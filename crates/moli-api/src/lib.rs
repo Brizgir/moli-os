@@ -177,6 +177,7 @@ fn house_routes(humans: &Arc<session::Sessions>, options: &Options) -> Router<Hu
         .layer(Extension(rest::InfraFile(infra)))
         .route("/api/plan", get(plan::get).put(plan::put))
         .route("/api/home/rooms", post(home::create))
+        .route("/api/home/pages", put(home::pages))
         .route(
             "/api/home/rooms/{name}",
             put(home::update).delete(home::delete),
