@@ -122,6 +122,10 @@ pub struct Server {
     /// Days of history kept (0 = no history).
     #[serde(default = "default_history_days")]
     pub history_days: u32,
+    /// Days a photo of each camera event (doorbell, motion…) is kept
+    /// (0, the default: none is taken).
+    #[serde(default)]
+    pub captures_days: u32,
     /// The Cloudflare Access application in front of the tunnel (absent:
     /// nobody coming through Cloudflare is recognized).
     #[serde(default)]
@@ -195,6 +199,7 @@ impl Default for Server {
             worker_threads: default_workers(),
             allowed_hosts: Vec::new(),
             history_days: default_history_days(),
+            captures_days: 0,
             access: None,
             language: default_language(),
             demo: false,

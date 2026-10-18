@@ -158,6 +158,7 @@ impl Announcer {
                 Image {
                     content_type: "audio/wav".into(),
                     bytes: wav,
+                    taken: None,
                 },
             )
             .context("no random name for the sound")?;

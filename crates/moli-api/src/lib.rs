@@ -21,6 +21,7 @@ mod assets;
 mod assistant;
 mod automations;
 mod caller;
+pub mod captures;
 mod guard;
 mod home;
 mod integrations;
@@ -160,6 +161,8 @@ fn device_routes() -> Router<Hub> {
         .route("/api/devices", get(rest::devices))
         .route("/api/devices/{id}", get(rest::device))
         .route("/api/devices/{id}/snapshot", get(rest::snapshot))
+        .route("/api/captures", get(captures::list))
+        .route("/api/captures/{device}/{name}", get(captures::image))
         .route(
             "/api/devices/{id}/service/{name}",
             get(service::read).post(service::write),
@@ -372,6 +375,13 @@ pub fn router(hub: Hub, shutdown: CancellationToken, options: &Options) -> Route
         .layer(Extension(rest::HomeFile(options.home_path.clone())))
         .layer(Extension(home::HomeStore::new(options.home_path.clone())))
         .layer(Extension(plan::PlanDir(
+            options
+                .home_path
+                .as_deref()
+                .and_then(std::path::Path::parent)
+                .map(std::path::Path::to_path_buf),
+        )))
+        .layer(Extension(captures::CapturesDir(
             options
                 .home_path
                 .as_deref()

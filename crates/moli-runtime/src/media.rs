@@ -13,6 +13,9 @@ use crate::BoxFuture;
 pub struct Image {
     pub content_type: String,
     pub bytes: Vec<u8>,
+    /// When the device says it was taken (ms since the epoch); `None`:
+    /// just now (a live camera).
+    pub taken: Option<i64>,
 }
 
 impl std::fmt::Debug for Image {
@@ -20,6 +23,7 @@ impl std::fmt::Debug for Image {
         f.debug_struct("Image")
             .field("content_type", &self.content_type)
             .field("bytes", &self.bytes.len())
+            .field("taken", &self.taken)
             .finish()
     }
 }
