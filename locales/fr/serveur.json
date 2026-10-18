@@ -89,7 +89,7 @@
   "serveur.garde.piece_protegee": "pièce protégée ({room})",
   "serveur.garde.sans_piece_connue": "appareil sans pièce connue",
   "serveur.garde.heures_calmes": "heures calmes ({from} → {to})",
-  "serveur.garde.machine": "ordre à une machine (imprimante, ordinateur) : un humain décide",
+  "serveur.garde.machine": "ordre réservé à une personne (machine au travail, mode de surveillance) : un humain décide",
   "serveur.garde.en_attente": "en attente d'autorisation humaine #{id} : {reason}",
   "serveur.garde.remplacee": "remplacée par une demande plus récente",
   "serveur.garde.expiree": "expirée",

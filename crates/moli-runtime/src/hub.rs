@@ -548,9 +548,9 @@ impl Hub {
 
     /// What the guard says about an order on this point from this origin.
     fn verdict(&self, point: &PointId, origin: Origin) -> Verdict {
-        // Stopping a machine at work (a print, a computer) is a person's
-        // call, whatever the room: an agent asks, and so does the dashboard
-        // without a code.
+        // Stopping a machine at work (a print, a computer) or arming the
+        // house's watch is a person's call, whatever the room: an agent
+        // asks, and so does the dashboard without a code.
         let agent = !matches!(origin, Origin::Ui | Origin::System | Origin::Automation);
         if agent && self.is_control(point) {
             return Verdict::Approval(moli_i18n::tr!("serveur.garde.machine"));

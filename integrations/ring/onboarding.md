@@ -16,6 +16,16 @@
    sonnette passe `doorbell` à vrai dans les 10 à 20 s, puis il retombe.
 5. Redémarrer Moli : `doorbell` reste faux, rien ne se déclenche ;
    un appui d'avant le démarrage n'est jamais annoncé.
+6. Les images : ouvrir l'onglet Caméras ; chaque sonnette et caméra montre sa dernière image
+   avec son heure (`image_at`). Toucher une image en demande une fraîche (quelques secondes ; sur
+   batterie, pas plus d'une par minute, et aucune pendant un enregistrement : l'ancienne reste,
+   avec son heure). Une caméra qui reste « indisponible » : activer ses **Instantanés** dans
+   l'appli Ring (réglages de l'appareil), souvent coupés sur une Stick Up Cam Mini.
+7. Le mode de surveillance, **avec la personne présente** : sur la page Caméras, le mode actuel
+   est celui de l'appli Ring. Passer de Domicile à Désactivé (le code est
+   demandé), vérifier dans l'appli Ring, puis remettre le mode d'origine. Changer le mode dans
+   l'appli : Moli le montre en moins d'une minute. Jamais ce test sans la personne : armer ou
+   désarmer la surveillance d'une maison habitée est son affaire.
 
 ## Premier essai contre un vrai compte
 
@@ -30,6 +40,13 @@ carillon ou un compte à plusieurs lieux n'ont pas encore été vus. Au premier 
   montre, c'est ici qu'il faut regarder (forme de la réponse).
 - La santé (`doorbots|chimes/<id>/health`, notée `ring health` si elle échoue) : sans elle,
   `wifi_signal` reste vide, le reste marche.
+- Les images (`ring snapshot update`, `ring snapshot time` en debug) : `PUT snapshots/update`
+  puis `POST snapshots/timestamps` jusqu'à un horodatage plus récent, puis `GET
+  snapshots/image/<id>` (404/410 = rien de disponible, l'image gardée reste). Si l'onglet
+  Caméras reste vide, c'est ici qu'il faut regarder.
+- Le mode (`ring location`, `ring mode`) : `GET/POST prd-api-us.prd.rings.solutions/api/v1/mode/
+  location/<lieu>` (l'hôte de l'appli, `app.ring.com` autrefois). Sans réponse, pas d'appareil
+  « Surveillance Ring » ; `readOnly` (alarme Ring) : lu, jamais changé.
 - `status = slow_down` : Ring a répondu 429, le pilote attend 10 min avant de reprendre.
 - `status = sign_in` après avoir été connecté : le jeton a été refusé (mot de passe changé, Moli
   retiré du Centre de contrôle) ; la personne refait un jeton et le colle depuis Système.

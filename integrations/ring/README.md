@@ -1,8 +1,11 @@
 # Sonnettes et carillons Ring
 
 Moli lit les sonnettes, caméras et carillons d'un compte Ring : quand on sonne, quand ça bouge
-devant la porte, la batterie, le signal Wi-Fi, le volume du carillon. Un appui peut lancer un
-automatisme comme n'importe quel bouton (une annonce sur les enceintes, une lumière…).
+devant la porte, la batterie, le signal Wi-Fi, le volume du carillon, la dernière image de chaque
+caméra quand le tableau de bord la montre, et le mode de surveillance du lieu (Désactivé,
+Domicile, Absent, comme les « Modes » de l'appli Ring), qu'une personne change depuis le
+tableau de bord. Un appui peut lancer un automatisme comme n'importe quel bouton (une annonce
+sur les enceintes, une lumière…).
 
 **À savoir avant de l'installer.** Les appareils Ring ne répondent à rien sur le réseau de la
 maison : tout passe par les serveurs de Ring, et Ring ne propose aucune interface officielle.
@@ -44,8 +47,41 @@ kind = "ring"
 | sonnette | `doorbell` | vrai pendant 10 s après un appui |
 | sonnette, caméra | `motion` | vrai pendant 60 s après le dernier mouvement vu par Ring |
 | sonnette, caméra | `battery` | % (appareils sur batterie) |
+| sonnette, caméra | `image_at` | quand l'image montrée a été prise (Ring peut redonner une ancienne) |
 | tous | `wifi_signal` | dBm |
 | carillon | `volume` | 0 à 11, en lecture |
+| Surveillance Ring (le lieu) | `mode` | `disarmed`, `home`, `away` ; **écrivable**, par une personne |
+| Surveillance Ring | `mode_since` | quand le mode a changé pour la dernière fois |
+
+## Images
+
+Chaque sonnette et caméra apparaît dans l'onglet Caméras, et la sonnette sur l'accueil (si la
+disposition n'y met pas déjà une autre caméra), avec la dernière image que Ring en a. Une image fraîche se demande à Ring et prend quelques secondes ;
+une caméra sur batterie se réveille pour ça, et n'en donne pas pendant qu'elle enregistre. Moli
+ménage la batterie et les quotas de Ring : une image n'est demandée que quand le tableau de bord
+l'affiche (jamais en boucle), une seule à la fois par caméra, pas plus d'une par minute sur
+batterie (quinze secondes sur secteur) ; entre deux, l'image gardée est montrée avec **son**
+horodatage (`image_at`), jamais présentée comme neuve si Ring redonne la même. Une caméra dans
+une pièce protégée reste réservée à une personne (le code de la maison), comme les autres.
+
+Ring ne prend une image d'une caméra que si ses **Instantanés** sont activés dans l'appli Ring
+(réglages de l'appareil, « Instantanés » ou « Snapshot Capture ») : c'est le cas par défaut sur
+une sonnette, pas toujours sur une Stick Up Cam Mini. Sans eux, Ring n'a rien à rendre et la
+tuile reste « indisponible » ; les événements, eux, arrivent quand même.
+
+## Modes de surveillance
+
+Le lieu Ring apparaît comme un appareil « Surveillance Ring », avec les trois modes de l'appli :
+**Désactivé**, **Domicile**, **Absent**. Le mode est relu toutes les 30 s (un changement fait
+dans l'appli Ring se voit dans Moli en moins d'une minute) et juste après chaque ordre : ce que
+Moli montre est ce que Ring dit. Trois boutons, sur la page Caméras et sur l'accueil, le mode
+actuel en évidence.
+
+Changer le mode est l'affaire d'une personne : depuis le tableau de bord, le **code de la
+maison** est demandé à l'appui. Moli (l'assistant), un agent MCP, un script ou le tableau de bord
+sans code n'obtiennent qu'une demande d'approbation ; un automatisme qu'une personne a validé
+peut le faire (c'est son intention). Un lieu avec une alarme Ring garde son mode dans l'appli Ring
+(Moli le lit, ne le change pas).
 
 En ligne ou non : la disponibilité de chaque appareil, telle que Ring la donne ; quand les
 serveurs de Ring sont injoignables, tous les appareils passent indisponibles et `doorbell`
@@ -57,7 +93,8 @@ et `motion` retombent à faux.
   notifications push de l'appli seront une suite). Un appui est donc vu 10 à 20 s après. Un
   événement de plus de 90 s n'est jamais annoncé, ni rien de ce qui s'est passé avant le
   démarrage de Moli : jamais de « on sonne » périmé.
-- Lecture seule : rien n'est commandé (volume du carillon, sirène, lumière : une suite).
-- Pas d'image pour l'instant (l'instantané Ring est une suite).
+- Hors le mode de surveillance, rien n'est commandé (volume du carillon, sirène, lumière : une
+  suite).
+- Pas de vidéo en direct : une image à la demande, pas plus d'une par minute sur batterie.
 - Un changement de mot de passe Ring, ou Moli retiré du Centre de contrôle, oblige à refaire
   un jeton.

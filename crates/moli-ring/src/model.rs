@@ -1,9 +1,11 @@
 //! What Ring's answers say, in Moli's words: the account's doorbells,
-//! cameras and chimes (`ring_devices`), their health (Wi-Fi, battery) and
+//! cameras and chimes (`ring_devices`), their health (Wi-Fi, battery),
 //! their latest events (a press, a motion), with what makes an event new
-//! enough to tell.
+//! enough to tell; when their last snapshot was taken; and the mode of a
+//! location (disarmed, home, away), as the app's « Modes » show it.
 
 use std::collections::HashSet;
+use std::sync::Arc;
 use std::time::Duration;
 
 use moli_core::{Access, Device, DeviceId, Kind, PointSpec, Semantic, Unit};
@@ -58,6 +60,73 @@ impl RingDevice {
     pub(crate) fn history_path(&self) -> String {
         format!("/clients_api/doorbots/{}/history?limit=5", self.id)
     }
+
+    /// On battery: an image wakes it, so one is asked seldom.
+    pub(crate) fn on_battery(&self) -> bool {
+        self.battery.is_some()
+    }
+}
+
+/// Where a location's mode is read and set (the app's own API).
+pub(crate) fn mode_path(location: &str) -> String {
+    format!("/api/v1/mode/location/{location}")
+}
+
+/// `POST snapshots/timestamps`, `PUT snapshots/update`: which devices.
+pub(crate) fn doorbot_ids(id: u64) -> Json {
+    serde_json::json!({ "doorbot_ids": [id] })
+}
+
+/// `{ "timestamp": ms }`, `"ms"`: a time in milliseconds since 1970.
+fn millis(v: &Json) -> Option<i64> {
+    match v {
+        Json::Number(n) => n.as_i64(),
+        Json::String(s) => s.trim().parse().ok(),
+        _ => None,
+    }
+    .filter(|ms| *ms > 0)
+}
+
+/// When Ring's last snapshot of device `id` was taken (ms since 1970), from
+/// a `snapshots/timestamps` answer; `None` if Ring lists none.
+pub(crate) fn snapshot_taken(answer: &Json, id: u64) -> Option<i64> {
+    answer["timestamps"]
+        .as_array()?
+        .iter()
+        .find(|t| t["doorbot_id"].as_u64() == Some(id))
+        .and_then(|t| millis(&t["timestamp"]))
+}
+
+/// The three modes of a location, as the Ring app names them.
+pub(crate) const MODES: [&str; 3] = ["disarmed", "home", "away"];
+
+/// A location's mode as Ring gives it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct ModeReading {
+    /// One of [`MODES`]; `None` when modes are off for this location
+    /// (`disabled`, `unset`).
+    pub mode: Option<String>,
+    /// When it last changed (ms since 1970).
+    pub since: Option<i64>,
+    /// Set by an alarm base station: the app changes it, not this API.
+    pub read_only: bool,
+}
+
+/// A `mode/location/<id>` answer.
+pub(crate) fn mode(answer: &Json) -> Option<ModeReading> {
+    let mode = answer["mode"].as_str()?;
+    Some(ModeReading {
+        mode: MODES.contains(&mode).then(|| mode.to_owned()),
+        since: millis(&answer["lastUpdateTimeMS"]),
+        read_only: answer["readOnly"].as_bool().unwrap_or(false),
+    })
+}
+
+/// A time as the dashboard reads it (RFC 3339, UTC).
+pub(crate) fn rfc3339(ms: i64) -> String {
+    jiff::Timestamp::from_millisecond(ms)
+        .map(|t| t.to_string())
+        .unwrap_or_default()
 }
 
 /// `"87"`, `87`, `null`: a battery level, when there is one.
@@ -239,6 +308,14 @@ pub(crate) fn device(ctx: &DriverCtx, id: &DeviceId, d: &RingDevice) -> Device {
         None,
         Semantic::Occupancy,
     );
+    // When the image shown was taken: Ring may give back an old one.
+    let image_at = point(
+        "image_at",
+        &moli_i18n::tr!("pilotes.ring.image_prise"),
+        Kind::Text,
+        None,
+        Semantic::Other,
+    );
     let points = match d.family {
         Family::Doorbell => vec![
             point(
@@ -251,8 +328,9 @@ pub(crate) fn device(ctx: &DriverCtx, id: &DeviceId, d: &RingDevice) -> Device {
             motion,
             battery,
             signal,
+            image_at,
         ],
-        Family::Camera => vec![motion, battery, signal],
+        Family::Camera => vec![motion, battery, signal, image_at],
         Family::Chime => vec![
             point(
                 "volume",
@@ -274,6 +352,43 @@ pub(crate) fn device(ctx: &DriverCtx, id: &DeviceId, d: &RingDevice) -> Device {
         native_room: None,
         members: Vec::new(),
         points,
+    }
+}
+
+/// The location's watch (« Modes » in the Ring app): its mode, set from the
+/// dashboard by a person only (`Semantic::Control`: an agent, Moli or the
+/// dashboard without the code ask, a human decides), and since when.
+pub(crate) fn location_device(ctx: &DriverCtx, id: &DeviceId) -> Device {
+    let mode = PointSpec {
+        key: "mode".into(),
+        label: moli_i18n::tr!("pilotes.ring.mode").into(),
+        kind: Kind::Enum {
+            values: MODES.iter().map(|m| Arc::from(*m)).collect(),
+        },
+        access: Access {
+            read: true,
+            write: true,
+        },
+        unit: None,
+        semantic: Semantic::Control,
+    };
+    let since = point(
+        "mode_since",
+        &moli_i18n::tr!("pilotes.ring.mode_depuis"),
+        Kind::Text,
+        None,
+        Semantic::Other,
+    );
+    Device {
+        id: id.clone(),
+        instance: ctx.instance().clone(),
+        native_name: moli_i18n::tr!("pilotes.ring.surveillance").into(),
+        manufacturer: Some("Ring".into()),
+        model: Some("Modes".into()),
+        description: Some(moli_i18n::tr!("pilotes.ring.surveillance_description").into()),
+        native_room: None,
+        members: Vec::new(),
+        points: vec![mode, since],
     }
 }
 
@@ -353,6 +468,36 @@ mod tests {
         assert_eq!(old.len(), 1);
         assert_eq!(old[0].id, "7000000000000000009");
         assert_eq!(old[0].what, Happened::Press);
+    }
+
+    #[test]
+    fn the_snapshot_s_time_and_the_location_s_mode() {
+        let stamps = fixture(include_str!(
+            "../../../integrations/ring/fixtures/snapshots-timestamps.json"
+        ));
+        assert_eq!(snapshot_taken(&stamps, 10_000_001), Some(1_760_800_000_000));
+        assert_eq!(snapshot_taken(&stamps, 10_000_002), None);
+        assert_eq!(snapshot_taken(&Json::Null, 10_000_001), None);
+        let odd = serde_json::json!({ "timestamps": [{ "doorbot_id": 7, "timestamp": "0" }] });
+        assert_eq!(snapshot_taken(&odd, 7), None);
+        assert_eq!(rfc3339(1_760_800_000_000), "2025-10-18T15:06:40Z");
+
+        let read = mode(&fixture(include_str!(
+            "../../../integrations/ring/fixtures/mode-location.json"
+        )))
+        .unwrap();
+        assert_eq!(read.mode.as_deref(), Some("home"));
+        assert_eq!(read.since, Some(1_760_790_000_000));
+        assert!(!read.read_only);
+        let off = mode(&serde_json::json!({ "mode": "disabled", "readOnly": true })).unwrap();
+        assert_eq!(off.mode, None);
+        assert!(off.read_only);
+        assert_eq!(mode(&serde_json::json!({ "error": "x" })), None);
+        assert_eq!(
+            mode_path("00000000-0000-4000-8000-000000000001"),
+            "/api/v1/mode/location/00000000-0000-4000-8000-000000000001"
+        );
+        assert_eq!(doorbot_ids(5), serde_json::json!({ "doorbot_ids": [5] }));
     }
 
     fn event(id: &str, what: Happened, at: i64) -> Event {
