@@ -150,5 +150,12 @@
   "serveur.personnes.point_depuis": "Dans cette zone depuis",
   "serveur.personnes.point_nombre": "Personnes à la maison",
   "serveur.personnes.point_quelquun": "Quelqu'un à la maison",
-  "serveur.personnes.point_tous_partis": "Tout le monde est parti"
+  "serveur.personnes.point_tous_partis": "Tout le monde est parti",
+  "serveur.tls.notice_titre": "HTTPS",
+  "serveur.tls.notice_expire": "Le certificat HTTPS de {names} expire dans {days} jours ({date}). Le renouveler sur la machine (scripts/tailscale-cert.sh) : Moli le relit tout seul.",
+  "serveur.tls.notice_ferme": "HTTPS fermé : {reason}. Le tableau de bord reste joignable en HTTP sur le réseau de la maison.",
+  "serveur.tls.notice_ouvert": "HTTPS de nouveau ouvert pour {names} (certificat valable jusqu'au {date}).",
+  "serveur.tls.raison.illisible": "certificat ou clé illisible ({error})",
+  "serveur.tls.raison.expire": "certificat expiré le {date}",
+  "serveur.tls.raison.pas_encore": "certificat pas encore valable (avant le {date})"
 }

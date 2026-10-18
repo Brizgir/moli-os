@@ -6,8 +6,8 @@
 //! owner of the house chose from the dashboard (kept in Moli's encrypted
 //! store, it wins: [`Sessions::set_pin`]), never on any surface.
 //!
-//! - cookies are `HttpOnly` + `SameSite=Strict`, bound to the client that
-//!   opened them ([`crate::caller::Caller::key`]: its address on the home
+//! - cookies are `HttpOnly` + `SameSite=Strict` (+ `Secure` when set over
+//!   HTTPS, [`Transport`]), bound to the client that opened them ([`crate::caller::Caller::key`]: its address on the home
 //!   network, its e-mail through Cloudflare Access), and expire on the server
 //!   after 30 days;
 //! - only their SHA-256 is kept, in the encrypted secret store, with a
@@ -33,8 +33,10 @@ use std::fmt;
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::{Duration, Instant};
 
+use axum::extract::FromRequestParts;
 use axum::http::HeaderMap;
 use axum::http::header::COOKIE;
+use axum::http::request::Parts;
 use moli_core::now_ms;
 use moli_runtime::Hub;
 use ring::digest::{SHA256, digest};
@@ -599,14 +601,48 @@ impl Sessions {
         }
     }
 
-    pub(crate) fn cookie(token: &str) -> String {
+    pub(crate) fn cookie(token: &str, transport: Transport) -> String {
         format!(
-            "{COOKIE_NAME}={token}; HttpOnly; SameSite=Strict; Path=/; Max-Age={COOKIE_MAX_AGE_S}"
+            "{COOKIE_NAME}={token}; HttpOnly; SameSite=Strict; Path=/; Max-Age={COOKIE_MAX_AGE_S}{}",
+            transport.secure()
         )
     }
 
-    pub(crate) fn clear_cookie() -> String {
-        format!("{COOKIE_NAME}=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0")
+    pub(crate) fn clear_cookie(transport: Transport) -> String {
+        format!(
+            "{COOKIE_NAME}=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0{}",
+            transport.secure()
+        )
+    }
+}
+
+/// How the request came in: over HTTPS (Moli's own listener,
+/// [`crate::tls::Encrypted`]) or plain HTTP. A cookie set over HTTPS is
+/// `Secure`: the browser never sends it in clear. Over HTTP it cannot be
+/// (the browser would drop it), which is why the home network, in clear,
+/// keeps its cookies bound to the address that opened them.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) struct Transport {
+    pub(crate) encrypted: bool,
+}
+
+impl Transport {
+    /// The cookie attribute, when it applies.
+    fn secure(self) -> &'static str {
+        if self.encrypted { "; Secure" } else { "" }
+    }
+}
+
+impl<S: Send + Sync> FromRequestParts<S> for Transport {
+    type Rejection = std::convert::Infallible;
+
+    fn from_request_parts(
+        parts: &mut Parts,
+        _state: &S,
+    ) -> impl Future<Output = Result<Self, Self::Rejection>> + Send {
+        std::future::ready(Ok(Self {
+            encrypted: parts.extensions.get::<crate::tls::Encrypted>().is_some(),
+        }))
     }
 }
 
@@ -678,6 +714,17 @@ mod tests {
             Some(UiPin::new(pin)),
             &["Moi@Example.org".into()],
         )
+    }
+
+    #[test]
+    fn cookies_are_secure_over_https_only() {
+        let clear = Transport::default();
+        let https = Transport { encrypted: true };
+        let cookie = Sessions::cookie("abc", clear);
+        assert!(cookie.contains("HttpOnly; SameSite=Strict") && !cookie.contains("Secure"));
+        assert!(Sessions::cookie("abc", https).ends_with("; Secure"));
+        assert!(!Sessions::clear_cookie(clear).contains("Secure"));
+        assert!(Sessions::clear_cookie(https).contains("Max-Age=0; Secure"));
     }
 
     #[tokio::test]

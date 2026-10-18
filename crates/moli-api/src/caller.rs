@@ -433,6 +433,21 @@ mod tests {
         let public = classify("8.8.8.8".parse().unwrap(), &HeaderMap::new(), None);
         assert_eq!(public.via, Via::Outside);
         assert!(!public.is_household());
+        // A VPN address (Tailscale's 100.64/10) is the outside, over HTTPS
+        // as over HTTP: only the peer's real address counts, never how it
+        // came in. Whatever it says of a relay is ignored: its key stays
+        // its address (it cannot pick one to dodge a lockout).
+        let vpn = headers(&[
+            ("x-forwarded-for", "192.168.0.20"),
+            ("x-real-ip", "127.0.0.1"),
+        ]);
+        let tailscale = classify("100.101.102.103".parse().unwrap(), &vpn, None);
+        assert_eq!(tailscale.via, Via::Outside);
+        assert_eq!(tailscale.key, "100.101.102.103");
+        assert!(!tailscale.is_household());
+        // The home network stays the household over HTTPS too.
+        let home = classify("192.168.0.20".parse().unwrap(), &HeaderMap::new(), None);
+        assert_eq!(home.via, Via::Lan);
         // A proxy on this machine would make everyone local: relayed is a stranger.
         for relay in ["x-forwarded-for", "forwarded", "tailscale-user-login"] {
             let mut headers = HeaderMap::new();

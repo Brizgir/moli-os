@@ -13,13 +13,20 @@ use serde_json::json;
 
 use crate::caller::{Caller, Via};
 use crate::people::People;
-use crate::session::{ClaimError, LoginError, Sessions};
+use crate::session::{ClaimError, LoginError, Sessions, Transport};
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 type Humans = Extension<Arc<Sessions>>;
 
-pub(crate) async fn health(State(hub): State<Hub>) -> Response {
+/// The HTTPS listener Moli serves itself (`[server.tls]`), if any.
+#[derive(Clone, Debug)]
+pub(crate) struct Https(pub(crate) Option<crate::tls::Tls>);
+
+pub(crate) async fn health(
+    State(hub): State<Hub>,
+    Extension(Https(tls)): Extension<Https>,
+) -> Response {
     let snapshot = hub.snapshot();
     Json(json!({
         "name": "moli-os",
@@ -29,6 +36,8 @@ pub(crate) async fn health(State(hub): State<Hub>) -> Response {
         "drivers": snapshot.drivers,
         // Journal entries lost on disk since the start: never silently.
         "journal_failures": hub.journal_failures(),
+        // `null` without `[server.tls]`; else its state and, closed, why.
+        "tls": tls.as_ref().map(crate::tls::Tls::status),
     }))
     .into_response()
 }
@@ -405,6 +414,7 @@ pub(crate) async fn setup(
     Extension(humans): Humans,
     Extension(SettingsFile(settings)): Extension<SettingsFile>,
     caller: Caller,
+    transport: Transport,
     Json(body): Json<SetupBody>,
 ) -> Response {
     // The chosen language first: the house announces its installation in it,
@@ -431,7 +441,7 @@ pub(crate) async fn setup(
                 }
             }
             (
-                [(SET_COOKIE, Sessions::cookie(&token))],
+                [(SET_COOKIE, Sessions::cookie(&token, transport))],
                 Json(json!({ "human": true })),
             )
                 .into_response()
@@ -469,13 +479,14 @@ pub(crate) async fn login(
     Extension(humans): Humans,
     Extension(persons): Extension<Arc<People>>,
     caller: Caller,
+    transport: Transport,
     Json(body): Json<LoginBody>,
 ) -> Response {
     let pin = match body {
         LoginBody::Person { login, password } => {
             return match persons.login(&humans, &login, &password, &caller).await {
                 Ok((token, person)) => (
-                    [(SET_COOKIE, People::cookie(&token))],
+                    [(SET_COOKIE, People::cookie(&token, transport))],
                     Json(json!({ "person": person })),
                 )
                     .into_response(),
@@ -494,7 +505,7 @@ pub(crate) async fn login(
     }
     match humans.login(&pin, &caller).await {
         Ok(token) => (
-            [(SET_COOKIE, Sessions::cookie(&token))],
+            [(SET_COOKIE, Sessions::cookie(&token, transport))],
             Json(json!({ "human": true })),
         )
             .into_response(),
@@ -516,14 +527,15 @@ pub(crate) async fn login(
 pub(crate) async fn logout(
     Extension(humans): Humans,
     Extension(persons): Extension<Arc<People>>,
+    transport: Transport,
     headers: HeaderMap,
 ) -> Response {
     humans.logout(&headers).await;
     persons.logout(&headers).await;
     (
         axum::response::AppendHeaders([
-            (SET_COOKIE, Sessions::clear_cookie()),
-            (SET_COOKIE, People::clear_cookie()),
+            (SET_COOKIE, Sessions::clear_cookie(transport)),
+            (SET_COOKIE, People::clear_cookie(transport)),
         ]),
         Json(json!({ "human": false, "person": null })),
     )

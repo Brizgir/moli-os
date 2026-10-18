@@ -9,6 +9,18 @@ worker_threads = 2
 # Names/IPs this instance is reached by, besides localhost (DNS-rebinding guard).
 allowed_hosts = ["192.168.0.10", "moli.local"]
 
+# HTTPS served by Moli itself, next to HTTP (port 8791 by default): what a
+# browser wants before it opens the microphone (the voice from a phone that
+# reaches the house through Tailscale). The certificate and its key are files
+# the container reads (here `data/tls/`, written by scripts/tailscale-cert.sh);
+# Moli reads them again when they change, no restart. Who is calling is still
+# judged by the peer's real address: a Tailscale address stays the outside
+# (a person signs in with their password). Absent: HTTP only.
+# [server.tls]
+# cert_file = "/data/tls/moli.crt"
+# key_file = "/data/tls/moli.key"
+# port = 8791
+
 # Reached from the Internet through a Cloudflare tunnel behind Cloudflare
 # Access: Moli checks Access's signed assertion itself and recognizes the
 # person by e-mail. Without this section, nobody coming through Cloudflare

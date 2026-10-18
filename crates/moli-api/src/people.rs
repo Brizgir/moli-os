@@ -657,14 +657,19 @@ impl People {
         self.persist_sessions(json).await;
     }
 
-    pub(crate) fn cookie(token: &str) -> String {
+    /// `Secure` over HTTPS ([`crate::session::Transport`]).
+    pub(crate) fn cookie(token: &str, transport: crate::session::Transport) -> String {
         format!(
-            "{COOKIE_NAME}={token}; HttpOnly; SameSite=Strict; Path=/; Max-Age={SESSION_MAX_AGE_S}"
+            "{COOKIE_NAME}={token}; HttpOnly; SameSite=Strict; Path=/; Max-Age={SESSION_MAX_AGE_S}{}",
+            if transport.encrypted { "; Secure" } else { "" }
         )
     }
 
-    pub(crate) fn clear_cookie() -> String {
-        format!("{COOKIE_NAME}=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0")
+    pub(crate) fn clear_cookie(transport: crate::session::Transport) -> String {
+        format!(
+            "{COOKIE_NAME}=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0{}",
+            if transport.encrypted { "; Secure" } else { "" }
+        )
     }
 
     /// Whether this person has a password (else: Access, or an invitation).

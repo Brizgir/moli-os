@@ -13,7 +13,7 @@ use moli_runtime::{Hub, Snapshot};
 use serde_json::{Value as Json, json};
 
 use crate::automations::Autos;
-use crate::rest::{BenchFile, Metered, Recorded, read_bench};
+use crate::rest::{BenchFile, Https, Metered, Recorded, read_bench};
 
 pub(crate) async fn system(
     State(hub): State<Hub>,
@@ -22,6 +22,7 @@ pub(crate) async fn system(
     Extension(Metered(energy)): Extension<Metered>,
     Extension(crate::assistant::Moli(moli)): Extension<crate::assistant::Moli>,
     Extension(Autos(autos)): Extension<Autos>,
+    Extension(Https(tls)): Extension<Https>,
 ) -> Response {
     let snapshot = hub.snapshot();
     let data_dir = bench_path
@@ -87,6 +88,9 @@ pub(crate) async fn system(
             { "id": "mcp", "name": "Agents (MCP)", "what": moli_i18n::tr!("serveur.systeme.surface.mcp.quoi") },
             { "id": "rest", "name": "API", "what": moli_i18n::tr!("serveur.systeme.surface.rest.quoi") },
         ],
+        // HTTPS served by Moli itself (`[server.tls]`): `null` when not
+        // configured, else where, until when, and why it is closed if it is.
+        "tls": tls.as_ref().map(crate::tls::Tls::status),
         "perf": perf_history(data_dir.as_ref()),
         "coverage": read_bench(bench_path.as_deref()).await.map(|b| b["coverage"].clone()),
     }))

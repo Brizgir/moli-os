@@ -346,5 +346,10 @@
   "systeme.alexa.connecter": "Connect",
   "systeme.alexa.verification": "Connecting…",
   "systeme.alexa.aide": "Moli never sees your password: it shows up as a \"Moli\" device of your Amazon account, and keeps an encrypted token in its secret store.",
-  "systeme.alexa.officieux": "Amazon offers no official interface to drive Echo music: Moli uses the Alexa app's, which may change without notice."
+  "systeme.alexa.officieux": "Amazon offers no official interface to drive Echo music: Moli uses the Alexa app's, which may change without notice.",
+  "systeme.https.titre": "HTTPS",
+  "systeme.https.ouvert": "Open on port {port} for {names} · certificate valid until {date} ({days} d)",
+  "systeme.https.bientot": "renew soon",
+  "systeme.https.ferme": "Closed: {reason}",
+  "systeme.https.aide": "Served by Moli itself, no relay: the browser's microphone wants a secure page. HTTP stays open for the house."
 }

@@ -348,18 +348,16 @@ async fn serve(config: Config, boot: Instant) -> anyhow::Result<()> {
     let (household, whereabouts) = spawn_household(&config, &hub, gates.phones.clone(), &cancel);
     tasks.push(whereabouts);
 
-    let listener = tokio::net::TcpListener::bind(config.server.listen)
-        .await
-        .with_context(|| format!("cannot listen on {}", config.server.listen))?;
+    let (listener, tls, https) = bind_surfaces(&config, &hub).await?;
     tracing::info!(
         listen = %config.server.listen,
+        https = tls.as_ref().map(|t| t.listen().to_string()),
         drivers = tasks.len(),
         boot_ms = boot.elapsed().as_millis(),
         "moli-os ready"
     );
 
     let saver = housekeeping(&hub, &cancel);
-    let shutdown = cancel.clone();
     // Given, even empty: the house is set up (its vault is wrong); absent:
     // a new house, which may ask for its installation.
     let ui_pin = from_env_or_file("MOLI_UI_PIN")?
@@ -382,21 +380,16 @@ async fn serve(config: Config, boot: Instant) -> anyhow::Result<()> {
         phones: gates.phones,
         machines: gates.machines,
         weather: weather(&config),
+        tls: tls.clone(),
     };
-    // Client addresses matter: human sessions are bound to them.
-    axum::serve(
-        listener,
-        moli_api::router(hub.clone(), cancel.clone(), &surfaces)
-            .into_make_service_with_connect_info::<std::net::SocketAddr>(),
-    )
-    .with_graceful_shutdown(async move {
-        wait_for_signal().await;
-        tracing::info!("shutting down");
-        shutdown.cancel();
-    })
-    .await?;
+    let watching = tls.map(|tls| tls.watch(cancel.clone()));
+    let app = moli_api::router(hub.clone(), cancel.clone(), &surfaces);
+    serve_surfaces(app, listener, https, &cancel).await?;
     for task in tasks {
         let _ = task.await;
+    }
+    if let Some(watching) = watching {
+        let _ = watching.await;
     }
     let _ = saver.await;
     let _ = automating.await;
@@ -409,6 +402,75 @@ async fn serve(config: Config, boot: Instant) -> anyhow::Result<()> {
     hub.persist_state()
         .await
         .context("final state cache write")?;
+    Ok(())
+}
+
+/// The HTTP listener and, with `[server.tls]`, the HTTPS one Moli serves
+/// itself: bound even while its certificate is missing, so a renewal needs
+/// no restart.
+async fn bind_surfaces(
+    config: &Config,
+    hub: &Hub,
+) -> anyhow::Result<(
+    tokio::net::TcpListener,
+    Option<moli_api::Tls>,
+    Option<moli_api::TlsListenerReady>,
+)> {
+    let listener = tokio::net::TcpListener::bind(config.server.listen)
+        .await
+        .with_context(|| format!("cannot listen on {}", config.server.listen))?;
+    let tls = config
+        .server
+        .tls_options()
+        .map(|options| moli_api::Tls::new(options, hub.clone()));
+    let https = match &tls {
+        Some(tls) => Some(
+            tls.bind()
+                .await
+                .with_context(|| format!("cannot listen on {} (HTTPS)", tls.listen()))?,
+        ),
+        None => None,
+    };
+    Ok((listener, tls, https))
+}
+
+/// Both listeners until the stop signal. Client addresses matter: human
+/// sessions are bound to them. One router (one set of sessions, of people)
+/// behind both listeners; the HTTPS one marks its requests, for `Secure`
+/// cookies.
+async fn serve_surfaces(
+    app: axum::Router,
+    http: tokio::net::TcpListener,
+    https: Option<moli_api::TlsListenerReady>,
+    cancel: &CancellationToken,
+) -> anyhow::Result<()> {
+    let shutdown = cancel.clone();
+    let http = axum::serve(
+        http,
+        app.clone()
+            .into_make_service_with_connect_info::<std::net::SocketAddr>(),
+    )
+    .with_graceful_shutdown(async move {
+        wait_for_signal().await;
+        tracing::info!("shutting down");
+        shutdown.cancel();
+    });
+    let stop = cancel.clone();
+    let https = async move {
+        match https {
+            Some(listener) => {
+                axum::serve(
+                    listener,
+                    app.layer(axum::Extension(moli_api::Encrypted))
+                        .into_make_service_with_connect_info::<std::net::SocketAddr>(),
+                )
+                .with_graceful_shutdown(stop.cancelled_owned())
+                .await
+            }
+            None => Ok(()),
+        }
+    };
+    tokio::try_join!(http, https)?;
     Ok(())
 }
 

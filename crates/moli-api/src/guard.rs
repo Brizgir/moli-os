@@ -6,6 +6,9 @@
 //! such: DNS rebinding takes a name the attacker controls, never an IP, so a
 //! new installation answers on its own address with nothing to configure.
 //!
+//! The names of the HTTPS certificate Moli serves itself (`[server.tls]`)
+//! are names this instance is reached by too: nothing to list twice.
+//!
 //! Nor can such a page hide where it comes from: a browser says it
 //! (`Origin`, `Sec-Fetch-Site`) on every write, and a write from another
 //! site is refused. The home network trusts the dashboard, not every page
@@ -20,7 +23,11 @@ use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
 
 #[derive(Clone, Debug)]
-pub(crate) struct AllowedHosts(Arc<[String]>);
+pub(crate) struct AllowedHosts {
+    hosts: Arc<[String]>,
+    /// The certificate's names, as they are now (a renewal may change them).
+    tls: Option<crate::tls::Tls>,
+}
 
 impl AllowedHosts {
     pub(crate) fn new(extra: &[String]) -> Self {
@@ -36,12 +43,22 @@ impl AllowedHosts {
             )
             .collect();
         hosts.dedup();
-        Self(hosts.into())
+        Self {
+            hosts: hosts.into(),
+            tls: None,
+        }
+    }
+
+    pub(crate) fn with_tls(mut self, tls: Option<crate::tls::Tls>) -> Self {
+        self.tls = tls;
+        self
     }
 
     fn allows(&self, host_header: &str) -> bool {
         let host = strip_port(host_header).to_ascii_lowercase();
-        host.parse::<std::net::IpAddr>().is_ok() || self.0.contains(&host)
+        host.parse::<std::net::IpAddr>().is_ok()
+            || self.hosts.contains(&host)
+            || self.tls.as_ref().is_some_and(|t| t.names().contains(&host))
     }
 }
 

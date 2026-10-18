@@ -12,7 +12,9 @@
 //!
 //! Every route sits behind the same `Host` allowlist (DNS-rebinding guard),
 //! then knows who is calling (`caller`: home network, this machine, or a
-//! person Cloudflare Access let in through the tunnel).
+//! person Cloudflare Access let in through the tunnel). The same router may
+//! be served over HTTPS too, by Moli itself (`tls`): the caller is judged
+//! the same way, by the real address of its peer.
 
 mod access;
 mod assets;
@@ -36,6 +38,7 @@ mod session;
 pub mod settings;
 mod sse;
 mod system;
+pub mod tls;
 mod weather;
 
 use std::sync::Arc;
@@ -51,6 +54,7 @@ use tower_http::compression::predicate::{DefaultPredicate, NotForContentType, Pr
 
 pub use access::AccessConfig;
 pub use plan::image_name_ok as plan_image_name_ok;
+pub use tls::{Encrypted, HttpsListener as TlsListenerReady, Tls, TlsListener, TlsOptions};
 
 /// A JSON request is small: orders, labels, a graph, a conversation turn.
 const BODY: usize = 256 * 1024;
@@ -126,6 +130,9 @@ pub struct Options {
     /// The sky over the house (forecast, satellite), when its position is
     /// known.
     pub weather: Option<moli_weather::Weather>,
+    /// The HTTPS listener's certificate (`[server.tls]`), when Moli serves
+    /// HTTPS itself: its names are hosts too, its state is shown.
+    pub tls: Option<Tls>,
 }
 
 /// Builds the complete HTTP application. Live streams end when `shutdown`
@@ -278,7 +285,7 @@ fn assistant_routes() -> Router<Hub> {
 }
 
 pub fn router(hub: Hub, shutdown: CancellationToken, options: &Options) -> Router {
-    let allowed = guard::AllowedHosts::new(&options.allowed_hosts);
+    let allowed = guard::AllowedHosts::new(&options.allowed_hosts).with_tls(options.tls.clone());
     let (humans, gate, persons) = people(&hub, options);
     Router::new()
         .route("/api/health", get(rest::health))
@@ -342,6 +349,7 @@ pub fn router(hub: Hub, shutdown: CancellationToken, options: &Options) -> Route
         .layer(Extension(shutdown))
         .layer(Extension(sse::Streams::default()))
         .layer(Extension(rest::Recorded(options.history.clone())))
+        .layer(Extension(rest::Https(options.tls.clone())))
         .layer(Extension(rest::BenchFile(options.bench_path.clone())))
         .layer(Extension(rest::HomeFile(options.home_path.clone())))
         .layer(Extension(plan::PlanDir(
