@@ -1,10 +1,11 @@
 //! What Ring's answers say, in Moli's words: the account's doorbells,
 //! cameras and chimes (`ring_devices`), their health (Wi-Fi, battery),
 //! their latest events (a press, a motion), with what makes an event new
-//! enough to tell; when their last snapshot was taken; and the mode of a
-//! location (disarmed, home, away), as the app's « Modes » show it.
+//! enough to tell, whether read or pushed by Ring ([`pushed`]); when their
+//! last snapshot was taken; and the mode of a location (disarmed, home,
+//! away), as the app's « Modes » show it.
 
-use std::collections::HashSet;
+use std::collections::{HashSet, VecDeque};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -233,34 +234,118 @@ pub(crate) fn events(answer: &Json) -> Vec<Event> {
 /// the door is not someone ringing now.
 pub(crate) const FRESH: Duration = Duration::from_secs(90);
 
-/// The events already seen at one device, so each is told once at most.
+/// How many event ids a device remembers: far more than Ring lists at once.
+const SEEN: usize = 200;
+
+/// The events already seen at one device, so each is told once at most,
+/// whether Ring pushed it or it was read (same id both ways).
 #[derive(Debug, Default)]
 pub(crate) struct Watch {
     seen: HashSet<String>,
+    /// The same ids, oldest first: the oldest are forgotten past [`SEEN`].
+    order: VecDeque<String>,
     /// The first reading only learns what is there.
     started: bool,
+    /// When Moli began to watch (ms): nothing that happened before is told.
+    since: i64,
 }
 
 impl Watch {
+    pub(crate) fn new(since: i64) -> Self {
+        Self {
+            since,
+            ..Self::default()
+        }
+    }
+
+    /// Whether `id` is new; remembered from now on (the last [`SEEN`]).
+    fn first_time(&mut self, id: &str) -> bool {
+        if !self.seen.insert(id.to_owned()) {
+            return false;
+        }
+        self.order.push_back(id.to_owned());
+        if self.order.len() > SEEN
+            && let Some(old) = self.order.pop_front()
+        {
+            self.seen.remove(&old);
+        }
+        true
+    }
+
+    fn fresh(since: i64, e: &Event, now: i64) -> bool {
+        let fresh = i64::try_from(FRESH.as_millis()).unwrap_or(i64::MAX);
+        now - e.at <= fresh && e.at <= now + fresh && e.at >= since
+    }
+
+    /// Whether to tell an event Ring pushed, heard at `now` (ms): new (not
+    /// pushed twice, nor read before), fresh enough, and not from before
+    /// Moli began to watch.
+    pub(crate) fn heard(&mut self, e: &Event, now: i64) -> bool {
+        self.first_time(&e.id) && Self::fresh(self.since, e, now)
+    }
+
     /// What to tell from a reading made at `now` (ms): new events, fresh
     /// enough, oldest first. The first reading tells nothing.
     pub(crate) fn news(&mut self, events: &[Event], now: i64) -> Vec<Event> {
         let first = !self.started;
         self.started = true;
-        let fresh = i64::try_from(FRESH.as_millis()).unwrap_or(i64::MAX);
+        let since = self.since;
         let mut news: Vec<Event> = events
             .iter()
-            .filter(|e| self.seen.insert(e.id.clone()))
-            .filter(|e| !first && now - e.at <= fresh && e.at <= now + fresh)
+            .filter(|e| self.first_time(&e.id))
+            .filter(|e| !first && Self::fresh(since, e, now))
             .cloned()
             .collect();
-        // Bounded: what Ring still lists is enough to remember.
-        if self.seen.len() > 200 {
-            self.seen = events.iter().map(|e| e.id.clone()).collect();
-        }
         news.sort_by_key(|e| e.at);
         news
     }
+}
+
+/// One event Ring pushed: which device, what, when.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct Pushed {
+    /// Ring's number for the device.
+    pub device: u64,
+    pub event: Event,
+}
+
+/// A number Ring may give as text (`"10000001"`) or as a number.
+fn id_text(v: &Json) -> Option<String> {
+    v.as_str()
+        .filter(|s| !s.is_empty())
+        .map(str::to_owned)
+        .or_else(|| v.as_u64().map(|n| n.to_string()))
+}
+
+/// A push notification (the decrypted message: `{"data": {…}}`, each field
+/// of `data` itself JSON as text), as an event; `None` for anything but a
+/// press or a motion (intercom, alarm, unknown shape).
+pub(crate) fn pushed(message: &Json) -> Option<Pushed> {
+    let field = |key: &str| match &message["data"][key] {
+        Json::String(text) => serde_json::from_str::<Json>(text).ok(),
+        Json::Null => None,
+        other => Some(other.clone()),
+    };
+    let android = field("android_config")?;
+    let body = field("data")?;
+    let ding = &body["event"]["ding"];
+    let what = match android["category"].as_str()? {
+        "com.ring.pn.live-event.ding" => Happened::Press,
+        "com.ring.pn.live-event.motion" => Happened::Motion,
+        _ => return None,
+    };
+    let device = id_text(&body["device"]["id"])?.parse().ok()?;
+    let id = id_text(&ding["id"])?;
+    let at = ding["created_at"]
+        .as_str()
+        .and_then(|t| t.parse::<jiff::Timestamp>().ok())
+        .map(jiff::Timestamp::as_millisecond)
+        .or_else(|| millis(&body["event"]["eventito"]["timestamp"]))
+        .or_else(|| field("analytics").and_then(|a| millis(&a["triggered_at"])))?;
+    Some(Pushed {
+        device,
+        event: Event { id, what, at },
+    })
 }
 
 fn point(key: &str, label: &str, kind: Kind, unit: Option<Unit>, semantic: Semantic) -> PointSpec {
@@ -506,6 +591,84 @@ mod tests {
             what,
             at,
         }
+    }
+
+    #[test]
+    fn ring_s_pushes_read() {
+        let ding = pushed(&fixture(include_str!(
+            "../../../integrations/ring/fixtures/push-ding.json"
+        )))
+        .unwrap();
+        assert_eq!(ding.device, 10_000_001);
+        assert_eq!(ding.event.what, Happened::Press);
+        assert_eq!(ding.event.id, "7000000000000000011");
+        assert_eq!(ding.event.at, 1_760_800_000_000);
+        let motion = pushed(&fixture(include_str!(
+            "../../../integrations/ring/fixtures/push-motion.json"
+        )))
+        .unwrap();
+        assert_eq!(motion.event.what, Happened::Motion);
+        assert_eq!(motion.event.id, "7000000000000000012");
+        assert_eq!(motion.event.at, 1_760_800_060_123);
+        // Fields given as objects (not text) read the same; an intercom,
+        // an alarm or an unknown shape is no event.
+        let objects = serde_json::json!({ "data": {
+            "android_config": { "category": "com.ring.pn.live-event.motion" },
+            "data": { "device": { "id": "10000001" }, "event": {
+                "ding": { "id": 7_000_000_000_000_000_013_u64 },
+                "eventito": { "timestamp": 1_760_800_000_000_i64 } } }
+        }});
+        let read = pushed(&objects).unwrap();
+        assert_eq!(read.event.id, "7000000000000000013");
+        assert_eq!(read.event.at, 1_760_800_000_000);
+        let intercom = objects
+            .to_string()
+            .replace("live-event.motion", "live-event.intercom");
+        assert_eq!(pushed(&fixture(&intercom)), None);
+        let alarm = serde_json::json!({ "data": { "gcmData": "{\"alarm_meta\":{}}" } });
+        assert_eq!(pushed(&alarm), None);
+        assert_eq!(pushed(&Json::Null), None);
+    }
+
+    #[test]
+    fn a_pushed_event_is_told_once_even_when_read_after() {
+        let now = 1_000_000_000_000;
+        let mut watch = Watch::new(now);
+        // A press before Moli watched: never told, pushed or read.
+        assert!(!watch.heard(&event("0", Happened::Press, now - 1_000), now + 1_000));
+        // Read first (a quiet start), then pushed: told once, by the push.
+        assert!(watch.news(&[], now + 2_000).is_empty());
+        let press = event("1", Happened::Press, now + 3_000);
+        assert!(watch.heard(&press, now + 3_500));
+        assert!(!watch.heard(&press, now + 3_600), "pushed twice");
+        assert!(
+            watch
+                .news(std::slice::from_ref(&press), now + 10_000)
+                .is_empty(),
+            "then read"
+        );
+        // Read first, pushed after: not told again.
+        let motion = event("2", Happened::Motion, now + 20_000);
+        let told = watch.news(&[motion.clone(), press], now + 21_000);
+        assert_eq!(told.len(), 1);
+        assert_eq!(told[0], motion);
+        assert!(!watch.heard(&motion, now + 22_000));
+        // Pushed late (Google kept it): not told.
+        let old = event("3", Happened::Press, now + 30_000);
+        assert!(!watch.heard(&old, now + 30_000 + 91_000));
+    }
+
+    #[test]
+    fn the_oldest_ids_are_forgotten_one_by_one() {
+        let now = 1_000_000_000_000;
+        let mut watch = Watch::new(now);
+        for n in 0..250 {
+            assert!(watch.heard(&event(&n.to_string(), Happened::Motion, now), now));
+        }
+        // The last 200 are still known, whatever reads them next.
+        assert!(!watch.heard(&event("249", Happened::Motion, now), now));
+        assert!(!watch.heard(&event("50", Happened::Motion, now), now));
+        assert!(watch.heard(&event("49", Happened::Motion, now), now));
     }
 
     #[test]

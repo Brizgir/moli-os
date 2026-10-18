@@ -11,16 +11,23 @@
 //! the encrypted secret store, and writes it again each time Ring
 //! replaces it.
 //!
-//! Presses and motion are read from the devices' latest events every few
-//! seconds (not Ring's push notifications): an event is told once, only if
-//! it is less than [`model::FRESH`] old, and never from the first reading
-//! after a start, so an old press never reads as someone at the door.
+//! Presses and motion come by Ring's push notifications as soon as Ring
+//! sends them ([`push`]: Moli receives them as the Ring app does), and are
+//! read from the devices' latest events every few seconds too, as a safety
+//! net (slower while the push works). Either way an event is told once
+//! (same id), only if it is less than [`model::FRESH`] old, and never from
+//! before the start (nor from the first reading after it), so an old press
+//! never reads as someone at the door.
 
 mod api;
 mod auth;
+mod ece;
+mod fcm;
 mod images;
+mod mcs;
 mod model;
 mod net;
+mod push;
 mod signin;
 
 use std::collections::HashMap;
@@ -34,13 +41,24 @@ use tokio::sync::{Mutex, mpsc};
 use tokio::time::{Instant, MissedTickBehavior};
 
 use crate::api::{Client, Failure, Vault};
+use crate::fcm::Credentials;
 use crate::images::{Images, Shared, Taken};
-use crate::model::{Family, Happened, ModeReading, RingDevice, Watch};
+use crate::mcs::{Dial, Google};
+use crate::model::{Event, Family, Happened, ModeReading, Pushed, RingDevice, Watch};
 use crate::net::{Transport, Web};
+use crate::push::{Ask, Heard, Keep, Push};
 use crate::signin::Refusal;
 
 const REFRESH: &str = "refresh_token";
 const HARDWARE_ID: &str = "hardware_id";
+/// Moli's Firebase device and keys ([`fcm::Credentials`]).
+const PUSH: &str = "push_credentials";
+/// The poll while the push works: a safety net, well within
+/// [`model::FRESH`] for an event the push would have missed.
+const PUSH_POLL: Duration = Duration::from_secs(30);
+/// Events the poll told while the push said it was up, before the push
+/// registers again.
+const MISSED: u32 = 3;
 /// The account's devices (one added, renamed, offline…).
 const DEVICES: Duration = Duration::from_secs(5 * 60);
 /// Wi-Fi and battery.
@@ -62,23 +80,42 @@ fn default_poll() -> u64 {
     10
 }
 
+fn yes() -> bool {
+    true
+}
+
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
-    /// Seconds between two readings of the latest events (5 at least).
+    /// Seconds between two readings of the latest events (5 at least);
+    /// while the push works, 30 at least.
     #[serde(default = "default_poll")]
     pub poll: u64,
+    /// Ring's push notifications (instant alerts); `false` for a network
+    /// that blocks Google's push server (TCP 5228).
+    #[serde(default = "yes")]
+    pub push: bool,
 }
 
 impl Config {
     fn poll(&self) -> Duration {
         Duration::from_secs(self.poll.max(5))
     }
+
+    /// The poll's pace, with the push working or not.
+    fn pace(&self, push_up: bool) -> Duration {
+        if push_up {
+            self.poll().max(PUSH_POLL)
+        } else {
+            self.poll()
+        }
+    }
 }
 
 pub struct Ring {
     config: Config,
     net: Arc<dyn Transport>,
+    dial: Arc<dyn Dial>,
 }
 
 impl std::fmt::Debug for Ring {
@@ -95,12 +132,13 @@ impl Ring {
         Self {
             config,
             net: Arc::new(Web),
+            dial: Arc::new(Google),
         }
     }
 
     #[cfg(test)]
-    fn with_transport(config: Config, net: Arc<dyn Transport>) -> Self {
-        Self { config, net }
+    fn with_transport(config: Config, net: Arc<dyn Transport>, dial: Arc<dyn Dial>) -> Self {
+        Self { config, net, dial }
     }
 }
 
@@ -110,7 +148,12 @@ impl Driver for Ring {
     }
 
     fn run<'a>(&'a self, ctx: &'a mut DriverCtx) -> BoxFuture<'a, anyhow::Result<()>> {
-        Box::pin(run(&self.config, Arc::clone(&self.net), ctx))
+        Box::pin(run(
+            &self.config,
+            Arc::clone(&self.net),
+            Arc::clone(&self.dial),
+            ctx,
+        ))
     }
 }
 
@@ -121,6 +164,12 @@ struct Store(SecretKeeper);
 impl Vault for Store {
     fn keep<'a>(&'a self, refresh: &'a str) -> BoxFuture<'a, anyhow::Result<()>> {
         Box::pin(async move { Ok(self.0.store(REFRESH, refresh).await?) })
+    }
+}
+
+impl Keep for Store {
+    fn keep<'a>(&'a self, credentials: &'a str) -> BoxFuture<'a, anyhow::Result<()>> {
+        Box::pin(async move { Ok(self.0.store(PUSH, credentials).await?) })
     }
 }
 
@@ -153,6 +202,13 @@ fn account_device(ctx: &DriverCtx, id: &DeviceId) -> Device {
                 false,
                 Semantic::Config,
             ),
+            // `active`, `fallback` (the poll only) or `off` (option).
+            text_point(
+                "push",
+                &moli_i18n::tr!("pilotes.ring.alertes"),
+                false,
+                Semantic::Config,
+            ),
             // What a person pastes: never journaled nor kept (`Secret`).
             text_point(
                 "sign_in",
@@ -168,7 +224,12 @@ fn set_text(ctx: &DriverCtx, id: &DeviceId, key: &str, text: &str) {
     ctx.set_state(id, key, Value::Text(text.into()));
 }
 
-async fn run(config: &Config, net: Arc<dyn Transport>, ctx: &mut DriverCtx) -> anyhow::Result<()> {
+async fn run(
+    config: &Config,
+    net: Arc<dyn Transport>,
+    dial: Arc<dyn Dial>,
+    ctx: &mut DriverCtx,
+) -> anyhow::Result<()> {
     let vault: Arc<dyn Vault> = Arc::new(Store(ctx.secret_keeper()));
     let account = ctx.device_id("account");
     ctx.upsert_device(account_device(ctx, &account));
@@ -187,7 +248,11 @@ async fn run(config: &Config, net: Arc<dyn Transport>, ctx: &mut DriverCtx) -> a
         };
         set_text(ctx, &account, "status", "connecting");
         let started = Instant::now();
-        let failure = match connected(config, ctx, &account, &vault, client).await {
+        let links = Links {
+            net: Arc::clone(&net),
+            dial: Arc::clone(&dial),
+        };
+        let failure = match connected(config, ctx, &account, &vault, client, &links).await {
             Ok(()) => return Ok(()),
             Err(e) => format!("{e:#}"),
         };
@@ -313,6 +378,30 @@ struct Session {
     locations: HashMap<String, Located>,
     /// Where a camera tells when its new image was taken.
     taken: Taken,
+    /// When Moli began to watch (ms): nothing from before is told.
+    since: i64,
+}
+
+/// How Ring and Google's push server are reached.
+struct Links {
+    net: Arc<dyn Transport>,
+    dial: Arc<dyn Dial>,
+}
+
+/// The push task, stopped with the connection to Ring.
+struct Aborting(tokio::task::JoinHandle<()>);
+
+impl Drop for Aborting {
+    fn drop(&mut self) {
+        self.0.abort();
+    }
+}
+
+/// The push task's side of the loop.
+struct Pushing {
+    heard: mpsc::UnboundedReceiver<Heard>,
+    asks: mpsc::UnboundedSender<Ask>,
+    _task: Aborting,
 }
 
 /// Connected: the devices, then their events, health and modes, until
@@ -323,6 +412,7 @@ async fn connected(
     account: &DeviceId,
     vault: &Arc<dyn Vault>,
     mut client: Client,
+    links: &Links,
 ) -> anyhow::Result<()> {
     let fail = |e: Failure| match e {
         Failure::SignInAgain => anyhow::anyhow!("{SIGN_IN_AGAIN}"),
@@ -343,6 +433,7 @@ async fn connected(
         tracked: HashMap::new(),
         locations: HashMap::new(),
         taken,
+        since: jiff::Timestamp::now().as_millisecond(),
     };
     discover(ctx, &mut session).await.map_err(fail)?;
     health(ctx, &session).await.map_err(fail)?;
@@ -354,11 +445,42 @@ async fn connected(
         locations = session.locations.len(),
         "ring connected"
     );
-    let result = watch(config, ctx, account, &mut session, images_taken).await;
+    let pushing = config.push.then(|| start_push(ctx, &session, links));
+    set_text(
+        ctx,
+        account,
+        "push",
+        if config.push { "fallback" } else { "off" },
+    );
+    let result = watch(config, ctx, account, &mut session, images_taken, pushing).await;
     if result.is_err() {
         lost(ctx, &session);
+        if config.push {
+            set_text(ctx, account, "push", "fallback");
+        }
     }
     result.map_err(fail)
+}
+
+/// The push task, beside the loop, with the same client to Ring.
+fn start_push(ctx: &DriverCtx, session: &Session, links: &Links) -> Pushing {
+    let (heard, heard_rx) = mpsc::unbounded_channel();
+    let (asks, asks_rx) = mpsc::unbounded_channel();
+    let push = Push {
+        net: Arc::clone(&links.net),
+        dial: Arc::clone(&links.dial),
+        client: Arc::clone(&session.client),
+        vault: Arc::clone(&session.vault),
+        keep: Arc::new(Store(ctx.secret_keeper())),
+        credentials: ctx.secret(PUSH).as_deref().and_then(Credentials::parse),
+        heard,
+        asks: asks_rx,
+    };
+    Pushing {
+        heard: heard_rx,
+        asks,
+        _task: Aborting(tokio::spawn(push.run())),
+    }
 }
 
 /// Ring out of reach: nothing is known of the door any more. No press, no
@@ -386,8 +508,9 @@ async fn watch(
     account: &DeviceId,
     session: &mut Session,
     mut taken: mpsc::UnboundedReceiver<(DeviceId, i64)>,
+    mut pushing: Option<Pushing>,
 ) -> Result<(), Failure> {
-    let mut poll = tokio::time::interval(config.poll());
+    let mut poll = tokio::time::interval(config.pace(false));
     let mut devices = tokio::time::interval(DEVICES);
     let mut healths = tokio::time::interval(HEALTH);
     let mut modes = tokio::time::interval(MODES);
@@ -398,9 +521,35 @@ async fn watch(
     // Points to put back to « off », and when.
     let mut resets: HashMap<(DeviceId, &'static str), Instant> = HashMap::new();
     poll.reset_immediately();
+    let mut push_up = false;
+    // Events the poll told while the push was up.
+    let mut missed = 0;
     loop {
         let next_reset = resets.values().min().copied();
         tokio::select! {
+            Some(heard) = async {
+                match pushing.as_mut() {
+                    Some(p) => p.heard.recv().await,
+                    None => std::future::pending().await,
+                }
+            } => match heard {
+                Heard::Up | Heard::Down => {
+                    push_up = heard == Heard::Up;
+                    missed = 0;
+                    set_text(ctx, account, "push", if push_up { "active" } else { "fallback" });
+                    tracing::info!(instance = %ctx.instance(), active = push_up, "ring instant alerts");
+                    // The new pace from now on; at once when the push fell.
+                    let pace = config.pace(push_up);
+                    let first = if push_up { Instant::now() + pace } else { Instant::now() };
+                    poll = tokio::time::interval_at(first, pace);
+                    poll.set_missed_tick_behavior(MissedTickBehavior::Delay);
+                }
+                Heard::Notified(p) => {
+                    if notified(ctx, session, &mut resets, &p) {
+                        missed = 0;
+                    }
+                }
+            },
             command = ctx.next_command() => {
                 let Some(command) = command else { return Ok(()) };
                 command_received(ctx, account, session, command).await?;
@@ -408,7 +557,18 @@ async fn watch(
             Some((id, at)) = taken.recv() => {
                 set_text(ctx, &id, "image_at", &model::rfc3339(at));
             }
-            _ = poll.tick() => events(ctx, session, &mut resets).await?,
+            _ = poll.tick() => {
+                let told = events(ctx, session, &mut resets).await?;
+                if push_up && told > 0 {
+                    missed += told;
+                    if missed >= MISSED {
+                        missed = 0;
+                        if let Some(p) = &pushing {
+                            let _ = p.asks.send(Ask::Renew);
+                        }
+                    }
+                }
+            }
             _ = devices.tick() => discover(ctx, session).await?,
             _ = healths.tick() => health(ctx, session).await?,
             _ = modes.tick() => read_modes(ctx, session).await?,
@@ -604,7 +764,7 @@ async fn discover(ctx: &DriverCtx, session: &mut Session) -> Result<(), Failure>
         }
         let entry = session.tracked.entry(id).or_insert_with(|| Tracked {
             device: d.clone(),
-            watch: Watch::default(),
+            watch: Watch::new(session.since),
             history: false,
             unreadable: false,
         });
@@ -686,12 +846,57 @@ async fn health(ctx: &DriverCtx, session: &Session) -> Result<(), Failure> {
     Ok(())
 }
 
-/// The latest events of each doorbell and camera; the new ones told.
+/// Shows one event on its device's point (a press on a doorbell only),
+/// for as long as it lasts; whether it was shown.
+fn tell(
+    ctx: &DriverCtx,
+    id: &DeviceId,
+    t: &Tracked,
+    event: &Event,
+    by: &str,
+    resets: &mut HashMap<(DeviceId, &'static str), Instant>,
+) -> bool {
+    let (key, hold) = match event.what {
+        Happened::Press if t.device.family == Family::Doorbell => ("doorbell", PRESS),
+        Happened::Press => return false,
+        Happened::Motion => ("motion", MOTION),
+    };
+    // How long after Ring saw it: what the push is for.
+    let delay_ms = jiff::Timestamp::now().as_millisecond() - event.at;
+    tracing::info!(device = %t.device.name, what = key, by, delay_ms, "ring event");
+    ctx.pulse_state(id, key, Value::Bool(true));
+    resets.insert((id.clone(), key), Instant::now() + hold);
+    true
+}
+
+/// An event Ring pushed, told if new (not read nor pushed before), fresh,
+/// and of a device Moli tracks.
+fn notified(
+    ctx: &DriverCtx,
+    session: &mut Session,
+    resets: &mut HashMap<(DeviceId, &'static str), Instant>,
+    p: &Pushed,
+) -> bool {
+    let Some((id, t)) = session
+        .tracked
+        .iter_mut()
+        .find(|(_, t)| t.device.id == p.device)
+    else {
+        tracing::debug!("ring push for a device Moli does not track");
+        return false;
+    };
+    let now = jiff::Timestamp::now().as_millisecond();
+    t.watch.heard(&p.event, now) && tell(ctx, id, t, &p.event, "push", resets)
+}
+
+/// The latest events of each doorbell and camera; the new ones told (how
+/// many).
 async fn events(
     ctx: &DriverCtx,
     session: &mut Session,
     resets: &mut HashMap<(DeviceId, &'static str), Instant>,
-) -> Result<(), Failure> {
+) -> Result<u32, Failure> {
+    let mut told = 0;
     for (id, t) in &mut session.tracked {
         if t.device.family == Family::Chime || !t.device.online {
             continue;
@@ -724,17 +929,12 @@ async fn events(
         t.unreadable = false;
         let now = jiff::Timestamp::now().as_millisecond();
         for event in t.watch.news(&model::events(&answer), now) {
-            let (key, hold) = match event.what {
-                Happened::Press if t.device.family == Family::Doorbell => ("doorbell", PRESS),
-                Happened::Press => continue,
-                Happened::Motion => ("motion", MOTION),
-            };
-            tracing::info!(device = %t.device.name, what = key, "ring event");
-            ctx.pulse_state(id, key, Value::Bool(true));
-            resets.insert((id.clone(), key), Instant::now() + hold);
+            if tell(ctx, id, t, &event, "poll", resets) {
+                told += 1;
+            }
         }
     }
-    Ok(())
+    Ok(told)
 }
 
 #[cfg(test)]
@@ -791,7 +991,42 @@ mod tests {
         Arc::new(net)
     }
 
+    /// No push server in this test.
+    struct NoDial;
+
+    impl Dial for NoDial {
+        fn dial(&self) -> BoxFuture<'_, anyhow::Result<Box<dyn mcs::Stream>>> {
+            Box::pin(async { anyhow::bail!("no push server here") })
+        }
+    }
+
+    /// A push server on the other end of a pipe, reached once.
+    struct Pipe(std::sync::Mutex<Option<tokio::io::DuplexStream>>);
+
+    impl Dial for Pipe {
+        fn dial(&self) -> BoxFuture<'_, anyhow::Result<Box<dyn mcs::Stream>>> {
+            let stream = self.0.lock().unwrap().take();
+            Box::pin(async move {
+                match stream {
+                    Some(s) => Ok(Box::new(s) as Box<dyn mcs::Stream>),
+                    None => anyhow::bail!("reached once"),
+                }
+            })
+        }
+    }
+
     async fn start(name: &str, net: Arc<Replay>) -> (Hub, InstanceId, CancellationToken, PathBuf) {
+        let config = serde_json::json!({ "push": false });
+        start_with(name, net, config, Arc::new(NoDial), None).await
+    }
+
+    async fn start_with(
+        name: &str,
+        net: Arc<Replay>,
+        config: serde_json::Value,
+        dial: Arc<dyn Dial>,
+        push: Option<&Credentials>,
+    ) -> (Hub, InstanceId, CancellationToken, PathBuf) {
         let vault = std::env::temp_dir().join(format!(
             "moli-ring-secrets-{}-{name}.enc",
             std::process::id()
@@ -809,12 +1044,17 @@ mod tests {
         hub.store_secret(&instance, HARDWARE_ID, "hw-test")
             .await
             .unwrap();
+        if let Some(push) = push {
+            hub.store_secret(&instance, PUSH, &push.to_text())
+                .await
+                .unwrap();
+        }
         let cancel = CancellationToken::new();
-        let config: Config = serde_json::from_value(serde_json::json!({})).unwrap();
+        let config: Config = serde_json::from_value(config).unwrap();
         spawn_driver(
             &hub,
             instance.clone(),
-            Arc::new(Ring::with_transport(config, net)),
+            Arc::new(Ring::with_transport(config, net, dial)),
             cancel.clone(),
         );
         for _ in 0..500 {
@@ -1098,10 +1338,194 @@ mod tests {
         let _ = std::fs::remove_file(&vault);
     }
 
+    fn flag(hub: &Hub, point: &str) -> Option<bool> {
+        match hub.state(&point.into())?.value {
+            Value::Bool(b) => Some(b),
+            _ => None,
+        }
+    }
+
+    /// Waits (in the test's time) until `ok`.
+    async fn until(what: &str, ok: impl Fn() -> bool) {
+        for _ in 0..200 {
+            if ok() {
+                return;
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+        panic!("never: {what}");
+    }
+
+    /// A press as Ring pushes it, happened `ago` ms before now.
+    fn ring_push(ding: &str, ago: i64) -> Vec<u8> {
+        let at = model::rfc3339(jiff::Timestamp::now().as_millisecond() - ago);
+        let text = include_str!("../../../integrations/ring/fixtures/push-ding.json")
+            .replace("7000000000000000011", ding)
+            .replace("2025-10-18T15:06:40Z", &at);
+        text.into_bytes()
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_press_ring_pushes_is_told_at_once_and_once() {
+        use tokio::io::AsyncWriteExt as _;
+        let net = replay();
+        net.always_bytes("/checkin", 200, &fcm::tests::checkin_answer(41, 42));
+        net.always("PATCH /clients_api/device", 200, "{}");
+        let push = fcm::tests::credentials();
+        let (client, mut server) = tokio::io::duplex(64 * 1024);
+        let dial = Arc::new(Pipe(std::sync::Mutex::new(Some(client))));
+        let (hub, _instance, cancel, vault) = start_with(
+            "push",
+            Arc::clone(&net),
+            serde_json::json!({}),
+            dial,
+            Some(&push),
+        )
+        .await;
+        let login = mcs::tests::accept(&mut server).await;
+        assert_eq!(
+            login.str(3),
+            Some("4000000000000000001"),
+            "the kept device, not a new one"
+        );
+        until("instant alerts active", || {
+            text(&hub, "ring:account/push").as_deref() == Some("active")
+        })
+        .await;
+        // Ring was told the token, on Moli's own client device; nothing
+        // was registered again.
+        let calls = net.calls();
+        let told = calls
+            .iter()
+            .position(|(m, p)| m == "PATCH" && p == "/clients_api/device")
+            .expect("Ring told the push token");
+        let (_, headers, body) = net.asked(told);
+        assert_eq!(headers["hardware_id"], "hw-test");
+        assert_eq!(body["device"]["push_notification_token"], "fake-fcm-token");
+        assert_eq!(body["device"]["metadata"]["pn_service"], "fcm");
+        assert!(
+            !calls.iter().any(|(_, p)| p.contains("register")),
+            "{calls:?}"
+        );
+
+        let frame = |n: u8, plain: Vec<u8>| {
+            let sender = ece::Keys::generate().unwrap();
+            let salt = [n; 16];
+            let raw = ece::tests::aesgcm(&push.keys, &sender, &salt, &plain);
+            let dh = format!("dh={}", ece::base64url(sender.public()));
+            let salt = format!("salt={}", ece::base64url(&salt));
+            mcs::tests::data(
+                &format!("0:{n}"),
+                &[("crypto-key", dh.as_str()), ("encryption", salt.as_str())],
+                &raw,
+            )
+        };
+        // An old press Google kept: never told.
+        server
+            .write_all(&frame(1, ring_push("7000000000000000020", 120_000)))
+            .await
+            .unwrap();
+        settle().await;
+        assert_eq!(flag(&hub, "ring:10000001/doorbell"), Some(false));
+        // A press now: told at once, then put back.
+        server
+            .write_all(&frame(2, ring_push("7000000000000000021", 0)))
+            .await
+            .unwrap();
+        until("the press", || {
+            flag(&hub, "ring:10000001/doorbell") == Some(true)
+        })
+        .await;
+        tokio::time::advance(PRESS + Duration::from_secs(1)).await;
+        until("the press over", || {
+            flag(&hub, "ring:10000001/doorbell") == Some(false)
+        })
+        .await;
+        // Pushed again: told once only.
+        server
+            .write_all(&frame(3, ring_push("7000000000000000021", 0)))
+            .await
+            .unwrap();
+        settle().await;
+        assert_eq!(flag(&hub, "ring:10000001/doorbell"), Some(false));
+
+        // The push server goes: back to the poll alone.
+        drop(server);
+        until("in fallback", || {
+            text(&hub, "ring:account/push").as_deref() == Some("fallback")
+        })
+        .await;
+        cancel.cancel();
+        let _ = std::fs::remove_file(&vault);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_new_registration_is_kept_before_ring_is_told() {
+        let net = replay();
+        net.always_bytes("/checkin", 200, &fcm::tests::checkin_answer(41, 42));
+        net.always("/c2dm/register3", 200, "token=fake-gcm-token");
+        net.always(
+            "/v1/projects/ring-17770/installations",
+            200,
+            r#"{"authToken":{"token":"fake-fis","expiresIn":"604800s"}}"#,
+        );
+        net.always(
+            "/v1/projects/ring-17770/registrations",
+            200,
+            r#"{"token":"fake-fcm-new"}"#,
+        );
+        net.always("PATCH /clients_api/device", 200, "{}");
+        let (client, mut server) = tokio::io::duplex(64 * 1024);
+        let dial = Arc::new(Pipe(std::sync::Mutex::new(Some(client))));
+        let (hub, instance, cancel, vault) = start_with(
+            "register",
+            Arc::clone(&net),
+            serde_json::json!({}),
+            dial,
+            None,
+        )
+        .await;
+        let login = mcs::tests::accept(&mut server).await;
+        assert_eq!(login.str(3), Some("41"), "the new device");
+        until("instant alerts active", || {
+            text(&hub, "ring:account/push").as_deref() == Some("active")
+        })
+        .await;
+        let kept = hub.secret(&instance, PUSH).expect("kept in the store");
+        let kept = Credentials::parse(&kept).unwrap();
+        assert_eq!(kept.token, "fake-fcm-new");
+        assert_eq!(kept.android_id, 41);
+        // The keys kept are the ones Firebase was given.
+        let calls = net.calls();
+        let registered = calls
+            .iter()
+            .position(|(_, p)| p.ends_with("/registrations"))
+            .unwrap();
+        let p256dh = net.asked(registered).2["web"]["p256dh"]
+            .as_str()
+            .unwrap()
+            .to_owned();
+        assert_eq!(ece::base64url(kept.keys.public()), p256dh);
+        let told = calls
+            .iter()
+            .position(|(m, _)| m == "PATCH")
+            .expect("Ring told");
+        assert!(told > registered);
+        assert_eq!(
+            net.asked(told).2["device"]["push_notification_token"],
+            "fake-fcm-new"
+        );
+        cancel.cancel();
+        let _ = std::fs::remove_file(&vault);
+    }
+
     #[test]
     fn the_poll_has_a_floor_and_nothing_else_is_accepted() {
         let parsed: Config = serde_json::from_value(serde_json::json!({})).unwrap();
         assert_eq!(parsed.poll(), Duration::from_secs(10));
+        assert!(parsed.push, "instant alerts unless told otherwise");
+        assert_eq!(parsed.pace(true), PUSH_POLL, "slower while the push works");
+        assert_eq!(parsed.pace(false), Duration::from_secs(10));
         let fast: Config = serde_json::from_value(serde_json::json!({ "poll": 1 })).unwrap();
         assert_eq!(fast.poll(), Duration::from_secs(5));
         assert!(

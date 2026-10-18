@@ -70,6 +70,8 @@ unicode-normalization = "0.1"
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
 tokio-rustls = { version = "0.26", default-features = false, features = ["ring", "tls12"] }
 mime_guess = { version = "2", default-features = false }
+# P-256 with a key that lasts (Ring's push messages): ring only has single-use ECDH keys.
+p256 = { version = "0.13", default-features = false, features = ["arithmetic"] }
 rmcp = { version = "3.5", features = ["server", "macros", "transport-streamable-http-server"] }
 rumqttc = { version = "0.25", default-features = false }
 rust-embed = "8"

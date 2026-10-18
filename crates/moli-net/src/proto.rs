@@ -61,6 +61,14 @@ impl Writer {
         self
     }
 
+    /// Fixed 64 bits, little-endian (`fixed64`: a GCM security token).
+    #[must_use]
+    pub fn fixed64(mut self, field: u32, value: u64) -> Self {
+        varint((u64::from(field) << 3) | 1, &mut self.0);
+        self.0.extend_from_slice(&value.to_le_bytes());
+        self
+    }
+
     #[must_use]
     pub fn float(self, field: u32, value: f32) -> Self {
         self.fixed32(field, value.to_bits())
@@ -124,7 +132,7 @@ pub fn parse(buf: &[u8]) -> Option<Fields<'_>> {
                 pos = end;
                 Field::Fixed32(word)
             }
-            // Fixed 64 bits: kept as bytes, never read here.
+            // Fixed 64 bits: kept as bytes ([`Fields::fixed64`] reads them).
             1 => {
                 let end = pos.checked_add(8).filter(|end| *end <= buf.len())?;
                 let slice = &buf[pos..end];
@@ -174,6 +182,17 @@ impl<'a> Fields<'a> {
     pub fn fixed32(&self, number: u32) -> Option<u32> {
         self.0.iter().find_map(|(n, f)| match f {
             Field::Fixed32(v) if *n == number => Some(*v),
+            _ => None,
+        })
+    }
+
+    /// A `fixed64` field (kept as its 8 bytes when parsed).
+    #[must_use]
+    pub fn fixed64(&self, number: u32) -> Option<u64> {
+        self.0.iter().find_map(|(n, f)| match f {
+            Field::Bytes(v) if *n == number && v.len() == 8 => {
+                Some(u64::from_le_bytes((*v).try_into().ok()?))
+            }
             _ => None,
         })
     }
@@ -239,6 +258,12 @@ mod tests {
             .collect();
         assert_eq!(names, ["url", "text"]);
         assert!(parse(&[0x15, 0x01, 0x02]).is_none(), "fixed32 cut short");
+        let wide = Writer::new().fixed64(7, 0x0123_4567_89AB_CDEF).finish();
+        assert_eq!(wide[0], (7 << 3) | 1);
+        assert_eq!(
+            parse(&wide).unwrap().fixed64(7),
+            Some(0x0123_4567_89AB_CDEF)
+        );
     }
 
     #[test]

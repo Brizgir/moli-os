@@ -28,7 +28,8 @@ Ring lui-même, puis se colle dans Moli.
 
 Moli apparaît alors dans le Centre de contrôle de l'appli Ring, parmi les appareils clients
 autorisés (le même que l'ordinateur qui a fait le jeton) : on peut l'y retirer, et il faudra
-refaire un jeton.
+refaire un jeton. Les alertes instantanées n'y ajoutent **pas** de second appareil : Moli
+donne son adresse de notification à Ring sur cette même entrée.
 
 ## Configuration
 
@@ -37,7 +38,9 @@ refaire un jeton.
 id = "ring"
 kind = "ring"
 [driver.options]
-# poll = 10   # secondes entre deux lectures des derniers événements (5 au moins)
+# poll = 10   # secondes entre deux lectures des derniers événements (5 au moins ;
+#             # 30 au moins tant que les alertes instantanées marchent)
+# push = true # alertes instantanées (notifications de Ring) ; false si le réseau bloque le port 5228
 ```
 
 ## Ce que Moli voit
@@ -52,6 +55,23 @@ kind = "ring"
 | carillon | `volume` | 0 à 11, en lecture |
 | Surveillance Ring (le lieu) | `mode` | `disarmed`, `home`, `away` ; **écrivable**, par une personne |
 | Surveillance Ring | `mode_since` | quand le mode a changé pour la dernière fois |
+
+## Alertes instantanées
+
+Un appui ou un mouvement arrive dans Moli **dès que Ring l'envoie**, comme sur le téléphone :
+Moli reçoit les notifications de Ring à la manière de l'appli Android (un client Firebase Cloud
+Messaging, connecté en permanence au serveur push de Google, `mtalk.google.com`, port TCP 5228).
+Ce qui fait de Moli un récepteur (son appareil Firebase et ses clés de déchiffrement) est tiré
+une fois et rangé chiffré dans le coffre, jamais dans un fichier ni au journal.
+
+La carte Ring de Système dit où en sont les alertes : **actives**, ou **en repli sur le
+sondage** (serveur push injoignable, port 5228 bloqué, Ring qui n'envoie rien) ; Moli se
+reconnecte tout seul, de plus en plus espacé (2 s à 5 min). Le sondage reste toujours là comme
+filet : toutes les 30 s tant que les alertes marchent, à son rythme normal (`poll`) dès
+qu'elles tombent. Un même événement n'est jamais annoncé deux fois (reçu puis lu, ou l'inverse).
+
+Ring n'envoie que ce que l'appli est réglée pour notifier : si les alertes de mouvement d'un
+appareil sont coupées dans l'appli Ring, ses mouvements ne viennent que par le sondage.
 
 ## Images
 
@@ -84,10 +104,11 @@ et `motion` retombent à faux.
 
 ## Limites
 
-- **Pas instantané** : Moli relit les derniers événements de chaque sonnette toutes les 10 s (les
-  notifications push de l'appli seront une suite). Un appui est donc vu 10 à 20 s après. Un
+- **Instantané si le push passe** : en repli sur le sondage, un appui est vu 5 à 20 s après. Un
   événement de plus de 90 s n'est jamais annoncé, ni rien de ce qui s'est passé avant le
   démarrage de Moli : jamais de « on sonne » périmé.
+- Les notifications push ont été écrites d'après ring-client-api (enregistrement Firebase, forme
+  des messages) et rejouées sur des messages reconstitués : à vérifier chez la personne.
 - Hors le mode de surveillance, rien n'est commandé (volume du carillon, sirène, lumière : une
   suite).
 - Pas de vidéo en direct : une image à la demande, pas plus d'une par minute sur batterie.

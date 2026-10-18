@@ -242,13 +242,17 @@ host = "192.168.1.x"
   oauth.ring.com/oauth/token` (`grant_type = refresh_token`, client `ring_official_android`,
   en-tête `hardware_id`) ; Ring le remplace aussitôt. Ce qui est collé n'est ni journalisé
   (`null` au journal), ni gardé comme état, ni affiché (`src/signin.rs`). `status` :
-  `sign_in`, `connecting`, `connected`, `error`, `slow_down`.
+  `sign_in`, `connecting`, `connected`, `error`, `slow_down` ; `push` : `active`, `fallback`
+  (le sondage seul), `off` (option), montré dans la carte Ring de Système.
 - **Secrets** (écrits par le pilote) : `refresh_token`, **réécrit à chaque renouvellement** (Ring
   le remplace ; un jeton qui n'a pas pu être rangé n'est pas utilisé ; sans coffre, rien n'est
   envoyé à Ring : un jeton collé est consommé par sa première vérification), et `hardware_id`
   (celui du jeton collé, sinon un UUID tiré une fois, gardé pour toujours : Moli reste un seul
   « appareil client autorisé » du compte). Jeton refusé (400/401 sur le renouvellement) :
-  oublié, retour à la connexion.
+  oublié, retour à la connexion. `push_credentials` : l'appareil Firebase de Moli (Android id,
+  jeton de sécurité, jeton FCM) et ses clés de déchiffrement (P-256, secret d'authentification),
+  en un texte JSON, tirés et rangés par le pilote **avant** d'être donnés à Ring ; jamais au
+  journal (`Debug` masqué).
 - **Protocole** : `api.ring.com/clients_api`, `Authorization: Bearer` (une heure, renouvelé 5 min
   avant ou sur un 401, une fois). `POST /session` à la connexion ; `ring_devices` toutes les
   5 min (appareils, en ligne par `alerts.connection`, batterie `battery_life`, volume du
@@ -256,6 +260,31 @@ host = "192.168.1.x"
   `battery_percentage`) ; derniers événements toutes les `poll` s (10 par défaut, 5 au moins) :
   `locations/<loc>/devices/<id>/events?limit=5`, ou l'ancien `doorbots/<id>/history` si le
   premier répond 404. 429 : pause de 10 min.
+- **Notifications push** (`src/push.rs`, `fcm.rs`, `mcs.rs`, `ece.rs`) : Moli reçoit les
+  notifications de Ring comme l'appli Android. Enregistrement (une fois, gardé au coffre) :
+  check-in GCM (`android.clients.google.com/checkin`, protobuf → Android id et jeton de
+  sécurité), `c2dm/register3` (jeton GCM), installation Firebase
+  (`firebaseinstallations.googleapis.com`, projet de l'appli Ring `ring-17770`) puis
+  enregistrement FCM (`fcmregistrations.googleapis.com` : jeton GCM, clé publique P-256, secret
+  d'authentification → jeton FCM). Ring reçoit ce jeton par `PATCH clients_api/device`
+  (`push_notification_token`, `pn_service = fcm`, `pn_dict_version = 2.0.0`, même `hardware_id`
+  que le reste : **pas de second appareil** dans le Centre de contrôle), à la connexion et toutes
+  les 12 h avec un `POST /session` (hors des États-Unis, Ring oublie le jeton d'un client au bout
+  d'un jour environ). Connexion MCS (`mtalk.google.com:5228`, TLS rustls, racines publiques,
+  keepalive TCP) : login avec l'appareil GCM, battements de cœur (5 min ; un silence de deux
+  périodes coupe), identifiants persistants des messages reçus redonnés au login suivant.
+  Chaque message est déchiffré (RFC 8291 `aes128gcm`, ou l'ancien `aesgcm` de Firebase avec
+  `crypto-key`/`encryption`) : `{"data": {"android_config", "data", …}}`, catégorie
+  `com.ring.pn.live-event.ding` (appui) ou `.motion` (mouvement), `data.device.id`,
+  `data.event.ding.id` et `created_at` (`model::pushed`). Même règle que le sondage, même
+  dédoublonnage (identifiant de l'événement, `Watch::heard`) : jamais un événement de plus de
+  90 s, jamais un d'avant le démarrage, jamais deux fois (poussé puis lu, ou l'inverse). Push
+  tombé : `push = fallback`, le sondage reprend son rythme (`poll`) aussitôt, reconnexion avec
+  recul exponentiel (2 s à 5 min) ; push actif : sondage toutes les 30 s au moins (filet). Trois
+  événements lus par le sondage alors que le push se disait actif : nouvel enregistrement (une
+  fois par jour au plus). Appareil refusé au login MCS : nouvel enregistrement. ECDH avec une
+  clé qui dure : `p256` (pur Rust ; `ring` n'a que des clés à usage unique), HKDF et AES-GCM par
+  `ring`.
 - **Images** (`src/images.rs`, `SnapshotSource` déclaré au hub pour chaque sonnette et caméra,
   jamais pour un carillon) : `PUT snapshots/update` (`{doorbot_ids, refresh: true}`), puis `POST
   snapshots/timestamps` (`{doorbot_ids}` → `timestamps[].timestamp` en ms) toutes les 2 s, 5 fois
@@ -277,22 +306,32 @@ host = "192.168.1.x"
   une demande d'approbation, 202), `mode_since` (RFC 3339). Relu toutes les 30 s et juste après
   chaque ordre ; l'ordre est en erreur si Ring ne montre pas le mode demandé. `readOnly` (alarme
   Ring) : lu, refus d'écrire. `disabled`/`unset` : l'appareil est indisponible, sans mode.
-- **Configuration** : `kind = "ring"`, option `poll` seulement.
+- **Configuration** : `kind = "ring"`, options `poll` (10 s par défaut, 5 au moins ; 30 au moins
+  quand le push marche) et `push` (vrai par défaut ; faux pour un réseau qui bloque le port 5228).
 - **Points** : sonnette `doorbell` (impulsion, vrai 10 s), `motion` (vrai 60 s après le dernier),
   `battery` (%), `wifi_signal` (dBm), `image_at` ; caméra : les mêmes sans `doorbell` ; carillon :
   `volume` (0 à 11), `wifi_signal` ; Surveillance Ring : `mode` (écrivable), `mode_since`. En
   ligne : disponibilité de l'appareil.
-- **Pièges** : pas de notifications push (FCM) dans cette version, d'où le sondage. Un événement
-  est dit **une fois**, s'il a moins de 90 s, et **jamais** depuis la première lecture après un
-  démarrage ou une reconnexion (elle ne fait qu'apprendre ce qui est là) : jamais de « on sonne »
-  périmé. `doorbell` et `motion` repartent à faux à chaque démarrage, et dès que Ring devient
+- **Pièges** : un événement est dit **une fois** (poussé ou lu), s'il a moins de 90 s, **jamais**
+  s'il date d'avant le démarrage ou la reconnexion, ni depuis la première lecture après eux (elle
+  ne fait qu'apprendre ce qui est là) : jamais de « on sonne » périmé. Le journal dit pour chaque
+  événement `by = push|poll` et `delay_ms` (entre l'heure de Ring et son arrivée dans Moli).
+  La clé d'API Firebase de l'appli Ring (publique, dans chaque copie de l'appli) est écrite en
+  deux morceaux dans `fcm.rs` pour que `scripts/leak-check.sh` continue de chercher les vraies. `doorbell` et `motion` repartent à faux à chaque démarrage, et dès que Ring devient
   injoignable (les appareils passent alors indisponibles jusqu'à la reconnexion).
 - **Tests** : réponses capturées anonymisées (`integrations/ring/fixtures/`) rejouées par un faux
   transport (`src/net.rs`) : jeton collé (brut ou forme ring-auth-cli) vérifié et son
   `hardware_id` adopté, texte qui n'est pas un jeton jamais envoyé à Ring, jeton refusé, jamais
   de mot de passe dans une requête, rotation du jeton rangée avant usage, expiration (temps
   simulé), 401 puis renouvellement, jeton révoqué, 429 ; lecture des appareils, santé,
-  événements des deux adresses ; fraîcheur des événements.
+  événements des deux adresses ; fraîcheur des événements. Push : vecteurs de la RFC 8291
+  (`ece.rs`), `aesgcm` chiffré puis déchiffré, enregistrement complet sur un faux transport
+  (`fcm.rs`), login, battements de cœur, trame coupée, appareil refusé et trame géante sur un
+  tube (`mcs.rs`), notifications anonymisées (`push-ding.json`, `push-motion.json`, reconstituées
+  d'après les types de ring-client-api), dédoublonnage push/sondage (`model.rs`), et le pilote
+  complet (`lib.rs`) : identifiants gardés réutilisés, nouvel enregistrement rangé au coffre avant
+  d'être donné à Ring, appui poussé dit tout de suite et une fois, appui ancien jamais dit, repli
+  quand le serveur push tombe.
 - **Non vérifié** (jamais tourné contre les serveurs Ring) : `POST /session` (non bloquant si
   refusé), la forme exacte de `locations/<loc>/devices/<id>/events` (d'où le repli sur
   `history`), `chimes/<id>/health` ; les instantanés (`snapshots/update`, `timestamps`, `image`)
@@ -300,12 +339,16 @@ host = "192.168.1.x"
   python-ring-doorbell, rejoués sur des fixtures anonymisées (`snapshots-timestamps.json`,
   `mode-location.json`) par les tests de `lib.rs` (pilote complet sur un faux transport : cache
   d'image, horodatage jamais rajeuni, refus par origine, relecture après ordre, changement vu
-  depuis l'appli). Marche à suivre au premier essai : `integrations/ring/onboarding.md`.
+  depuis l'appli). Les notifications push (enregistrement Firebase, `PATCH clients_api/device`,
+  forme des messages) : écrites d'après ring-client-api 14.3 et @eneris/push-receiver 4.4, jamais
+  reçues d'un vrai compte. Marche à suivre au premier essai : `integrations/ring/onboarding.md`.
 - **Décisions** : seul le mode s'écrit, par une personne (`Semantic::Control`) ; images à la
-  demande seulement, jamais en boucle (batterie, quotas) ; sondage plutôt que FCM (pas de
-  dépendance à Firebase, au prix de 10 à 20 s de retard) ; « en ligne » par la disponibilité de
-  l'appareil, pas par un point `online` ; `hardware_id` tiré une fois et gardé au coffre.
-- **Suites** : notifications push (instantané), volume du carillon en écriture, vidéo en direct.
+  demande seulement, jamais en boucle (batterie, quotas) ; notifications push de Ring (FCM) avec
+  le sondage comme filet (le sondage seul mettait 5 à 20 s : un automatisme « mouvement → lumière »
+  arrivait trop tard) ; client FCM écrit dans le crate (aucune dépendance lourde : `p256` pour la
+  courbe, le reste déjà là) ; « en ligne » par la disponibilité de l'appareil, pas par un point
+  `online` ; `hardware_id` tiré une fois et gardé au coffre.
+- **Suites** : volume du carillon en écriture, vidéo en direct, sirène et lumière.
 
 ## `sonos` : enceintes Sonos (`crates/moli-sonos`)
 
@@ -659,7 +702,7 @@ ni pièce native). Il ne déplace jamais rien. Sans argument : plan à blanc ; `
 | `hue` | `moli-hue` | HTTPS CLIP v2 + SSE, local, épinglé | oui : lumières, pièces ; zones non | pont Philips Hue (CLIP v2) |
 | `tuya` | `moli-tuya` | TCP 6668 chiffré 3.3/3.4/3.5, UDP 6666/6667/7000 ; cloud en lecture | oui : DP booléens, entiers, enum (local seulement) | prises Tuya (local, écriture comprise) ; capteurs sur pile et passerelles (cloud) |
 | `reolink` | `moli-reolink` | HTTPS API locale, épinglé (X.509 v1) | non (+ images) | Reolink Home Hub (caméras, sonnette) |
-| `ring` | `moli-ring` | HTTPS, API cloud de l'appli Ring (non officielle) | non | en service (sonnette et caméras sur batterie, un seul lieu) ; images et modes rejoués, à vérifier chez la personne |
+| `ring` | `moli-ring` | HTTPS, API cloud de l'appli Ring (non officielle), notifications push (FCM) | non | en service (sonnette et caméras sur batterie, un seul lieu) ; images, modes et notifications push rejoués, à vérifier chez la personne |
 | `sonos` | `moli-sonos` | UPnP/SOAP HTTP 1400 ; annonces en WebSocket TLS 1443 | oui : lecture, volume, sourdine, annonces | Sonos Beam |
 | `alexa` | `moli-alexa` | HTTPS, interface de l'appli Alexa (non officielle) | oui : lecture, volume, musique, phrases, annonces, commandes | Echo Dot, Spot, Show 5 et groupes (lecture partielle, en cours) |
 | `philips` | `moli-philips` | JointSpace HTTPS 1926, digest, WoL ; Android TV Remote, Cast | oui : alimentation, volume, sourdine, Ambilight, touches, appli | Philips Google TV (lecture) |

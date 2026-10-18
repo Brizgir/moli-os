@@ -1,8 +1,10 @@
 # Onboarding : sonnettes et carillons Ring
 
 1. Prévenir la personne : interface non officielle de Ring (celle de l'appli), qui peut casser ;
-   Moli apparaîtra parmi les « appareils clients autorisés » de son compte Ring ; les appuis
-   sont relevés toutes les 10 s (pas de notification instantanée).
+   Moli apparaîtra parmi les « appareils clients autorisés » de son compte Ring (une seule fois :
+   les alertes instantanées n'ajoutent pas de second appareil) ; les appuis arrivent par les
+   notifications de Ring, avec un relevé régulier en plus par précaution. Le réseau doit laisser
+   sortir le port TCP 5228 vers `mtalk.google.com` (serveur push de Google).
 2. Déclarer `kind = "ring"` (aucune option obligatoire) ; `moli-os check-config`, redémarrer.
    Le pilote attend la connexion (« Connecte le compte Ring… »).
 3. La personne fait le jeton **elle-même, sur son ordinateur** : `npx -p ring-client-api
@@ -12,8 +14,10 @@
    ni le faire passer par un fichier, un message ou un agent** : le jeton se colle dans la
    carte, et nulle part ailleurs. Si le tableau de bord demande le code de la maison, c'est
    normal : une connexion de compte est l'affaire d'une personne.
-4. Tester : la sonnette et le carillon apparaissent, batterie et Wi-Fi remplis ; un appui sur la
-   sonnette passe `doorbell` à vrai dans les 10 à 20 s, puis il retombe.
+4. Tester : la sonnette et le carillon apparaissent, batterie et Wi-Fi remplis ; la carte Ring de
+   Système dit « Alertes instantanées : actives » (sinon : en repli, voir plus bas). Un appui sur
+   la sonnette passe `doorbell` à vrai en une ou deux secondes, puis il retombe ; le journal dit
+   `ring event … by=push delay_ms=…`.
 5. Redémarrer Moli : `doorbell` reste faux, rien ne se déclenche ;
    un appui d'avant le démarrage n'est jamais annoncé.
 6. Les images : ouvrir l'onglet Caméras ; chaque sonnette et caméra montre sa dernière image
@@ -46,6 +50,15 @@ pas encore tourné contre les serveurs Ring. Au premier essai, lancer Moli avec
   location/<lieu>` (l'hôte de l'appli, `app.ring.com` autrefois). Sans réponse, pas d'appareil
   « Surveillance Ring » ; `readOnly` (alarme Ring) : lu, jamais changé.
 - `status = slow_down` : Ring a répondu 429, le pilote attend 10 min avant de reprendre.
+- Les alertes instantanées (`ring push …`) : `ring push registered` (une fois, au premier
+  démarrage), `ring push connected`, puis `ring instant alerts active=true`. `ring push down` dit
+  pourquoi : `GCM check-in`, `GCM registration refused`, `Firebase installation`, `FCM
+  registration` (Google), `Ring did not take the push token` (le `PATCH clients_api/device`),
+  `cannot reach mtalk.google.com:5228` (port bloqué). En repli, rien ne casse : le sondage
+  continue. Un appui vu `by=poll` alors que les alertes sont actives : Ring n'a rien envoyé
+  (alertes coupées dans l'appli pour cet appareil ?) ; trois de suite, Moli se réenregistre.
+  `ring push unreadable` en debug de temps en temps est normal (Firebase envoie parfois un
+  message indéchiffrable). Pour couper les alertes : `push = false` dans les options.
 - `status = sign_in` après avoir été connecté : le jeton a été refusé (mot de passe changé, Moli
   retiré du Centre de contrôle) ; la personne refait un jeton et le colle depuis Système.
 

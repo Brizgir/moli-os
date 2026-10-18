@@ -1,0 +1,12 @@
+{
+  "data": {
+    "android_config": "{\"category\": \"com.ring.pn.live-event.motion\", \"body\": \"Une personne est à votre Porte d'entrée\"}",
+    "analytics": "{\"server_correlation_id\": \"00000000-0000-4000-8000-0000000000aa\", \"server_id\": \"com.ring.pns\", \"subcategory\": \"human\", \"triggered_at\": 1760800060123, \"sent_at\": 1760800060373, \"referring_item_type\": \"ding\", \"referring_item_id\": \"7000000000000000012\"}",
+    "data": "{\"device\":{\"e2ee_enabled\":false,\"id\":10000001,\"kind\":\"doorbell_oyster\",\"name\":\"Porte d'entrée\"},\"event\":{\"ding\":{\"id\":7000000000000000012,\"created_at\":\"2025-10-18T15:07:40.123Z\",\"subtype\":\"human\",\"detection_type\":\"human\"},\"eventito\":{\"type\":\"human\",\"timestamp\":1760800060123},\"riid\":\"00000000000000000000000000000000\",\"is_sidewalk\":false,\"live_session\":{\"streaming_data_hash\":\"0000\",\"active_streaming_profile\":\"rms\",\"default_audio_route\":\"speaker\",\"max_duration\":600}},\"location\":{\"id\":\"00000000-0000-4000-8000-000000000001\"}}",
+    "img": "{\"snapshot_uuid\": \"00000000-0000-4000-8000-0000000000bb\"}",
+    "version": "2.0.0"
+  },
+  "fcmMessageId": "00000000-0000-4000-8000-0000000000cc",
+  "from": "876313859327",
+  "priority": "high"
+}

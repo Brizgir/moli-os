@@ -85,7 +85,7 @@ fn token_like(s: &str) -> bool {
 }
 
 /// Standard or URL-safe base64, padding optional; `None` if not base64.
-fn base64(text: &str) -> Option<Vec<u8>> {
+pub(crate) fn base64(text: &str) -> Option<Vec<u8>> {
     let text = text.trim_end_matches('=');
     let mut out = Vec::with_capacity(text.len() * 3 / 4);
     let (mut acc, mut bits) = (0u32, 0u32);

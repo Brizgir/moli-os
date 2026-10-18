@@ -81,6 +81,7 @@
   "pilotes.ring.compte": "Ring account",
   "pilotes.ring.description": "The Ring account's doorbells, cameras and chimes, read through the Ring app's interface (unofficial).",
   "pilotes.ring.etat_compte": "Account state",
+  "pilotes.ring.alertes": "Instant alerts (Ring's notifications)",
   "pilotes.ring.jeton": "Ring token (pasted from ring-auth-cli)",
   "pilotes.ring.jeton_faux": "this is not a Ring token: paste what ring-auth-cli prints, as is",
   "pilotes.ring.jeton_refuse": "Ring refuses this token (already used, revoked or expired): make a new one on your computer",

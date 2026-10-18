@@ -53,6 +53,8 @@ pub(crate) mod replay {
         pub path: String,
         pub headers: http::HeaderMap,
         pub body: serde_json::Value,
+        /// As sent (a protobuf, a form).
+        pub raw: Vec<u8>,
     }
 
     #[derive(Default)]
@@ -105,9 +107,13 @@ pub(crate) mod replay {
         /// An answer given every time nothing queued matches the path;
         /// replaces the one set for that path before.
         pub(crate) fn always(&self, path: &'static str, status: u16, body: &str) {
+            self.always_bytes(path, status, body.as_bytes());
+        }
+
+        pub(crate) fn always_bytes(&self, path: &'static str, status: u16, body: &[u8]) {
             let mut sticky = self.sticky.lock().unwrap();
             sticky.retain(|(p, _, _)| *p != path);
-            sticky.push((path, status, body.as_bytes().to_vec()));
+            sticky.push((path, status, body.to_vec()));
         }
 
         pub(crate) fn left(&self) -> usize {
@@ -121,6 +127,10 @@ pub(crate) mod replay {
 
         pub(crate) fn method(&self, n: usize) -> String {
             self.asked.lock().unwrap()[n].method.clone()
+        }
+
+        pub(crate) fn raw(&self, n: usize) -> Vec<u8> {
+            self.asked.lock().unwrap()[n].raw.clone()
         }
 
         pub(crate) fn asked(&self, n: usize) -> (String, http::HeaderMap, serde_json::Value) {
@@ -181,6 +191,7 @@ pub(crate) mod replay {
                     path,
                     headers: parts.headers,
                     body: serde_json::from_slice(&body).unwrap_or(serde_json::Value::Null),
+                    raw: body.to_vec(),
                 });
                 Ok((StatusCode::from_u16(status)?, Bytes::from(answer)))
             })

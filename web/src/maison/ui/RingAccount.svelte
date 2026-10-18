@@ -71,6 +71,19 @@
       </div>
     </div>
 
+    {#if status === 'connected'}
+      {@const push = value(a.id, 'push')}
+      <p class="push" class:on={push === 'active'}>
+        {#if push === 'active'}
+          {t('systeme.ring.alertes_actives')}
+        {:else if push === 'off'}
+          {t('systeme.ring.alertes_off')}
+        {:else}
+          {t('systeme.ring.alertes_repli')}
+        {/if}
+      </p>
+    {/if}
+
     {#if status === 'sign_in'}
       <ol class="steps">
         <li>{t('systeme.ring.etape1')} <code>npx -p ring-client-api ring-auth-cli</code></li>
@@ -121,6 +134,15 @@
     display: grid;
     gap: 2px;
     min-width: 0;
+  }
+
+  .push {
+    margin: 0;
+    color: var(--ink-2);
+  }
+
+  .push.on {
+    color: inherit;
   }
 
   .steps {

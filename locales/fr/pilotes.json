@@ -81,6 +81,7 @@
   "pilotes.ring.compte": "Compte Ring",
   "pilotes.ring.description": "Les sonnettes, caméras et carillons du compte Ring, lus par l'interface de l'appli Ring (non officielle).",
   "pilotes.ring.etat_compte": "État du compte",
+  "pilotes.ring.alertes": "Alertes instantanées (notifications de Ring)",
   "pilotes.ring.jeton": "Jeton Ring (collé depuis ring-auth-cli)",
   "pilotes.ring.jeton_faux": "ce n'est pas un jeton Ring : colle ce que ring-auth-cli affiche, tel quel",
   "pilotes.ring.jeton_refuse": "Ring refuse ce jeton (déjà utilisé, révoqué ou périmé) : refais-en un sur ton ordinateur",

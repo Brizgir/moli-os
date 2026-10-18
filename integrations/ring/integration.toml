@@ -6,6 +6,8 @@ name = "Sonnettes et carillons Ring"
 brands = ["Ring"]
 models = ["Video Doorbell", "Battery Doorbell", "Chime", "Chime Pro", "Stick Up Cam", "Stick Up Cam Mini"]
 transport = "https"
+# Presses and motion come by Ring's push notifications (Firebase Cloud
+# Messaging, Google's push server on TCP 5228), the poll beside them.
 driver = "ring"
 crate = "moli-ring"
 
@@ -18,16 +20,19 @@ ports = []
 [needs]
 # Given by the dashboard's sign-in (a token pasted by the person, made on
 # their own computer: no password ever goes through Moli), never typed into
-# a file. Both are rewritten by the driver.
-secrets = ["refresh_token", "hardware_id"]
+# a file. Both are rewritten by the driver. `push_credentials`: Moli's
+# Firebase device and decryption keys, made and kept by the driver.
+secrets = ["refresh_token", "hardware_id", "push_credentials"]
 vars = []
 options = []
 
 [origin]
-reused = ""
+reused = "Push notifications: protocol facts (FCM registration, MCS, Ring's PATCH clients_api/device and notification shape) from ring-client-api 14.3 (dgreif, MIT) and @eneris/push-receiver 4.4 (MIT), mcs.proto from Chromium (BSD), RFC 8291; no code copied"
 author = "agent"
 
 # Replayed by the crate's tests (crates/moli-ring/src/{auth,api,signin,model,lib}.rs).
+# push-*.json: decrypted push messages, rebuilt from ring-client-api's types
+# (not captured), every id and name fictitious.
 [[fixture]]
 file = "fixtures/ring-devices.json"
 
@@ -51,3 +56,9 @@ file = "fixtures/snapshots-timestamps.json"
 
 [[fixture]]
 file = "fixtures/mode-location.json"
+
+[[fixture]]
+file = "fixtures/push-ding.json"
+
+[[fixture]]
+file = "fixtures/push-motion.json"

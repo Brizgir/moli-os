@@ -222,6 +222,16 @@ impl Client {
             .await
     }
 
+    pub(crate) async fn patch(
+        &mut self,
+        vault: &dyn Vault,
+        path: &str,
+        body: &Json,
+    ) -> Result<Json, Failure> {
+        self.call(vault, API_HOST, Method::PATCH, path, Some(body))
+            .await
+    }
+
     /// The app's own API (the location's modes), on its own host.
     pub(crate) async fn app_get(&mut self, vault: &dyn Vault, path: &str) -> Result<Json, Failure> {
         self.call(vault, APP_HOST, Method::GET, path, None).await

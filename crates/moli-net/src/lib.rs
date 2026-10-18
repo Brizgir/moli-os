@@ -748,6 +748,33 @@ async fn web_response(
         .with_context(|| format!("{host} did not answer in time"))?
 }
 
+/// A long-lived TLS stream to a public service (a push server), verified
+/// against the public CAs; TCP keepalive turns a dead link that sends
+/// nothing (a home router that forgot the connection) into an error.
+pub async fn public_tls_stream(
+    host: &str,
+    port: u16,
+) -> anyhow::Result<tokio_rustls::client::TlsStream<TcpStream>> {
+    let tcp = tokio::time::timeout(TIMEOUT * 2, TcpStream::connect((host, port)))
+        .await
+        .with_context(|| format!("{host}:{port} did not answer in time"))?
+        .with_context(|| format!("cannot reach {host}:{port}"))?;
+    let _ = tcp.set_nodelay(true);
+    SockRef::from(&tcp).set_tcp_keepalive(
+        &TcpKeepalive::new()
+            .with_time(Duration::from_secs(60))
+            .with_interval(Duration::from_secs(15)),
+    )?;
+    let name = ServerName::try_from(host.to_owned()).context("host name")?;
+    tokio::time::timeout(
+        TIMEOUT * 2,
+        TlsConnector::from(public_tls()).connect(name, tcp),
+    )
+    .await
+    .with_context(|| format!("{host}: TLS handshake timeout"))?
+    .with_context(|| format!("{host}: TLS"))
+}
+
 /// An `http(s)://host[:port]/path?query` address, for [`web`].
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct WebUrl {
