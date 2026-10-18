@@ -125,6 +125,7 @@ impl SnapshotSource for Thumbnail {
             Ok(Image {
                 content_type: content_type.into(),
                 bytes,
+                taken: None,
             })
         })
     }

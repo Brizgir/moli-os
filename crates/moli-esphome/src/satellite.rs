@@ -422,6 +422,7 @@ impl Voice {
                 Image {
                     content_type: "audio/wav".into(),
                     bytes: sound::chime(),
+                    taken: None,
                 },
             )?;
             Some(format!("{base}/api/media/{name}"))

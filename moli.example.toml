@@ -8,6 +8,10 @@ data_dir = "/data"
 worker_threads = 2
 # Names/IPs this instance is reached by, besides localhost (DNS-rebinding guard).
 allowed_hosts = ["192.168.0.10", "moli.local"]
+# A photo of each camera event (doorbell, motion, person…), kept this many
+# days in `data_dir/captures/` (0 or absent: none is taken). Never in a
+# protected room.
+# captures_days = 30
 
 # HTTPS served by Moli itself, next to HTTP (port 8791 by default): what a
 # browser wants before it opens the microphone (the voice from a phone that

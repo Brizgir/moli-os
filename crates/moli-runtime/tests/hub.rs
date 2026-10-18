@@ -778,6 +778,7 @@ impl moli_runtime::media::SnapshotSource for CountingLens {
             Ok(moli_runtime::media::Image {
                 content_type: "image/jpeg".into(),
                 bytes: vec![0xFF, 0xD8, 0xFF, 0xD9],
+                taken: None,
             })
         })
     }

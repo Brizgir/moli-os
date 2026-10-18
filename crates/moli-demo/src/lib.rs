@@ -189,6 +189,7 @@ impl Demo {
                     Some(Arc::new(Image {
                         content_type: content_type(&path).to_owned(),
                         bytes,
+                        taken: None,
                     }))
                 }
             };
@@ -228,6 +229,7 @@ impl SnapshotSource for Still {
         let image = Image {
             content_type: self.0.content_type.clone(),
             bytes: self.0.bytes.clone(),
+            taken: None,
         };
         Box::pin(async move { Ok(image) })
     }

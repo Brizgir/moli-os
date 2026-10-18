@@ -64,6 +64,7 @@
   "serveur.code.journal_installation": "première mise en route : ouvrez le tableau de bord (http://<adresse de cette machine>:8790) et tapez ce code d'installation",
   "serveur.session.humain_seulement": "seule une personne (code) envoie ceci",
   "serveur.camera.piece_protegee": "pièce protégée « {room} » : image réservée à une session humaine",
+  "serveur.camera.photo_introuvable": "photo introuvable",
   "serveur.impression.tableau_seulement": "imprimer : depuis le tableau de bord de la maison seulement",
   "serveur.impression.type_manquant": "type du document manquant (content-type)",
   "serveur.impression.trop_lourde": "page trop lourde (16 Mo au plus)",
