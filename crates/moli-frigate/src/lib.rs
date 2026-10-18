@@ -75,6 +75,7 @@ impl SnapshotSource for CameraImages {
             Ok(Image {
                 content_type: "image/jpeg".into(),
                 bytes: bytes.to_vec(),
+                taken: None,
             })
         })
     }

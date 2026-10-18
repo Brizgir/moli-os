@@ -59,6 +59,23 @@
     }
   }
   let mySkin = $state(readSkin());
+  /** This viewer's sizes for the devices and the temperatures (small,
+   *  medium, large), as the skin: a matter of screen. */
+  const SIZES = { small: 0.75, medium: 1, large: 1.35 };
+  function readSizes() {
+    try {
+      const v = JSON.parse(localStorage.getItem('plan-sizes') ?? '{}');
+      return { devices: SIZES[v.devices] ? v.devices : 'medium', gauges: SIZES[v.gauges] ? v.gauges : 'medium' };
+    } catch {
+      return { devices: 'medium', gauges: 'medium' };
+    }
+  }
+  let mySizes = $state(readSizes());
+  const sizes = $derived({ devices: SIZES[mySizes.devices], gauges: SIZES[mySizes.gauges] });
+  function chooseSize(what, v) {
+    mySizes = { ...mySizes, [what]: v };
+    savePref('plan-sizes', JSON.stringify(mySizes));
+  }
   /** Which kinds of devices show (none chosen: all). Edit mode shows all. */
   let filter = $state(loadFilter('plan-filter'));
   // A Hue room is not a lamp, a fixture's bulbs and relay are the fixture:
@@ -570,6 +587,20 @@
     });
   }
 
+  /** Where the chosen room's temperature shows, typed in cm (empty: its foot). */
+  function gaugeField(k, event) {
+    const v = cm(event, -E.MARGIN, 10000);
+    change(() => {
+      if (v == null) {
+        delete chosen.gauge;
+        return;
+      }
+      const at = chosen.gauge ? [...chosen.gauge] : [bbox(chosen.poly).x + bbox(chosen.poly).w / 2, bbox(chosen.poly).y + bbox(chosen.poly).h];
+      at[k] = v;
+      chosen.gauge = E.clampPoint(at, floor.size);
+    });
+  }
+
   function removeCorner() {
     if (vertex == null || chosen.poly.length <= 3) return;
     change(() => {
@@ -821,6 +852,16 @@
           <i style="background:{SKINS[id].bg}; border-color:{SKINS[id].wall}"></i>{SKINS[id].name}
         </button>
       {/each}
+      {#if !editing && !in3d}
+        {#each ['devices', 'gauges'] as what (what)}
+          <label class="size">
+            <span class="muted small">{t(`maison.plan.taille.${what}`)}</span>
+            <select value={mySizes[what]} onchange={(e) => chooseSize(what, e.currentTarget.value)}>
+              {#each Object.keys(SIZES) as v (v)}<option value={v}>{t(`maison.plan.taille.${v}`)}</option>{/each}
+            </select>
+          </label>
+        {/each}
+      {/if}
     </div>
   {/if}
 
@@ -883,7 +924,7 @@
             <div class="storey" style="width:{f.size[0] * scale}px">
               <button class="storey-name" onclick={() => pickFloor(f.id)}>{f.name}<Icon name="arrow-top-right" size={14} /></button>
               <div style="margin-top:{(f.offset?.[1] ?? 0) * scale}px; height:{f.size[1] * scale}px">
-                <Drawing floor={f} {skin} {keep} fill ontap={() => (opened = null)} token={spotBody} />
+                <Drawing floor={f} {skin} {keep} {sizes} fill ontap={() => (opened = null)} token={spotBody} />
               </div>
             </div>
           {/each}
@@ -892,7 +933,7 @@
         <House3D plan={shown} floorId={floor.id} {skin} {keep} ontap={tap3d} />
       {:else if floor.size}
         <div class="drawn" onpointermove={drag} onpointerup={drop} onpointercancel={drop} role="presentation">
-          <Drawing bind:this={drawing} {floor} {skin} {editing} {picking} {keep} {layer} {magnet} {aiming} {ruler} onpick={pickRef} bind:selection bind:vertex onbegin={begin} onend={end} onplace={placeAt} ontap={() => (opened = null)} token={spotBody} />
+          <Drawing bind:this={drawing} {floor} {skin} {editing} {picking} {keep} {layer} {magnet} {aiming} {ruler} {sizes} onpick={pickRef} bind:selection bind:vertex onbegin={begin} onend={end} onplace={placeAt} ontap={() => (opened = null)} token={spotBody} />
           <!-- What is chosen, under the plan: choosing does not move the plan. -->
           {#if chosen}
             <section class="sheet" aria-label={t('maison.plan.fiche')}>
@@ -924,6 +965,12 @@
                   <label><span>{t('maison.plan.coin_y', { n: vertex + 1 })}</span><input type="number" inputmode="numeric" value={Math.round(chosen.poly[vertex][1])} onchange={(e) => cornerAt(1, e)} /></label>
                 {/if}
                 <p class="muted small">{t('maison.plan.aide.coins', { n: chosen.poly.length })} {t('maison.plan.aide.origine')}</p>
+                {#if chosen.kind !== 'void' && chosen.kind !== 'roof'}
+                  <label><span>{t('maison.plan.temperature_x')}</span><input type="number" inputmode="numeric" value={chosen.gauge ? Math.round(chosen.gauge[0]) : ''} placeholder={t('maison.plan.auto')} onchange={(e) => gaugeField(0, e)} /></label>
+                  <label><span>{t('maison.plan.temperature_y')}</span><input type="number" inputmode="numeric" value={chosen.gauge ? Math.round(chosen.gauge[1]) : ''} placeholder={t('maison.plan.auto')} onchange={(e) => gaugeField(1, e)} /></label>
+                  {#if chosen.gauge}<button class="chip" onclick={() => change(() => delete chosen.gauge)}>{t('maison.plan.temperature_auto')}</button>{/if}
+                  <p class="muted small">{t('maison.plan.aide.temperature')}</p>
+                {/if}
                 <div class="row">
                   <button class="chip" onclick={removeCorner} disabled={vertex == null || chosen.poly.length <= 3}>{t('maison.plan.retirer_coin')}</button>
                   <button class="chip danger" onclick={removeChosen}><Icon name="trash" size={16} />{t('maison.plan.retirer_piece')}</button>
@@ -1250,6 +1297,24 @@
   .views button.active {
     background: var(--ink);
     color: var(--surface);
+  }
+
+  .size {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-left: 6px;
+  }
+
+  .size select {
+    min-height: 32px;
+    padding: 4px 8px;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    color: var(--ink);
+    font: inherit;
+    font-size: 13px;
   }
 
   .skins i {

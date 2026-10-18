@@ -345,6 +345,7 @@ async fn serve(config: Config, boot: Instant) -> anyhow::Result<()> {
 
     let (mut tasks, gates) = spawn_drivers(&config, &hub, &cancel)?;
     tasks.extend(spawn_house_drivers(&config, &hub, energy.as_ref(), &cancel));
+    tasks.extend(start_captures(&config, &hub, &cancel));
     let (household, whereabouts) = spawn_household(&config, &hub, gates.phones.clone(), &cancel);
     tasks.push(whereabouts);
 
@@ -895,6 +896,17 @@ fn housekeeping(hub: &Hub, cancel: &CancellationToken) -> tokio::task::JoinHandl
             }
         }
     })
+}
+
+/// A photo of each camera event, kept `captures_days` days (0: none).
+fn start_captures(
+    config: &Config,
+    hub: &Hub,
+    cancel: &CancellationToken,
+) -> Option<tokio::task::JoinHandle<()>> {
+    let days = config.server.captures_days;
+    (days > 0)
+        .then(|| moli_api::captures::start(hub, &config.server.data_dir, days, cancel.clone()))
 }
 
 /// History: every change, kept `history_days` days (0 disables it).

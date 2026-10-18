@@ -151,6 +151,7 @@ impl Images {
                 let image = Image {
                     content_type: "image/jpeg".into(),
                     bytes: b.to_vec(),
+                    taken: latest,
                 };
                 cache.image = Some((latest, image.clone()));
                 if let Some(at) = latest {

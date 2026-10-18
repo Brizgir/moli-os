@@ -178,6 +178,7 @@ impl Session {
                 return Ok(Image {
                     content_type: "image/jpeg".into(),
                     bytes: bytes.to_vec(),
+                    taken: None,
                 });
             }
             if attempt == 0 {

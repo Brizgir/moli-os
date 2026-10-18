@@ -64,6 +64,7 @@
   "serveur.code.journal_installation": "first start: open the dashboard (http://<this machine’s address>:8790) and type this setup code",
   "serveur.session.humain_seulement": "only a person (with the code) can send this",
   "serveur.camera.piece_protegee": "protected room “{room}”: images are for a human session only",
+  "serveur.camera.photo_introuvable": "photo not found",
   "serveur.impression.tableau_seulement": "printing: from the house’s dashboard only",
   "serveur.impression.type_manquant": "document type missing (content-type)",
   "serveur.impression.trop_lourde": "page too large (16 MB at most)",
