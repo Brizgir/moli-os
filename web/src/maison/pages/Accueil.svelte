@@ -1,6 +1,6 @@
 <script>
   import { onMount } from 'svelte';
-  import { home, hub, value, device, isOn, clock, num, relative, lastSeen, roomList, lampsOf, nameOf, doorOpen, leak, lowBattery, act, pending } from '../lib/home.svelte.js';
+  import { home, hub, value, device, isOn, clock, num, relative, lastSeen, roomList, lampsOf, nameOf, hidden, doorOpen, leak, lowBattery, act, pending } from '../lib/home.svelte.js';
   import { isPrinter, phase } from '../lib/printers.js';
   import { t, locale } from '../../lib/i18n.svelte.js';
   import Icon from '../ui/Icon.svelte';
@@ -11,6 +11,7 @@
   import AmbiancePicker from '../ui/AmbiancePicker.svelte';
   import Routines from '../ui/Routines.svelte';
   import SkyHero from '../ui/SkyHero.svelte';
+  import RingModes, { isRingWatch } from '../ui/RingModes.svelte';
 
   const cfg = $derived(home.config ?? {});
   const out = $derived(cfg.outdoor ?? {});
@@ -132,7 +133,14 @@
               ? t('maison.air.mediocre')
               : t('maison.air.mauvais'),
   );
-  const bell = $derived((cfg.favorites?.cameras ?? [])[0]);
+  // The door: the layout's first camera, else a doorbell with an image
+  // (Ring): on battery, its last image, a touch asks a fresh one.
+  const bell = $derived.by(() => {
+    const listed = (cfg.favorites?.cameras ?? [])[0];
+    if (listed) return listed;
+    const d = Object.values(hub.devices).find((d) => d.camera && !hidden(d.id) && d.points.some((p) => p.key === 'doorbell'));
+    return d ? { id: d.id, name: nameOf(d.id), battery: d.points.some((p) => p.key === 'battery') } : undefined;
+  });
 
   // The last real passage at the door (the history knows; the live value
   // is refreshed every few seconds whatever happens).
@@ -220,9 +228,12 @@
           <h2><Icon name="bell" size={18} />{t('maison.accueil.devant_porte')}</h2>
           <a class="more" href="#/cameras" aria-label={t('maison.accueil.toutes_cameras')}><Icon name="arrow-top-right" size={18} /></a>
         </div>
-        <CameraTile id={bell.id} name={bell.name} refresh={15} />
+        <CameraTile id={bell.id} name={bell.name} refresh={bell.battery ? 0 : 15} battery={!!bell.battery} />
         <p class="muted small">{passage ? t('maison.accueil.dernier_passage', { when: relative(passage, home.now) }) : t('maison.accueil.personne')}</p>
+        <RingModes compact />
       </section>
+    {:else if Object.values(hub.devices).some((d) => !hidden(d.id) && isRingWatch(d))}
+      <div class="doorbell"><RingModes /></div>
     {/if}
 
     <a class="card remote" href="#/salon">

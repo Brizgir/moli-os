@@ -4,14 +4,16 @@
   import Icon from '../ui/Icon.svelte';
   import CameraTile from '../ui/CameraTile.svelte';
   import SecurityPanel from '../ui/SecurityPanel.svelte';
+  import RingModes from '../ui/RingModes.svelte';
 
-  // The layout's cameras first (their names, pace, battery), then any other.
+  // The layout's cameras first (their names, pace, battery), then any
+  // other; one on battery (a `battery` point: Ring) is asked on touch only.
   const cameras = $derived.by(() => {
     const listed = home.config?.favorites?.cameras ?? [];
     const known = new Set(listed.map((c) => c.id));
     const others = Object.values(hub.devices)
       .filter((d) => d.camera && !known.has(d.id) && !hidden(d.id))
-      .map((d) => ({ id: d.id, name: nameOf(d.id), refresh: 15 }));
+      .map((d) => ({ id: d.id, name: nameOf(d.id), refresh: 15, battery: d.points.some((p) => p.key === 'battery') }));
     return [...listed, ...others].map((c) => ({ ...c, locked: protectedRoom(roomOf(hub.devices[c.id]) ?? '') }));
   });
 
@@ -73,6 +75,8 @@
   </header>
 
   <SecurityPanel />
+
+  <RingModes />
 
   <div class="wall">
     {#each cameras as cam (cam.id)}

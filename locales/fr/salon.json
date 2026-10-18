@@ -81,6 +81,17 @@
   "salon.cameras.aujourdhui": "Aujourd’hui",
   "salon.cameras.rien": "Rien de signalé depuis 24 h.",
 
+  "salon.surveillance.titre": "Surveillance Ring",
+  "salon.surveillance.disarmed": "Désactivé",
+  "salon.surveillance.home": "Domicile",
+  "salon.surveillance.away": "Absent",
+  "salon.surveillance.actuel": "Mode actuel : {mode}",
+  "salon.surveillance.depuis": "changé {when}",
+  "salon.surveillance.inconnu": "Mode inconnu pour l’instant",
+  "salon.surveillance.envoi": "Changement en cours…",
+  "salon.surveillance.code": "le code de la maison est demandé",
+  "salon.surveillance.changer": "Surveillance Ring : {mode}",
+
   "salon.evenement.sonnette": "On a sonné",
   "salon.evenement.personne": "Personne",
   "salon.evenement.vehicule": "Véhicule",

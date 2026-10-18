@@ -81,6 +81,17 @@
   "salon.cameras.aujourdhui": "Today",
   "salon.cameras.rien": "Nothing to report in the last 24 h.",
 
+  "salon.surveillance.titre": "Ring watch",
+  "salon.surveillance.disarmed": "Disarmed",
+  "salon.surveillance.home": "Home",
+  "salon.surveillance.away": "Away",
+  "salon.surveillance.actuel": "Current mode: {mode}",
+  "salon.surveillance.depuis": "changed {when}",
+  "salon.surveillance.inconnu": "Mode unknown for now",
+  "salon.surveillance.envoi": "Changing…",
+  "salon.surveillance.code": "the home's code is asked",
+  "salon.surveillance.changer": "Ring watch: {mode}",
+
   "salon.evenement.sonnette": "Someone rang",
   "salon.evenement.personne": "Person",
   "salon.evenement.vehicule": "Vehicle",
