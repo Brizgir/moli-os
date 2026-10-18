@@ -346,5 +346,19 @@
   "systeme.alexa.connecter": "Connect",
   "systeme.alexa.verification": "Connecting…",
   "systeme.alexa.aide": "Moli never sees your password: it shows up as a \"Moli\" device of your Amazon account, and keeps an encrypted token in its secret store.",
-  "systeme.alexa.officieux": "Amazon offers no official interface to drive Echo music: Moli uses the Alexa app's, which may change without notice."
+  "systeme.alexa.officieux": "Amazon offers no official interface to drive Echo music: Moli uses the Alexa app's, which may change without notice.",
+  "systeme.ring.titre": "Ring doorbell and chime",
+  "systeme.ring.connecte": "Ring account connected: {n} devices read by Moli.",
+  "systeme.ring.a_connecter": "Connect your Ring account so that Moli knows when someone rings (and sees motion, battery, Wi-Fi). Your password never goes through Moli.",
+  "systeme.ring.attendre": "Ring asks to wait: Moli tries again in about ten minutes.",
+  "systeme.ring.erreur": "Ring does not answer for now: Moli tries again by itself.",
+  "systeme.ring.connexion": "Connecting to Ring…",
+  "systeme.ring.etape1": "On your computer (with Node.js installed), run:",
+  "systeme.ring.etape2": "Ring asks you there for your e-mail, your password and the code you receive (text message, e-mail or app): none of it goes through Moli.",
+  "systeme.ring.etape3": "Copy the token printed at the end (one long line) and paste it here.",
+  "systeme.ring.coller": "Token printed by ring-auth-cli",
+  "systeme.ring.connecter": "Connect",
+  "systeme.ring.verification": "Connecting…",
+  "systeme.ring.aide": "Moli sends this token to Ring once to check it, then keeps only the one Ring gives back, encrypted in its store, and renews it by itself. What you paste is never shown, journaled or kept. Moli will show among your Ring account's authorized devices: you can remove it there at any time.",
+  "systeme.ring.officieux": "Ring offers no official interface: Moli uses the Ring app's, which may change without notice. Presses are read every few seconds."
 }

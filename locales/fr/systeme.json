@@ -346,5 +346,19 @@
   "systeme.alexa.connecter": "Connecter",
   "systeme.alexa.verification": "Connexion…",
   "systeme.alexa.aide": "Moli ne voit jamais ton mot de passe : il apparaîtra comme un appareil « Moli » de ton compte Amazon, et garde un jeton chiffré dans son coffre.",
-  "systeme.alexa.officieux": "Amazon ne propose pas d'interface officielle pour piloter la musique des Echo : Moli utilise celle de l'appli Alexa, qui peut changer sans prévenir."
+  "systeme.alexa.officieux": "Amazon ne propose pas d'interface officielle pour piloter la musique des Echo : Moli utilise celle de l'appli Alexa, qui peut changer sans prévenir.",
+  "systeme.ring.titre": "Sonnette et carillon Ring",
+  "systeme.ring.connecte": "Compte Ring connecté : {n} appareils lus par Moli.",
+  "systeme.ring.a_connecter": "Connecte ton compte Ring pour que Moli sache quand on sonne (et voie mouvement, batterie, Wi-Fi). Ton mot de passe ne passe jamais par Moli.",
+  "systeme.ring.attendre": "Ring demande de patienter : Moli réessaie dans une dizaine de minutes.",
+  "systeme.ring.erreur": "Ring ne répond pas pour le moment : Moli réessaie tout seul.",
+  "systeme.ring.connexion": "Connexion à Ring…",
+  "systeme.ring.etape1": "Sur ton ordinateur (Node.js installé), lance :",
+  "systeme.ring.etape2": "Ring te demande là ton e-mail, ton mot de passe et le code reçu (SMS, e-mail ou appli) : rien de tout cela ne passe par Moli.",
+  "systeme.ring.etape3": "Copie le jeton affiché à la fin (une longue ligne) et colle-le ici.",
+  "systeme.ring.coller": "Jeton affiché par ring-auth-cli",
+  "systeme.ring.connecter": "Connecter",
+  "systeme.ring.verification": "Connexion…",
+  "systeme.ring.aide": "Moli envoie ce jeton à Ring une fois pour le vérifier, puis garde seulement celui que Ring lui rend, chiffré dans son coffre, et le renouvelle lui-même. Ce que tu colles n'est ni affiché, ni journalisé, ni gardé. Moli apparaîtra parmi les appareils autorisés de ton compte Ring : tu peux l'y retirer à tout moment.",
+  "systeme.ring.officieux": "Ring ne propose pas d'interface officielle : Moli utilise celle de l'appli Ring, qui peut changer sans prévenir. Les appuis sont relevés toutes les quelques secondes."
 }

@@ -5,6 +5,7 @@
   import AssistantSettings from '../ui/AssistantSettings.svelte';
   import AssistantExchanges from '../ui/AssistantExchanges.svelte';
   import AlexaAccount from '../ui/AlexaAccount.svelte';
+  import RingAccount from '../ui/RingAccount.svelte';
   import DashboardCode from '../ui/DashboardCode.svelte';
   import PeopleCard from '../ui/PeopleCard.svelte';
   import { hub, home } from '../lib/home.svelte.js';
@@ -167,6 +168,8 @@
   <AssistantExchanges />
 
   <AlexaAccount />
+
+  <RingAccount />
 
   <TuyaCloudKeys />
 
