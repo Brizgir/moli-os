@@ -21,3 +21,9 @@
    test sans l'accord de la famille.
 7. Vérifier que les pièces Netatmo tombent dans les bonnes pièces Moli (étiquettes) : c'est
    ce qui fait jouer la garde des pièces protégées.
+8. Plannings de chauffe : montrer la page **Planning de chauffe** (pastille d'une pièce
+   chauffée, ou carte Netatmo de Système). Lecture d'abord, comparée à l'appli Netatmo ; puis,
+   si la personne le veut, une copie (« Dupliquer pour essayer ») modifiée et créée par elle
+   (son code est demandé), sans l'utiliser, à supprimer ensuite dans l'appli Netatmo. **Un
+   agent ne modifie jamais un planning** : la route refuse tout ce qui n'est pas une personne
+   au tableau de bord avec son code.

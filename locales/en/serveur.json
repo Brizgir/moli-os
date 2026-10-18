@@ -151,5 +151,7 @@
   "serveur.maison.icone_inconnue": "unknown icon: {icon}",
   "serveur.maison.trop_d_alias": "{max} other names at most for a room",
   "serveur.maison.trop_de_pieces": "{max} rooms at most",
-  "serveur.maison.inconnue": "no room “{name}” in the list"
+  "serveur.maison.inconnue": "no room “{name}” in the list",
+  "serveur.service.sans_reponse": "the device did not answer in time",
+  "serveur.service.humain": "only a person (code), from the dashboard, changes this setting"
 }

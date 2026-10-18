@@ -24,6 +24,29 @@ const RENEW_BEFORE: Duration = Duration::from_secs(5 * 60);
 pub(crate) const QUOTA_MIN: Duration = Duration::from_secs(60);
 const QUOTA_MAX: Duration = Duration::from_secs(30 * 60);
 
+/// What a request carries: a form (most orders) or a JSON document (a
+/// schedule, whose zones and timetable are arrays).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) enum Payload {
+    Form(String),
+    Json(String),
+}
+
+impl Payload {
+    pub(crate) fn text(&self) -> &str {
+        match self {
+            Self::Form(t) | Self::Json(t) => t,
+        }
+    }
+
+    fn content_type(&self) -> &'static str {
+        match self {
+            Self::Form(_) => "application/x-www-form-urlencoded;charset=UTF-8",
+            Self::Json(_) => "application/json;charset=UTF-8",
+        }
+    }
+}
+
 /// One answer: its HTTP status and its JSON (`null` when it has none).
 #[derive(Debug)]
 pub(crate) struct Answer {
@@ -38,7 +61,7 @@ pub(crate) trait Transport: Send + Sync {
         method: Method,
         path: &'a str,
         bearer: Option<&'a str>,
-        form: Option<String>,
+        body: Option<Payload>,
     ) -> BoxFuture<'a, anyhow::Result<Answer>>;
 }
 
@@ -57,7 +80,7 @@ impl Transport for Https {
         method: Method,
         path: &'a str,
         bearer: Option<&'a str>,
-        form: Option<String>,
+        body: Option<Payload>,
     ) -> BoxFuture<'a, anyhow::Result<Answer>> {
         Box::pin(async move {
             let mut builder = Request::builder()
@@ -68,14 +91,13 @@ impl Transport for Https {
             if let Some(token) = bearer {
                 builder = builder.header("authorization", format!("Bearer {token}"));
             }
-            if form.is_some() {
-                builder = builder.header(
-                    "content-type",
-                    "application/x-www-form-urlencoded;charset=UTF-8",
-                );
+            if let Some(body) = &body {
+                builder = builder.header("content-type", body.content_type());
             }
             let request = builder.body(Full::new(Bytes::from(
-                form.unwrap_or_default().into_bytes(),
+                body.map(|b| b.text().to_owned())
+                    .unwrap_or_default()
+                    .into_bytes(),
             )))?;
             let (status, body) =
                 moli_net::web(auth::HOST, 443, true, request, LIMIT, MAX_BODY).await?;
@@ -227,7 +249,7 @@ impl<T: Transport> Client<T> {
         }
         self.quiet()?;
         self.pace().await;
-        let form = auth::refresh_form(&self.app, &self.refresh);
+        let form = Payload::Form(auth::refresh_form(&self.app, &self.refresh));
         let answer = self
             .transport
             .send(Method::POST, auth::TOKEN_PATH, None, Some(form))
@@ -262,7 +284,7 @@ impl<T: Transport> Client<T> {
         vault: &dyn Vault,
         method: Method,
         path: &str,
-        form: Option<String>,
+        body: Option<Payload>,
         wanted: &(dyn Fn() -> bool + Sync),
     ) -> Result<Json, Failure> {
         for attempt in 0..2 {
@@ -274,7 +296,7 @@ impl<T: Transport> Client<T> {
             }
             let answer = self
                 .transport
-                .send(method.clone(), path, Some(&token), form.clone())
+                .send(method.clone(), path, Some(&token), body.clone())
                 .await
                 .map_err(Failure::Network)?;
             match verdict(&answer) {
@@ -304,8 +326,8 @@ pub(crate) mod tests {
 
     use super::*;
 
-    /// One request: its path, its bearer token, its form.
-    type Sent = (String, Option<String>, Option<String>);
+    /// One request: its path, its bearer token, its body.
+    type Sent = (String, Option<String>, Option<Payload>);
 
     /// Answers given in order; every request is written down.
     #[derive(Default)]
@@ -338,12 +360,12 @@ pub(crate) mod tests {
             _method: Method,
             path: &'a str,
             bearer: Option<&'a str>,
-            form: Option<String>,
+            body: Option<Payload>,
         ) -> BoxFuture<'a, anyhow::Result<Answer>> {
             self.sent
                 .lock()
                 .unwrap()
-                .push((path.to_owned(), bearer.map(str::to_owned), form));
+                .push((path.to_owned(), bearer.map(str::to_owned), body));
             let next = self.answers.lock().unwrap().pop_front();
             Box::pin(async move {
                 let (status, body) = next.ok_or_else(|| anyhow::anyhow!("no answer left"))?;
@@ -396,8 +418,9 @@ pub(crate) mod tests {
         assert!(
             sent[0]
                 .2
-                .as_deref()
+                .as_ref()
                 .unwrap()
+                .text()
                 .contains("refresh_token=refresh-1")
         );
         assert_eq!(sent[1].1.as_deref(), Some("access-1"));
@@ -448,8 +471,9 @@ pub(crate) mod tests {
         assert!(
             sent[4]
                 .2
-                .as_deref()
+                .as_ref()
                 .unwrap()
+                .text()
                 .contains("refresh_token=refresh-2")
         );
     }
@@ -509,7 +533,7 @@ pub(crate) mod tests {
                 &Kept::default(),
                 Method::POST,
                 "/api/setroomthermpoint",
-                Some("x=1".into()),
+                Some(Payload::Form("x=1".into())),
                 &|| false,
             )
             .await

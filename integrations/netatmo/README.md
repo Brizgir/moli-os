@@ -90,6 +90,7 @@ donc la garde des **pièces protégées** s'y applique) :
 | `temperature` | température mesurée (°C) |
 | `setpoint` ✎ | consigne (°C), de 7 à 30 par pas de 0,5 (les bornes de Netatmo ; hors bornes : refusé). Écrire une consigne la rend **manuelle pour `setpoint_minutes`** (3 h par défaut), puis la pièce revient d'elle-même à son planning |
 | `setpoint_mode` ✎ | `schedule` (planning), `manual`, `max` (boost), `away`, `hg` (hors-gel), `off`. Seul `schedule` s'écrit : la pièce revient au planning |
+| `setpoint_end` | fin de la consigne manuelle en cours (horodatage en ms), vide sinon |
 | `heating` | la pièce demande de la chauffe (vannes : demande de puissance ; pièce à thermostat seul : chaudière en marche) |
 
 **La maison** (un appareil par maison Netatmo ; son ordre touche toutes les pièces, la garde
@@ -98,6 +99,7 @@ les vérifie toutes) :
 | Point | Sens |
 |---|---|
 | `mode` ✎ | `schedule` (planning), `away` (absent), `hg` (hors-gel), sans limite de durée jusqu'au prochain changement. Lu d'après les pièces : `away` ou `hg` quand toutes le sont |
+| `schedule` ✎ | le planning suivi, par son nom (la liste des plannings de la maison). En écrire un autre bascule la maison dessus. Comme le mode, il touche toutes les pièces : un agent attend l'accord d'une personne dès qu'une pièce est protégée |
 
 **Chaque module** (thermostat, vannes, relais) :
 
@@ -106,6 +108,35 @@ les vérifie toutes) :
 | `reachable` | le module répond au relais |
 | `rf_signal` | signal radio vers le relais (dBm : −60 bon, −90 faible) |
 | `battery`, `battery_low`, `battery_voltage` | thermostat et vannes : niveau dit par Netatmo (`max` … `very_low`), alerte (`low`, `very_low`), tension en mV |
+
+## Les plannings de chauffe
+
+Le tableau de bord a une page **Planning de chauffe** (`#/chauffage`), ouverte depuis la
+pastille de chaque pièce chauffée (Pièces) ou depuis la carte « Chauffage Netatmo » (Système).
+Sans passer par l'appli Netatmo, on y :
+
+- choisit le planning suivi (« Utiliser ce planning ») ;
+- voit la semaine en grille, un réglage (Confort, Nuit, Éco…) par couleur ; on fait glisser
+  une limite pour changer l'heure (par quart d'heure), on touche une plage pour lui donner un
+  autre réglage ou en ajuster le début et la fin, on touche un jour pour le recopier sur
+  d'autres ;
+- règle la température de chaque réglage dans chaque pièce (de 7 à 30 °C, par demi-degré), et
+  celles d'absence et de hors-gel ;
+- duplique un planning pour en essayer un autre sans toucher à celui qu'on suit.
+
+**Enregistrer demande le code de la maison** : changer un planning est le geste d'une
+personne, jamais celui d'un agent, de Moli ni d'un automatisme. Avant l'envoi, Moli vérifie
+tout (températures de 7 à 30 par 0,5, premier créneau le lundi à 0 h, créneaux dans l'ordre et
+dans la semaine, réglages et pièces qui existent, chaque pièce chauffée a sa température dans
+chaque réglage, 20 réglages et 1 000 créneaux au plus, nom de 60 caractères au plus) ; puis il
+envoie une seule requête à Netatmo (`synchomeschedule`, `createnewhomeschedule` ou
+`switchhomeschedule`) et relit aussitôt les plannings chez Netatmo : ce que la page affiche
+ensuite est ce que Netatmo garde.
+
+Une **consigne manuelle** en cours (donnée dans Moli ou l'appli Netatmo) passe avant le
+planning jusqu'à sa fin ; la page le dit en haut, pièce par pièce, avec « Revenir au
+planning ». De même, une maison en absence ou en hors-gel ne suit pas son planning tant que
+dure ce mode.
 
 ## Prudence
 
@@ -130,3 +161,11 @@ les vérifie toutes) :
    suit à nouveau son planning.
 3. Le mode de la maison (`away`, `hg`) touche toutes les pièces, chambres comprises : ne le
    tester qu'avec l'accord de la famille, et le remettre sur `schedule` aussitôt.
+4. **Les plannings, en lecture d'abord** : ouvrir Planning de chauffe, comparer la semaine, les
+   températures de chaque réglage et le planning « en cours » avec l'appli Netatmo.
+5. **Une modification réversible** : « Dupliquer pour essayer », changer une heure ou une
+   température dans la copie, « Créer ce planning » (le code est demandé) ; vérifier que la
+   copie apparaît dans l'appli Netatmo, identique à ce que montre Moli. Ne pas l'utiliser :
+   le planning suivi n'a pas bougé. La supprimer ensuite depuis l'appli Netatmo (Moli ne
+   supprime pas de planning). Changer de planning suivi touche toutes les pièces, chambres
+   comprises : seulement avec l'accord de la famille, et en revenant aussitôt au précédent.

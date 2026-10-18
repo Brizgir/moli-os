@@ -101,6 +101,9 @@
           {/if}
         </span>
       </div>
+      {#if status === 'connected'}
+        <a class="btn" href="#/chauffage">{t('maison.chauffage.lien')}</a>
+      {/if}
       {#if status !== 'app_missing'}
         <button class="btn" onclick={() => (showKeys = !showKeys)}>{t('systeme.netatmo.changer_app')}</button>
       {/if}

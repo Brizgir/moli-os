@@ -16,6 +16,7 @@ mod journal_log;
 mod labels;
 pub mod media;
 mod secrets;
+pub mod service;
 mod state_cache;
 mod stats;
 pub mod supervisor;

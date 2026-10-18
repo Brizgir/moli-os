@@ -9,6 +9,7 @@ use moli_core::{Access, Kind, PointSpec, Semantic, Unit, Value};
 use serde_json::Value as Json;
 
 use crate::encode;
+use crate::schedule::{self, Schedule};
 
 /// Netatmo's own bounds for a room's setpoint (°C).
 pub(crate) const SETPOINT_MIN: f64 = 7.0;
@@ -37,6 +38,10 @@ pub(crate) struct Home {
     pub modules: Vec<Module>,
     /// The home's own duration for a manual setpoint, in minutes.
     pub default_minutes: Option<u32>,
+    /// Every room `(id, name)`, heated or not: a schedule may name any.
+    pub all_rooms: Vec<(String, String)>,
+    /// Its heating schedules, one selected.
+    pub schedules: Vec<Schedule>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -92,6 +97,37 @@ impl Home {
             .find(|r| r.id == id)
             .map(|r| r.name.as_str())
     }
+
+    /// The selected schedule's name, if one is.
+    pub(crate) fn active_schedule(&self) -> Option<&Schedule> {
+        self.schedules.iter().find(|s| s.selected)
+    }
+
+    /// The schedules' names, each once: the `schedule` point's values.
+    pub(crate) fn schedule_names(&self) -> Vec<String> {
+        let mut names: Vec<String> = Vec::new();
+        for s in &self.schedules {
+            if !names.contains(&s.name) {
+                names.push(s.name.clone());
+            }
+        }
+        names
+    }
+
+    /// The schedule a person names (the first of that name).
+    pub(crate) fn schedule_named(&self, name: &str) -> Option<&Schedule> {
+        self.schedules.iter().find(|s| s.name == name)
+    }
+
+    /// What a surface reads: the home, its rooms, its schedules.
+    pub(crate) fn schedules_json(&self) -> Json {
+        serde_json::json!({
+            "home": { "id": self.id, "name": self.name },
+            "rooms": self.rooms.iter().map(|r| serde_json::json!({ "id": r.id, "name": r.name })).collect::<Vec<_>>(),
+            "active": self.active_schedule().map(|s| s.id.as_str()),
+            "schedules": self.schedules.iter().map(Schedule::to_json).collect::<Vec<_>>(),
+        })
+    }
 }
 
 fn text(json: &Json, key: &str) -> String {
@@ -120,7 +156,7 @@ pub(crate) fn homes(answer: &Json) -> Vec<Home> {
                 .iter()
                 .any(|m| m.room.as_deref() == Some(room) && HEATERS.contains(&m.kind.as_str()))
         };
-        let rooms: Vec<Room> = home["rooms"]
+        let all_rooms: Vec<Room> = home["rooms"]
             .as_array()
             .into_iter()
             .flatten()
@@ -128,7 +164,12 @@ pub(crate) fn homes(answer: &Json) -> Vec<Home> {
                 id: text(r, "id"),
                 name: text(r, "name"),
             })
-            .filter(|r| !r.id.is_empty() && heated(&r.id))
+            .filter(|r| !r.id.is_empty())
+            .collect();
+        let rooms: Vec<Room> = all_rooms
+            .iter()
+            .filter(|r| heated(&r.id))
+            .cloned()
             .collect();
         if rooms.is_empty() {
             continue;
@@ -142,6 +183,8 @@ pub(crate) fn homes(answer: &Json) -> Vec<Home> {
                 .as_u64()
                 .and_then(|m| u32::try_from(m).ok())
                 .filter(|m| *m > 0),
+            all_rooms: all_rooms.into_iter().map(|r| (r.id, r.name)).collect(),
+            schedules: schedule::schedules(home),
         });
     }
     found
@@ -155,6 +198,8 @@ pub(crate) struct RoomStatus {
     pub measured: Option<f64>,
     pub setpoint: Option<f64>,
     pub mode: Option<String>,
+    /// When a manual setpoint ends (Unix seconds).
+    pub setpoint_end: Option<u64>,
     pub power_request: Option<f64>,
 }
 
@@ -181,6 +226,7 @@ pub(crate) fn status(answer: &Json) -> (Vec<RoomStatus>, Vec<ModuleStatus>) {
             measured: r["therm_measured_temperature"].as_f64(),
             setpoint: r["therm_setpoint_temperature"].as_f64(),
             mode: r["therm_setpoint_mode"].as_str().map(str::to_owned),
+            setpoint_end: r["therm_setpoint_end_time"].as_u64().filter(|t| *t > 0),
             power_request: r["heating_power_request"].as_f64(),
         })
         .collect();
@@ -213,6 +259,17 @@ pub(crate) fn room_values(status: &RoomStatus, boiler: Option<bool>) -> Vec<(&'s
     if let Some(mode) = &status.mode {
         values.push(("setpoint_mode", Value::Text(mode.as_str().into())));
     }
+    // Milliseconds, as every timestamp Moli shows; none: no end (or no
+    // manual setpoint).
+    values.push((
+        "setpoint_end",
+        status
+            .setpoint_end
+            .filter(|_| status.mode.as_deref() == Some("manual"))
+            .map_or(Value::Null, |t| {
+                Value::Int(i64::try_from(t * 1000).unwrap_or(i64::MAX))
+            }),
+    ));
     if let Some(heating) = status.power_request.map(|p| p > 0.0).or(boiler) {
         values.push(("heating", Value::Bool(heating)));
     }
@@ -319,6 +376,14 @@ pub(crate) fn room_points() -> Vec<PointSpec> {
             Semantic::Config,
         ),
         point(
+            "setpoint_end",
+            &tr!("pilotes.netatmo.fin_consigne"),
+            numeric(),
+            false,
+            Some(Unit::Other("ms".into())),
+            Semantic::Other,
+        ),
+        point(
             "heating",
             &tr!("pilotes.netatmo.chauffe"),
             Kind::Binary,
@@ -329,15 +394,29 @@ pub(crate) fn room_points() -> Vec<PointSpec> {
     ]
 }
 
-pub(crate) fn home_points() -> Vec<PointSpec> {
-    vec![point(
-        "mode",
-        &moli_i18n::tr!("pilotes.netatmo.mode"),
-        values(&HOME_MODES),
-        true,
-        None,
-        Semantic::Config,
-    )]
+/// The home's points: its mode, and its active schedule among `schedules`
+/// (the names; writing one switches to it).
+pub(crate) fn home_points(schedules: &[String]) -> Vec<PointSpec> {
+    use moli_i18n::tr;
+    let names: Vec<&str> = schedules.iter().map(String::as_str).collect();
+    vec![
+        point(
+            "mode",
+            &tr!("pilotes.netatmo.mode"),
+            values(&HOME_MODES),
+            true,
+            None,
+            Semantic::Config,
+        ),
+        point(
+            "schedule",
+            &tr!("pilotes.netatmo.planning"),
+            values(&names),
+            !names.is_empty(),
+            None,
+            Semantic::Config,
+        ),
+    ]
 }
 
 pub(crate) fn module_points(module: &Module) -> Vec<PointSpec> {
@@ -412,15 +491,19 @@ pub(crate) enum Wrong {
     OutOfBounds,
     RoomMode,
     ReadOnly(String),
+    /// No schedule of that name in the home.
+    NoSuchSchedule(String),
 }
 
-/// The request for an order: its path and its form. `now`: Unix seconds.
+/// The request for an order: its path and its form. `now`: Unix seconds;
+/// `home`: the home as last described, for what names its schedules.
 pub(crate) fn order(
     target: &Target,
     key: &str,
     value: &Value,
     minutes: u32,
     now: u64,
+    home: Option<&Home>,
 ) -> Result<(&'static str, String), Wrong> {
     match (target, key) {
         (Target::Room { home, room }, "setpoint") => {
@@ -456,6 +539,19 @@ pub(crate) fn order(
             )),
             _ => Err(Wrong::ReadOnly(key.to_owned())),
         },
+        (Target::Home { home: id }, "schedule") => {
+            let Value::Text(name) = value else {
+                return Err(Wrong::ReadOnly(key.to_owned()));
+            };
+            let schedule = home
+                .filter(|h| h.id == *id)
+                .and_then(|h| h.schedule_named(name))
+                .ok_or_else(|| Wrong::NoSuchSchedule(name.to_string()))?;
+            Ok((
+                "/api/switchhomeschedule",
+                schedule::switch_form(id, &schedule.id),
+            ))
+        }
         (_, key) => Err(Wrong::ReadOnly(key.to_owned())),
     }
 }
@@ -493,6 +589,17 @@ mod tests {
         assert_eq!(home.modules[1].model(), "Smart Thermostat");
         assert!(!home.modules[0].has_battery());
         assert_eq!(home.room_name("1002"), Some("Chambre"));
+        assert_eq!(home.all_rooms.len(), 4);
+        assert_eq!(home.schedules.len(), 2);
+        assert_eq!(
+            home.active_schedule().map(|s| s.name.as_str()),
+            Some("Semaine")
+        );
+        assert_eq!(home.schedule_names(), ["Semaine", "Vacances"]);
+        let json = home.schedules_json();
+        assert_eq!(json["active"], "sched-1");
+        assert_eq!(json["rooms"].as_array().unwrap().len(), 3);
+        assert_eq!(json["schedules"][1]["name"], "Vacances");
     }
 
     #[test]
@@ -506,15 +613,16 @@ mod tests {
                 ("temperature", Value::Float(19.5)),
                 ("setpoint", Value::Float(20.0)),
                 ("setpoint_mode", Value::Text("schedule".into())),
+                ("setpoint_end", Value::Null),
                 ("heating", Value::Bool(true)),
             ]
         );
         let bureau = &rooms[2];
         assert_eq!(bureau.power_request, Some(0.0));
         assert!(room_values(bureau, Some(true)).contains(&("heating", Value::Bool(false))));
-        assert!(
-            room_values(&rooms[1], None).contains(&("setpoint_mode", Value::Text("manual".into())))
-        );
+        let chambre = room_values(&rooms[1], None);
+        assert!(chambre.contains(&("setpoint_mode", Value::Text("manual".into()))));
+        assert!(chambre.contains(&("setpoint_end", Value::Int(1_700_010_000_000))));
         let valve = modules
             .iter()
             .find(|m| m.id == "aa:bb:cc:dd:ee:04")
@@ -561,7 +669,7 @@ mod tests {
             home: "home-1".into(),
             room: "1003".into(),
         };
-        let (path, form) = order(&room, "setpoint", &Value::Float(19.3), 180, 1_000).unwrap();
+        let (path, form) = order(&room, "setpoint", &Value::Float(19.3), 180, 1_000, None).unwrap();
         assert_eq!(path, "/api/setroomthermpoint");
         assert_eq!(
             form,
@@ -569,17 +677,24 @@ mod tests {
         );
         for wrong in [6.5, 30.5, f64::NAN] {
             assert_eq!(
-                order(&room, "setpoint", &Value::Float(wrong), 180, 0),
+                order(&room, "setpoint", &Value::Float(wrong), 180, 0, None),
                 Err(Wrong::OutOfBounds),
                 "{wrong}"
             );
         }
         assert_eq!(
-            order(&room, "setpoint", &Value::Text("chaud".into()), 180, 0),
+            order(
+                &room,
+                "setpoint",
+                &Value::Text("chaud".into()),
+                180,
+                0,
+                None
+            ),
             Err(Wrong::OutOfBounds)
         );
-        assert!(order(&room, "setpoint", &Value::Float(7.0), 180, 0).is_ok());
-        assert!(order(&room, "setpoint", &Value::Float(30.0), 180, 0).is_ok());
+        assert!(order(&room, "setpoint", &Value::Float(7.0), 180, 0, None).is_ok());
+        assert!(order(&room, "setpoint", &Value::Float(30.0), 180, 0, None).is_ok());
     }
 
     #[test]
@@ -594,7 +709,8 @@ mod tests {
                 "setpoint_mode",
                 &Value::Text("schedule".into()),
                 180,
-                0
+                0,
+                None
             ),
             Ok((
                 "/api/setroomthermpoint",
@@ -602,19 +718,75 @@ mod tests {
             ))
         );
         assert_eq!(
-            order(&room, "setpoint_mode", &Value::Text("max".into()), 180, 0),
+            order(
+                &room,
+                "setpoint_mode",
+                &Value::Text("max".into()),
+                180,
+                0,
+                None
+            ),
             Err(Wrong::RoomMode)
         );
         assert_eq!(
-            order(&room, "temperature", &Value::Float(20.0), 180, 0),
+            order(&room, "temperature", &Value::Float(20.0), 180, 0, None),
             Err(Wrong::ReadOnly("temperature".into()))
         );
         let home = Target::Home { home: "h".into() };
         assert_eq!(
-            order(&home, "mode", &Value::Text("hg".into()), 180, 0),
+            order(&home, "mode", &Value::Text("hg".into()), 180, 0, None),
             Ok(("/api/setthermmode", "home_id=h&mode=hg".into()))
         );
-        assert!(order(&home, "mode", &Value::Text("off".into()), 180, 0).is_err());
+        assert!(order(&home, "mode", &Value::Text("off".into()), 180, 0, None).is_err());
         assert_eq!(status_path("a b"), "/api/homestatus?home_id=a%20b");
+    }
+
+    #[test]
+    fn a_schedule_is_switched_by_its_name() {
+        let homes = homes(&fixture(HOMESDATA));
+        let known = &homes[0];
+        let home = Target::Home {
+            home: "home-1".into(),
+        };
+        assert_eq!(
+            order(
+                &home,
+                "schedule",
+                &Value::Text("Vacances".into()),
+                180,
+                0,
+                Some(known)
+            ),
+            Ok((
+                "/api/switchhomeschedule",
+                "home_id=home-1&schedule_id=sched-2".into()
+            ))
+        );
+        assert_eq!(
+            order(
+                &home,
+                "schedule",
+                &Value::Text("Été".into()),
+                180,
+                0,
+                Some(known)
+            ),
+            Err(Wrong::NoSuchSchedule("Été".into()))
+        );
+        assert!(
+            order(
+                &home,
+                "schedule",
+                &Value::Text("Vacances".into()),
+                180,
+                0,
+                None
+            )
+            .is_err()
+        );
+        let points = home_points(&known.schedule_names());
+        assert_eq!(points[1].key.as_ref(), "schedule");
+        assert!(points[1].access.write);
+        assert!(!home_points(&[])[1].access.write);
     }
 }

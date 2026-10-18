@@ -359,6 +359,7 @@ mod tests {
             state: BTreeMap::new(),
             camera: false,
             printer: false,
+            service: false,
         }
     }
 

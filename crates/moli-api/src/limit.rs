@@ -47,6 +47,10 @@ fn budget(method: &Method, path: &str, from_dashboard: bool) -> Option<(&'static
     if path.starts_with("/api/approvals/") {
         return Some(("decide", 30));
     }
+    // A schedule written to a cloud with its own quota: never a burst.
+    if path.starts_with("/api/devices/") && path.contains("/service/") {
+        return Some(("service", 10));
+    }
     if path.starts_with("/mcp") {
         return Some(("mcp", 120));
     }
