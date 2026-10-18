@@ -470,5 +470,25 @@
   "pilotes.netatmo.hors_bornes": "setpoint outside Netatmo’s bounds: between {min} and {max} °C",
   "pilotes.netatmo.mode_piece": "for a room’s mode, only “schedule” (back to the schedule) can be asked; a temperature goes through the setpoint",
   "pilotes.netatmo.lecture_seule": "{key} cannot be commanded",
-  "pilotes.netatmo.adresse_retour": "The app’s return address (redirect URI)"
+  "pilotes.netatmo.adresse_retour": "The app’s return address (redirect URI)",
+
+  "pilotes.netatmo.planning": "Active schedule",
+  "pilotes.netatmo.fin_consigne": "Manual setpoint ends",
+  "pilotes.netatmo.occupe": "the Netatmo heating is busy: try again in a moment",
+  "pilotes.netatmo.planning_inconnu": "no schedule “{name}” in this home",
+  "pilotes.netatmo.planning_forme": "malformed schedule ({field})",
+  "pilotes.netatmo.planning_nom": "a name of 1 to {max} characters",
+  "pilotes.netatmo.planning_temperature": "invalid temperature ({what}): between {min} and {max} °C, by half degrees",
+  "pilotes.netatmo.planning_sans_zone": "a schedule has at least one zone (comfort, night…)",
+  "pilotes.netatmo.planning_trop_de_zones": "{max} zones at most",
+  "pilotes.netatmo.planning_zone_double": "zone {id} is given twice",
+  "pilotes.netatmo.planning_zone_type": "unknown zone type ({kind})",
+  "pilotes.netatmo.planning_piece_inconnue": "room {room} does not exist in this Netatmo home",
+  "pilotes.netatmo.planning_piece_manquante": "zone “{zone}” gives no temperature for “{room}”",
+  "pilotes.netatmo.planning_sans_creneau": "a schedule has at least one slot",
+  "pilotes.netatmo.planning_trop_de_creneaux": "{max} slots at most",
+  "pilotes.netatmo.planning_lundi": "the first slot starts on Monday at 0:00",
+  "pilotes.netatmo.planning_ordre": "slots out of order or past the week (minute {start})",
+  "pilotes.netatmo.planning_zone_inconnue": "a slot names an unknown zone ({zone})",
+  "pilotes.netatmo.planning_relecture": "the schedule reached Netatmo, but reading it back failed ({why}): reopen the page"
 }

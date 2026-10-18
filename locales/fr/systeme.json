@@ -371,5 +371,9 @@
   "systeme.netatmo.coller": "Adresse de la page de retour",
   "systeme.netatmo.connecter": "Connecter",
   "systeme.netatmo.verification": "Connexion…",
-  "systeme.netatmo.aide": "Moli garde un jeton chiffré dans son coffre ; tu peux le révoquer à tout moment depuis ton compte Netatmo."
+  "systeme.netatmo.aide": "Moli garde un jeton chiffré dans son coffre ; tu peux le révoquer à tout moment depuis ton compte Netatmo.",
+  "systeme.journal.service.sync": "planning de chauffe modifié",
+  "systeme.journal.service.create": "planning de chauffe créé",
+  "systeme.journal.service.activate": "planning de chauffe activé",
+  "systeme.journal.service.autre": "action « {action} »"
 }

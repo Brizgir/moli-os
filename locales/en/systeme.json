@@ -371,5 +371,9 @@
   "systeme.netatmo.coller": "Address of the return page",
   "systeme.netatmo.connecter": "Connect",
   "systeme.netatmo.verification": "Connecting…",
-  "systeme.netatmo.aide": "Moli keeps an encrypted token in its store; you can revoke it at any time from your Netatmo account."
+  "systeme.netatmo.aide": "Moli keeps an encrypted token in its store; you can revoke it at any time from your Netatmo account.",
+  "systeme.journal.service.sync": "heating schedule changed",
+  "systeme.journal.service.create": "heating schedule created",
+  "systeme.journal.service.activate": "heating schedule activated",
+  "systeme.journal.service.autre": "action “{action}”"
 }

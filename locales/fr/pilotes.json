@@ -470,5 +470,25 @@
   "pilotes.netatmo.hors_bornes": "consigne hors des bornes de Netatmo : entre {min} et {max} °C",
   "pilotes.netatmo.mode_piece": "pour le mode d'une pièce, seul « schedule » (retour au planning) se demande ; une température passe par la consigne",
   "pilotes.netatmo.lecture_seule": "{key} ne se commande pas",
-  "pilotes.netatmo.adresse_retour": "Adresse de retour de l'app (redirect URI)"
+  "pilotes.netatmo.adresse_retour": "Adresse de retour de l'app (redirect URI)",
+
+  "pilotes.netatmo.planning": "Planning actif",
+  "pilotes.netatmo.fin_consigne": "Fin de la consigne manuelle",
+  "pilotes.netatmo.occupe": "le chauffage Netatmo est occupé : réessaie dans un instant",
+  "pilotes.netatmo.planning_inconnu": "aucun planning « {name} » dans cette maison",
+  "pilotes.netatmo.planning_forme": "planning mal formé ({field})",
+  "pilotes.netatmo.planning_nom": "un nom de 1 à {max} caractères",
+  "pilotes.netatmo.planning_temperature": "température invalide ({what}) : entre {min} et {max} °C, par demi-degré",
+  "pilotes.netatmo.planning_sans_zone": "un planning a au moins une zone (confort, nuit…)",
+  "pilotes.netatmo.planning_trop_de_zones": "{max} zones au plus",
+  "pilotes.netatmo.planning_zone_double": "la zone {id} est en double",
+  "pilotes.netatmo.planning_zone_type": "type de zone inconnu ({kind})",
+  "pilotes.netatmo.planning_piece_inconnue": "la pièce {room} n'existe pas dans cette maison Netatmo",
+  "pilotes.netatmo.planning_piece_manquante": "la zone « {zone} » ne dit pas de température pour « {room} »",
+  "pilotes.netatmo.planning_sans_creneau": "un planning a au moins un créneau",
+  "pilotes.netatmo.planning_trop_de_creneaux": "{max} créneaux au plus",
+  "pilotes.netatmo.planning_lundi": "le premier créneau commence lundi à 0 h",
+  "pilotes.netatmo.planning_ordre": "créneaux dans le désordre ou au-delà de la semaine (minute {start})",
+  "pilotes.netatmo.planning_zone_inconnue": "un créneau nomme une zone inconnue ({zone})",
+  "pilotes.netatmo.planning_relecture": "le planning est parti chez Netatmo, mais la relecture a échoué ({why}) : rouvre la page"
 }

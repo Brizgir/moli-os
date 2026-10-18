@@ -187,6 +187,14 @@ impl DriverCtx {
         }
     }
 
+    /// Declares that `device` (one of ours) has a document and actions of
+    /// its own (see [`crate::service::Service`]).
+    pub fn provide_service(&self, device: &DeviceId, service: Arc<dyn crate::service::Service>) {
+        if self.owns(device) {
+            self.hub.provide_service(device, service);
+        }
+    }
+
     pub fn remove_device(&self, id: &DeviceId) {
         if self.owns(id) {
             self.hub.remove_device(id);

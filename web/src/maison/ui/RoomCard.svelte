@@ -45,6 +45,9 @@
     if (typeof co2 === 'number') out.push({ tone: co2 > 1200 ? 'warm' : '', icon: 'leaf', text: `CO₂ ${num(co2)} ppm` });
     if (motion(d.id)) out.push({ tone: 'warm', icon: 'motion', text: t('commun.piece.presence') });
     if (lowBattery(d.id)) out.push({ tone: 'alert', icon: 'alert', text: t('commun.piece.pile_faible', { name: nameOf(d.id) }) });
+    // A heated room (Netatmo): what it aims at, and its week of heating.
+    if (d.points.some((p) => p.key === 'setpoint') && d.points.some((p) => p.key === 'setpoint_mode'))
+      out.push({ tone: v('heating') === true ? 'warm' : '', icon: 'calendar', text: t('maison.chauffage.lien_piece', { name: nameOf(d.id), temp: num(v('setpoint'), 1) }), href: '#/chauffage' });
     if (deviceKind(d) === 'camera') out.push({ tone: 'cool', icon: 'cctv', text: nameOf(d.id), href: '#/cameras' });
     if (deviceKind(d) === 'printer') {
       const st = phase(v('state'));

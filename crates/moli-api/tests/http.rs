@@ -1194,3 +1194,164 @@ async fn an_invited_person_reaches_the_house_from_the_internet() {
     assert_eq!(status, 401);
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// A device with a document of its own (as a heating schedule): it says
+/// what it was asked and keeps what it was given.
+#[derive(Debug, Default)]
+struct Notebook(std::sync::Mutex<Vec<(String, Json)>>);
+
+impl moli_runtime::service::Service for Notebook {
+    fn read(&self, what: &str) -> BoxFuture<'_, Result<Json, moli_runtime::service::ServiceError>> {
+        let what = what.to_owned();
+        Box::pin(async move {
+            match what.as_str() {
+                "schedules" => Ok(json!({ "written": self.0.lock().unwrap().len() })),
+                other => Err(moli_runtime::service::ServiceError::UnknownAction(
+                    other.to_owned(),
+                )),
+            }
+        })
+    }
+
+    fn write(
+        &self,
+        action: &str,
+        input: Json,
+    ) -> BoxFuture<'_, Result<Json, moli_runtime::service::ServiceError>> {
+        let action = action.to_owned();
+        Box::pin(async move {
+            if input["bad"] == true {
+                return Err(moli_runtime::service::ServiceError::Invalid("bad".into()));
+            }
+            self.0.lock().unwrap().push((action, input));
+            Ok(json!({ "written": self.0.lock().unwrap().len() }))
+        })
+    }
+}
+
+struct Heating(Arc<Notebook>);
+
+impl Driver for Heating {
+    fn kind(&self) -> &'static str {
+        "heating"
+    }
+
+    fn run<'a>(&'a self, ctx: &'a mut DriverCtx) -> BoxFuture<'a, anyhow::Result<()>> {
+        Box::pin(async move {
+            let id = ctx.device_id("home");
+            ctx.upsert_device(Device {
+                id: id.clone(),
+                instance: ctx.instance().clone(),
+                native_name: "home".into(),
+                manufacturer: None,
+                model: None,
+                description: None,
+                native_room: None,
+                members: Vec::new(),
+                points: Vec::new(),
+            });
+            ctx.provide_service(&id, self.0.clone());
+            ctx.ready();
+            while let Some(cmd) = ctx.next_command().await {
+                cmd.reply(Err("no".into()));
+            }
+            Ok(())
+        })
+    }
+}
+
+/// A device's own document is read by anyone; changed by a person only
+/// (the dashboard and the code), never by an agent nor a script.
+#[tokio::test]
+async fn a_service_is_read_freely_and_changed_by_a_person_only() {
+    let hub = Hub::new(HubOptions::default()).unwrap();
+    let notebook = Arc::new(Notebook::default());
+    spawn_driver(
+        &hub,
+        InstanceId::from("heating"),
+        Arc::new(Heating(notebook.clone())),
+        CancellationToken::new(),
+    );
+    for _ in 0..200 {
+        if hub.stats().drivers_running == 1 {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(5)).await;
+    }
+    let options = moli_api::Options {
+        ui_pin: Some(moli_api::UiPin::new("482915")),
+        ..moli_api::Options::default()
+    };
+    let addr = serve(&hub, &options).await;
+    let read = "/api/devices/heating:home/service/schedules";
+    let sync = "/api/devices/heating:home/service/sync";
+    let edit = json!({ "id": "s1", "name": "Semaine" });
+
+    let (status, body) = request(&addr, "GET", read, None).await;
+    assert_eq!(status, 200, "{body}");
+    assert_eq!(serde_json::from_str::<Json>(&body).unwrap()["written"], 0);
+    let (status, devices) = request(&addr, "GET", "/api/devices/heating:home", None).await;
+    assert_eq!(status, 200);
+    assert_eq!(
+        serde_json::from_str::<Json>(&devices).unwrap()["service"],
+        true
+    );
+    let (status, _) = request(
+        &addr,
+        "GET",
+        "/api/devices/heating:home/service/other",
+        None,
+    )
+    .await;
+    assert_eq!(status, 404);
+    let (status, _) = request(
+        &addr,
+        "GET",
+        "/api/devices/fake:none/service/schedules",
+        None,
+    )
+    .await;
+    assert_eq!(status, 404);
+
+    // An agent, a script, the household's dashboard without the code: no.
+    let (status, body) = request(&addr, "POST", sync, Some(&edit)).await;
+    assert_eq!(status, 403, "{body}");
+    let ui = "x-moli-origin: ui\r\n";
+    let (status, _) = request_with(&addr, "POST", sync, Some(&edit), ui).await;
+    assert_eq!(status, 403);
+    let cli = "x-moli-origin: cli\r\n";
+    let (status, _) = request_with(&addr, "POST", sync, Some(&edit), cli).await;
+    assert_eq!(status, 403);
+    // A session without the dashboard's word: still no (a script with a
+    // stolen cookie is no person at the dashboard).
+    let pin = pin_session(&addr, "482915").await;
+    let (status, _) = request_with(&addr, "POST", sync, Some(&edit), &pin).await;
+    assert_eq!(status, 403);
+    assert!(
+        notebook.0.lock().unwrap().is_empty(),
+        "nothing reached the device"
+    );
+
+    // A person at the dashboard: done, journaled.
+    let person = format!("{pin}{ui}");
+    let (status, body) = request_with(&addr, "POST", sync, Some(&edit), &person).await;
+    assert_eq!(status, 200, "{body}");
+    assert_eq!(notebook.0.lock().unwrap()[0], ("sync".into(), edit.clone()));
+    let journal = hub.journal(5);
+    assert!(journal.iter().any(|e| matches!(
+        &e.action,
+        moli_core::Action::Service { action, .. } if action == "sync"
+    ) && e.origin == moli_core::Origin::Ui));
+    let (status, _) =
+        request_with(&addr, "POST", sync, Some(&json!({ "bad": true })), &person).await;
+    assert_eq!(status, 422);
+    let (status, _) = request_with(
+        &addr,
+        "POST",
+        "/api/devices/heating:home/service/Sync",
+        Some(&edit),
+        &person,
+    )
+    .await;
+    assert_eq!(status, 404);
+}

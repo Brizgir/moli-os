@@ -466,7 +466,9 @@ pièces ; il commande ensuite les membres en origine `system` (journal : `lumina
   coffre avant tout usage. `invalid_grant` → refresh token oublié, nouvelle autorisation
   demandée ; `invalid_client` → statut `app_refused`, attente de nouvelles clés.
 - **Quotas** : `homestatus` toutes les `poll_seconds` (300, 120 au moins), `homesdata` au
-  démarrage puis toutes les 15 min (un nom changé dans l'appli se voit vite) ; jamais deux requêtes à moins de 1 s ; quota atteint
+  démarrage, toutes les 15 min (un nom changé dans l'appli se voit vite), après chaque
+  changement de planning, et quand le tableau de bord lit les plannings alors que la
+  dernière lecture a plus d'une minute ; jamais deux requêtes à moins de 1 s ; quota atteint
   (code 26 ou HTTP 429) : silence de 1 min doublé jusqu'à 30 min, rien ne part pendant ;
   erreur réseau : relecture espacée (×2 jusqu'à 30 min).
 - **Appareils** : le compte (`status` : `app_missing`, `sign_in`, `connecting`, `connected`,
@@ -476,20 +478,39 @@ pièces ; il commande ensuite les membres en origine `system` (journal : `lumina
   vérifiées par le hub et le pilote), `setpoint_mode` ✎ (seul `schedule` s'écrit : retour au
   planning), `heating` (`heating_power_request` > 0, ou chaudière du thermostat) ; la
   **maison** : `mode` ✎ (`schedule`, `away`, `hg`, lu d'après les pièces), `members` = ses
-  pièces (la garde les vérifie toutes) ; chaque **module** : `reachable`, `rf_signal` (dBm),
-  et pour thermostat et vannes `battery`, `battery_low`, `battery_voltage` (mV).
+  pièces (la garde les vérifie toutes), `schedule` ✎ (énumération des noms de plannings,
+  le planning `selected`) ; `setpoint_end` (ms) sur chaque pièce, fin de la consigne
+  manuelle ; chaque **module** : `reachable`, `rf_signal` (dBm), et pour thermostat et vannes
+  `battery`, `battery_low`, `battery_voltage` (mV).
+- **Plannings** (`src/schedule.rs`) : lus dans `homesdata` (`schedules[]` de type `therm` :
+  `id`, `name`, `selected`, `hg_temp`, `away_temp`, `zones[]` avec
+  `rooms[].therm_setpoint_temperature`, `timetable[]` `{zone_id, m_offset}`, minutes depuis
+  lundi 0 h). L'appareil maison fournit un **service** (`moli_runtime::service`, voir
+  [api.md](api.md)) : `schedules` (lecture : `{home, rooms, active, schedules:[{id, name,
+  selected, default, hg_temp, away_temp, zones:[{id, name, type, rooms:[{id, temp}]}],
+  timetable:[{zone, start}]}]}`), `sync` (même forme avec `id` → `synchomeschedule`),
+  `create` (sans `id` → `createnewhomeschedule`), `activate` (`{id}` → `switchhomeschedule`).
+  Validation stricte avant envoi (`Draft::parse`) : nom 1–60 (zone : 0–60), températures
+  7–30 par 0,5, zones distinctes de type 0–8, pièces connues, chaque pièce chauffée dans
+  chaque zone, ≤ 20 zones, ≤ 1 000 créneaux, premier à 0, strictement croissants, < 10 080,
+  zones référencées existantes. Corps **JSON** (`zones` et `timetable` en tableaux, comme
+  Netatmo les lit), les autres ordres restent en formulaire. Les demandes passent par la
+  boucle du pilote (file de 4, une à la fois, espacées comme le reste), puis `homesdata` est
+  relu : la réponse est ce que Netatmo garde.
 - **Écritures** : `setpoint` → `setroomthermpoint` `mode=manual` avec `endtime` = maintenant +
   `setpoint_minutes` (option ; sans : durée de la maison dans l'appli Netatmo, sinon 3 h) ;
   `setpoint_mode=schedule` → `mode=home` ; `mode` → `setthermmode` sans fin. L'échéance du
   hub est regardée juste avant l'envoi : un ordre qui n'a pas pu partir dans les 5 s n'est
   jamais envoyé (`pilotes.netatmo.trop_tard`). Après un ordre réussi, l'état de la maison est
   relu aussitôt.
-- **Tests** : fixtures anonymisées (`src/fixtures/`), rotation et expiration des jetons,
-  quota, ordre tardif, espacement, correspondance des points, bornes. Vérifié sur une
+- **Tests** : fixtures anonymisées (`src/fixtures/`, plannings compris), rotation et
+  expiration des jetons, quota, ordre tardif, espacement, correspondance des points, bornes,
+  lecture des plannings, validation stricte, corps exact de `synchomeschedule` et
+  `createnewhomeschedule`, formulaire de `switchhomeschedule`. Vérifié sur une
   installation réelle (octobre 2026 : thermostat, trois vannes, relais) : lecture des pièces,
-  consigne d'une pièce neutre puis retour au planning, maison hors-gel → `schedule`.
-  `setpoint_mode=schedule` (`mode=home`) suit le **mode de la maison** : une maison en
-  hors-gel garde la pièce en hors-gel.
+  consigne d'une pièce neutre puis retour au planning, maison hors-gel → `schedule`, lecture
+  des plannings. `setpoint_mode=schedule` (`mode=home`) suit le **mode de la maison** : une
+  maison en hors-gel garde la pièce en hors-gel.
 
 ## `profile` : profils déclaratifs (`crates/moli-profile`)
 
@@ -530,7 +551,7 @@ ni pièce native). Il ne déplace jamais rien. Sans argument : plan à blanc ; `
 | `moonraker` | `moli-moonraker` | HTTP local 7125 | lumière, `control` (humain pour un agent) | Snapmaker U1 |
 | `tapo` | `moli-tapo` | HTTP 80 + KLAP v2 | oui : tout | pas encore (cible : Tapo L530) |
 | `igd` | `moli-igd` | UPnP IGD (SSDP + SOAP) | non | Livebox |
-| `netatmo` | `moli-netatmo` | HTTPS, API cloud officielle (OAuth2) | consigne d'une pièce, retour au planning, mode de la maison | thermostat, vannes et relais Netatmo Energy |
+| `netatmo` | `moli-netatmo` | HTTPS, API cloud officielle (OAuth2) | consigne d'une pièce, retour au planning, mode de la maison, planning suivi ; plannings modifiés et créés (humain seulement) | thermostat, vannes et relais Netatmo Energy |
 | `ipp` | `moli-ipp` | IPP 2.0 HTTP 631 | identifier, annuler, imprimer (tableau de bord) | Canon MG3600 |
 | `host` | `moli-host` | /proc, /sys ; WoL ; agent HTTP sortant | allumer, éteindre, veille, Claude et Codex pour le téléphone (PIN) | hôte Linux ; PC Windows avec l'agent |
 | `presence` | `moli-presence` | UDP + table ARP de l'hôte | non | téléphones sur le Wi-Fi |

@@ -32,6 +32,7 @@ pub use whereabouts::INSTANCE as PEOPLE_INSTANCE;
 mod phones;
 mod plan;
 mod rest;
+mod service;
 mod session;
 pub mod settings;
 mod sse;
@@ -151,6 +152,10 @@ fn device_routes() -> Router<Hub> {
         .route("/api/devices", get(rest::devices))
         .route("/api/devices/{id}", get(rest::device))
         .route("/api/devices/{id}/snapshot", get(rest::snapshot))
+        .route(
+            "/api/devices/{id}/service/{name}",
+            get(service::read).post(service::write),
+        )
         .route(
             "/api/devices/{id}/print",
             post(rest::print).layer(DefaultBodyLimit::max(rest::MAX_PAGE)),

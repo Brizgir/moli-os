@@ -40,7 +40,8 @@ Détails transverses :
   est refusée et journalisée sans son contenu.
 - **Débit** (`limit.rs`), par appelant et par tranche de 10 s, sur ce qui écrit seulement :
   `POST /api/command` et `PUT /api/labels/*` 30 (100 depuis le dashboard, un curseur envoie
-  beaucoup de valeurs), `POST /api/approvals/*` 30, `POST /mcp` 120. Au-delà : `429`.
+  beaucoup de valeurs), `POST /api/approvals/*` 30, `POST /api/devices/*/service/*` 10,
+  `POST /mcp` 120. Au-delà : `429`.
 - Demandes d'autorisation : 50 en attente au plus ; une nouvelle demande pour le même point
   et la même origine remplace l'ancienne (la carte affichée est toujours la dernière).
 - À l'arrêt (SIGTERM / Ctrl-C), les flux SSE se ferment : l'arrêt n'attend jamais un
@@ -281,6 +282,8 @@ Légende « Accès » : **libre** = aucune condition au-delà de la garde `Host`
 | GET | `/api/devices` | libre ; un invité : ses pièces seulement (§ 3.1) | aucune | `Snapshot` : `{devices:[DeviceView], drivers:[DriverView], approvals:[ApprovalRequest], guard}` | aucune |
 | GET | `/api/devices/{id}` | libre ; un invité : ses pièces seulement | `id` = device_id | `DeviceView` | `404` unknown device ; `403` invité, hors de ses pièces |
 | GET | `/api/devices/{id}/snapshot` | libre ; **humain** si la caméra est dans une pièce protégée | aucune | image brute, `content-type` de la caméra, `cache-control: no-store` | `403` pièce protégée ; `404` appareil inconnu / pas une caméra ; `502` pas d'image en 20 s ou échec |
+| GET | `/api/devices/{id}/service/{nom}` | libre ; un invité : ses pièces seulement | aucune | le document propre à l'appareil (`DeviceView.service = true`) ; Netatmo : `schedules` (§ 2.1 ter) | `404` appareil inconnu, sans service, nom inconnu ; `503` pas de réponse (25 s) ou pilote occupé |
+| POST | `/api/devices/{id}/service/{action}` | **humain** + `x-moli-origin: ui` (jamais un agent, un script, Moli ni un automatisme ; un invité non plus) | JSON propre à l'action | ce que l'appareil garde ensuite ; l'action est journalisée (`kind: "service"`, origine `ui`) | `403` ; `404` ; `422` refusé avant envoi (la raison, traduite) ; `502` refusé par l'appareil ou son cloud ; `503` |
 | GET | `/api/home` | libre | aucune | contenu de `data/home.json` (disposition du dashboard famille), `{}` si absent | `500` JSON invalide |
 | GET | `/api/system` | libre | aucune | `{version, stats, drivers, bricks, surfaces, perf, coverage}` (carte du système, § 2.3) | aucune |
 | GET | `/api/bench` | libre | aucune | `data/bench.json` tel quel (comparaison avec Home Assistant, écrite par un script côté hôte, hors de ce dépôt) | `404` no comparison available yet |
@@ -363,6 +366,30 @@ Limites de `Turn` : 14 derniers messages renvoyés au modèle, 2 000 caractères
 
 `503` sur les routes d'automatismes = `automations are not running` ; en pratique
 `moli-os serve` démarre toujours le moteur.
+
+### 2.1 ter Les services d'appareils (`crates/moli-api/src/service.rs`, `moli_runtime::service`)
+
+Ce qu'un appareil sait faire au-delà de ses points, trop structuré pour une valeur : un
+document à lire et des actions dessus. Un pilote l'enregistre (`DriverCtx::provide_service`),
+le hub l'appelle sans file d'attente (`Hub::service_read`, `Hub::service_write`, 25 s au
+plus). Les noms sont en minuscules (`[a-z_]`, 32 au plus). **Lire** est libre comme
+`/api/devices` ; **agir** est réservé à une personne au tableau de bord avec son code, comme
+`PUT /api/plan` : ni la garde ni une approbation ne peuvent le donner à un agent. Débit : 10
+écritures / 10 s par appelant.
+
+Le seul service aujourd'hui : l'appareil **maison** Netatmo (`netatmo:home-<id>`), ses
+plannings de chauffe.
+
+| Nom | Méthode | Entrée | Netatmo |
+|---|---|---|---|
+| `schedules` | GET | aucune | `homesdata` relu si la dernière lecture a plus d'une minute ; réponse `{home:{id,name}, rooms:[{id,name}], active, schedules:[{id, name, selected, default, hg_temp, away_temp, zones:[{id, name, type, rooms:[{id, temp}]}], timetable:[{zone, start}]}]}` (`start` : minutes depuis lundi 0 h) |
+| `sync` | POST | un planning de cette forme, avec son `id` | `synchomeschedule` (JSON : `home_id`, `schedule_id`, `name`, `hg_temp`, `away_temp`, `zones`, `timetable`), puis `homesdata` |
+| `create` | POST | la même forme, sans `id` | `createnewhomeschedule`, puis `homesdata` |
+| `activate` | POST | `{id}` | `switchhomeschedule`, puis `homesdata` |
+
+Validation avant tout envoi : voir [pilotes.md](pilotes.md) § netatmo. Le point `schedule`
+de la maison change aussi le planning suivi, par la garde comme toute commande (la maison
+a pour membres toutes ses pièces : une pièce protégée retient l'ordre d'un agent).
 
 ### 2.1 bis Le plan vivant (`crates/moli-api/src/plan.rs`)
 

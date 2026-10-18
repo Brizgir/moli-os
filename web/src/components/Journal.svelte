@@ -35,6 +35,11 @@
       const d = a.device && hub.devices[a.device];
       return { target: d ? deviceName(d) : a.device || a.instance, detail: t('systeme.journal.adresse', { from: a.from, to: a.to }) };
     }
+    if (a.kind === 'service') {
+      const d = hub.devices[a.device];
+      const known = ['sync', 'create', 'activate'].includes(a.action);
+      return { target: d ? deviceName(d) : a.device, detail: known ? t(`systeme.journal.service.${a.action}`) : t('systeme.journal.service.autre', { action: a.action }) };
+    }
     const d = hub.devices[a.device];
     const parts = [a.label.name, a.label.room].filter(Boolean).join(' · ');
     return { target: d ? deviceName(d) : a.device, detail: t('systeme.journal.etiquette', { value: parts || t('systeme.journal.effacee') }) };
