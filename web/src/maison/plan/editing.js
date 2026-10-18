@@ -285,6 +285,47 @@ export function carryOpening(o, wallBefore, wallAfter, dx = 0, dy = 0) {
   return { ...o, ...fitOpening(wallAfter, width, horizontal(wallAfter) ? cx + dx : cy + dy) };
 }
 
+// ---- measuring --------------------------------------------------------------------------
+
+/** The box a shape covers on the floor: itself for a quarter turn (or
+ *  none), else the box around its turned corners. */
+export function footprint(s) {
+  const b = straight(s);
+  if (b) return b;
+  const a = (s.r * Math.PI) / 180;
+  const [cx, cy] = centerOf(s);
+  const xs = [];
+  const ys = [];
+  for (const [px, py] of [[s.x, s.y], [s.x + s.w, s.y], [s.x + s.w, s.y + s.h], [s.x, s.y + s.h]]) {
+    const dx = px - cx;
+    const dy = py - cy;
+    xs.push(cx + dx * Math.cos(a) - dy * Math.sin(a));
+    ys.push(cy + dx * Math.sin(a) + dy * Math.cos(a));
+  }
+  const x = Math.min(...xs);
+  const y = Math.min(...ys);
+  return { x: round(x), y: round(y), w: round(Math.max(...xs) - x), h: round(Math.max(...ys) - y) };
+}
+
+/** Face to face, from box `a` (the reference) to box `b`, along x and
+ *  y: `{ x: { gap, after }, y: { gap, after } }`. `after`: b is right of
+ *  (below) a, by their middles; a negative gap: they overlap. */
+export function gaps(a, b) {
+  const along = (p, s, q, t) => {
+    const after = q + t / 2 >= p + s / 2;
+    return { after, gap: round(after ? q - (p + s) : p - (q + t)) };
+  };
+  return { x: along(a.x, a.w, b.x, b.w), y: along(a.y, a.h, b.y, b.h) };
+}
+
+/** Box `b` moved along `axis` so that its gap from `a` is `gap`, on the
+ *  side it already is. */
+export function withGap(a, b, axis, gap) {
+  const { after } = gaps(a, b)[axis];
+  const [p, s, t] = axis === 'x' ? [a.x, a.w, b.w] : [a.y, a.h, b.h];
+  return { ...b, [axis]: round(after ? p + s + gap : p - t - gap) };
+}
+
 // ---- rooms -----------------------------------------------------------------------------
 
 /** A new rectangular room centred on (cx, cy). */

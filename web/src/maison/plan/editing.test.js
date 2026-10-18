@@ -4,7 +4,7 @@ import {
   toGrid, snapValue, snapPoint, snapSpan, clampPoint, clampBox,
   straight, unturned, ends, wallGuides, roomGuides, mergeGuides, newWall, moveWall, stretchWall, setThickness, setLength,
   distance, nearestWall, fitOpening, wallOf, offsetOf, openingAt, widthOf, placeOpening, resizeOpening, openingsOn, carryOpening,
-  rectRoom, insertVertex, removeVertex, freshId,
+  footprint, gaps, withGap, rectRoom, insertVertex, removeVertex, freshId,
   history, remember, settle, undo, redo,
 } from './editing.js';
 
@@ -149,4 +149,18 @@ test('an opening is placed by its distance from the start of its wall', () => {
   assert.deepEqual(openingAt(walls[0], 120, 100), { x: 100, y: 0, w: 120, h: 20 });
   assert.deepEqual(openingAt(walls[0], 120, 550), { x: 480, y: 0, w: 120, h: 20 }, 'never past the end of its wall');
   assert.equal(wallOf({ kind: 'door', x: 250, y: 250, w: 90, h: 20 }, walls), null);
+});
+
+test('the gap between two things, face to face, and a thing placed by it', () => {
+  assert.deepEqual(footprint({ x: 0, y: 0, w: 100, h: 20, r: 90 }), { x: 40, y: -40, w: 20, h: 100 });
+  const slanted = footprint({ x: 0, y: 0, w: 100, h: 0, r: 45 });
+  assert.ok(Math.abs(slanted.w - 70.7) < 0.1 && Math.abs(slanted.h - 70.7) < 0.1);
+  const ref = { x: 100, y: 100, w: 20, h: 300 };
+  const bed = { x: 180, y: 50, w: 160, h: 200 };
+  assert.deepEqual(gaps(ref, bed), { x: { after: true, gap: 60 }, y: { after: false, gap: -150 } });
+  assert.deepEqual(withGap(ref, bed, 'x', 5), { ...bed, x: 125 });
+  assert.deepEqual(withGap(ref, bed, 'y', 30), { ...bed, y: -130 }, 'above: its bottom 30 cm over the top of the reference');
+  const left = { x: 0, y: 0, w: 50, h: 50 };
+  assert.deepEqual(gaps(ref, left).x, { after: false, gap: 50 });
+  assert.deepEqual(withGap(ref, left, 'x', 10), { ...left, x: 40 });
 });

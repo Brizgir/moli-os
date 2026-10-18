@@ -6,7 +6,7 @@
   import Drawing from '../plan/Drawing.svelte';
   import House3D from '../plan/House3D.svelte';
   import { SKINS, SKIN_IDS, ITEMS } from '../plan/skins.js';
-  import { spread } from '../plan/geometry.js';
+  import { spread, bbox } from '../plan/geometry.js';
   import * as E from '../plan/editing.js';
   import FilterChips from '../ui/FilterChips.svelte';
   import SpeakerCard from '../ui/SpeakerCard.svelte';
@@ -41,6 +41,10 @@
   let addKind = $state('bed');
   let addOpeningKind = $state('door');
   let magnet = $state(true);
+  /** Edit: the reference measured from (`{ type, i }`), and whether the
+   *  next tap on the plan picks it. */
+  let ruler = $state(null);
+  let aiming = $state(false);
   /** Edit: the last changes, to undo and redo them. */
   let hist = $state(E.history());
   const LAYERS = ['items', 'rooms', 'walls', 'openings'];
@@ -128,6 +132,8 @@
     floorId = id;
     selection = null;
     vertex = null;
+    ruler = null;
+    aiming = false;
   }
   const in3d = $derived(view === '3d' && !editing && drawn && floor?.size);
   const skinId = $derived(editing ? (draft?.skin ?? 'plan') : SKINS[mySkin] ? mySkin : (plan.skin ?? 'plan'));
@@ -237,6 +243,8 @@
     layer = 'items';
     selection = null;
     vertex = null;
+    ruler = null;
+    aiming = false;
   }
 
   function cancelEdit() {
@@ -273,6 +281,7 @@
     if (!draft.floors.some((f) => f.id === floorId)) floorId = draft.floors[0]?.id ?? null;
     const f = draft.floors.find((x) => x.id === floorId);
     if (selection && !f?.[LISTS[selection.type]]?.[selection.i]) selection = null;
+    if (ruler && !f?.[LISTS[ruler.type]]?.[ruler.i]) ruler = null;
     vertex = null;
   }
 
@@ -435,6 +444,58 @@
     return own && !names.includes(own) ? [...names, own] : names;
   });
 
+  // ---- measuring: a reference, the gap from it to what is chosen ----------------------
+
+  /** The box a thing covers (a room: around its corners). */
+  function boxOf(sel) {
+    const s = sel && floor ? floor[LISTS[sel.type]]?.[sel.i] : null;
+    if (!s) return null;
+    return sel.type === 'room' ? bbox(s.poly) : E.footprint(s);
+  }
+  const refBox = $derived(editing && ruler ? boxOf(ruler) : null);
+  const sameAsRef = $derived(!!(ruler && selection && ruler.type === selection.type && ruler.i === selection.i));
+  const chosenBox = $derived(refBox && chosen && !sameAsRef ? boxOf(selection) : null);
+  const cotes = $derived(refBox && chosenBox ? E.gaps(refBox, chosenBox) : null);
+  /** What the reference is called in the sheet. */
+  const refName = $derived.by(() => {
+    const s = editing && ruler && floor ? floor[LISTS[ruler.type]]?.[ruler.i] : null;
+    if (!s) return '';
+    // « du mur », « de la porte », « de « Salon » » : each with its own words.
+    if (ruler.type === 'room') return t('maison.plan.repere.piece', { name: s.name });
+    if (ruler.type === 'item') return t('maison.plan.repere.meuble', { name: ITEMS[s.kind]?.name ?? s.kind });
+    if (ruler.type === 'opening') return t(`maison.plan.repere.${s.kind}`);
+    return t('maison.plan.repere.mur');
+  });
+
+  /** The tap on the plan picks the reference (or nothing: stop aiming). */
+  function pickRef(sel) {
+    aiming = false;
+    if (sel) ruler = sel;
+  }
+
+  /** What is chosen, moved by (dx, dy) cm (an opening stays in a wall). */
+  function shiftChosen(dx, dy) {
+    const { type, i } = selection;
+    if (type === 'wall') return setWall((b) => E.clampBox({ ...b, x: b.x + dx, y: b.y + dy }, floor.size));
+    change(() => {
+      if (type === 'item') Object.assign(chosen, E.clampBox({ ...$state.snapshot(chosen), x: chosen.x + dx, y: chosen.y + dy }, floor.size));
+      else if (type === 'room') chosen.poly = chosen.poly.map(([x, y]) => E.clampPoint([x + dx, y + dy], floor.size));
+      else {
+        const o = $state.snapshot(chosen);
+        const [cx, cy] = E.centerOf(o);
+        floor.openings[i] = E.placeOpening($state.snapshot(floor.walls ?? []), o, E.widthOf(o, floor.walls ?? []), cx + dx, cy + dy, false);
+      }
+    });
+  }
+
+  /** The gap typed: what is chosen moves to be that far from the reference. */
+  function gapTo(axis, event) {
+    const v = cm(event, -10000, 10000);
+    if (v == null || !cotes) return;
+    const next = E.withGap(refBox, chosenBox, axis, v);
+    shiftChosen(next.x - chosenBox.x, next.y - chosenBox.y);
+  }
+
   function chooseLayer(id) {
     layer = id;
     selection = null;
@@ -472,6 +533,8 @@
         if (on.size) floor.openings = floor.openings.filter((_, k) => !on.has(k));
       }
       floor[LISTS[type]] = floor[LISTS[type]].filter((_, k) => k !== i);
+      // The list shifted: a reference in it is not what it was.
+      if (ruler?.type === type || (type === 'wall' && ruler?.type === 'opening')) ruler = null;
       selection = null;
       vertex = null;
     });
@@ -829,7 +892,7 @@
         <House3D plan={shown} floorId={floor.id} {skin} {keep} ontap={tap3d} />
       {:else if floor.size}
         <div class="drawn" onpointermove={drag} onpointerup={drop} onpointercancel={drop} role="presentation">
-          <Drawing bind:this={drawing} {floor} {skin} {editing} {picking} {keep} {layer} {magnet} bind:selection bind:vertex onbegin={begin} onend={end} onplace={placeAt} ontap={() => (opened = null)} token={spotBody} />
+          <Drawing bind:this={drawing} {floor} {skin} {editing} {picking} {keep} {layer} {magnet} {aiming} {ruler} onpick={pickRef} bind:selection bind:vertex onbegin={begin} onend={end} onplace={placeAt} ontap={() => (opened = null)} token={spotBody} />
           <!-- What is chosen, under the plan: choosing does not move the plan. -->
           {#if chosen}
             <section class="sheet" aria-label={t('maison.plan.fiche')}>
@@ -897,6 +960,21 @@
                   <button class="chip danger" onclick={removeChosen}><Icon name="trash" size={16} />{t('maison.plan.retirer_ouverture')}</button>
                 </div>
               {/if}
+              <!-- measuring: from a reference picked on the plan to what is chosen -->
+              <div class="measure">
+                {#if cotes}
+                  <label><span>{t(cotes.x.after ? 'maison.plan.cote.droite' : 'maison.plan.cote.gauche', { name: refName })}</span><input type="number" inputmode="numeric" value={Math.round(cotes.x.gap)} onchange={(e) => gapTo('x', e)} /></label>
+                  <label><span>{t(cotes.y.after ? 'maison.plan.cote.dessous' : 'maison.plan.cote.dessus', { name: refName })}</span><input type="number" inputmode="numeric" value={Math.round(cotes.y.gap)} onchange={(e) => gapTo('y', e)} /></label>
+                  <p class="muted small">{t('maison.plan.cote.aide')}</p>
+                {:else if ruler && sameAsRef}
+                  <p class="muted small">{t('maison.plan.cote.meme', { name: refName })}</p>
+                {/if}
+                <div class="row">
+                  <button class="chip" class:active={aiming} aria-pressed={aiming} onclick={() => (aiming = !aiming)}><Icon name="ruler" size={16} />{t(ruler ? 'maison.plan.mesurer_autre' : 'maison.plan.mesurer')}</button>
+                  {#if ruler}<button class="chip" onclick={() => ((ruler = null), (aiming = false))}>{t('maison.plan.mesure_arreter')}</button>{/if}
+                  {#if aiming}<span class="muted small">{t('maison.plan.mesurer_aide')}</span>{/if}
+                </div>
+              </div>
             </section>
           {/if}
         </div>
@@ -1293,6 +1371,22 @@
 
   .sheet p {
     flex-basis: 100%;
+  }
+
+  .measure {
+    flex-basis: 100%;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 10px 14px;
+    padding-top: 10px;
+    border-top: 1px solid var(--line);
+  }
+
+  .chip.active {
+    border-color: var(--ink);
+    background: var(--ink);
+    color: var(--surface);
   }
 
   .pick select {
