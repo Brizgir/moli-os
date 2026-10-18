@@ -42,6 +42,8 @@
   "maison.accueil.ambiance": "Mood",
   "maison.accueil.piece": "Room",
   "maison.accueil.clim": "Air conditioning",
+  "maison.accueil.chauffage": "Heating",
+  "maison.accueil.temperature": "Heating and cooling",
   "maison.accueil.devant_porte": "At the door",
   "maison.accueil.toutes_cameras": "All cameras",
   "maison.accueil.dernier_passage": "Last seen {when}",

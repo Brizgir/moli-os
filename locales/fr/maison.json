@@ -42,6 +42,8 @@
   "maison.accueil.ambiance": "Ambiance",
   "maison.accueil.piece": "Pièce",
   "maison.accueil.clim": "Climatisation",
+  "maison.accueil.chauffage": "Chauffage",
+  "maison.accueil.temperature": "Chauffage et climatisation",
   "maison.accueil.devant_porte": "Devant la porte",
   "maison.accueil.toutes_cameras": "Toutes les caméras",
   "maison.accueil.dernier_passage": "Dernier passage {when}",
