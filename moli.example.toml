@@ -81,9 +81,19 @@ base_topic = "zigbee2mqtt"
 # [driver.options]
 # host = "192.168.0.x"
 
-# Moli, l'assistant (API compatible OpenAI). Clé : <source> | moli-os secrets set assistant api_key
+# Moli, l'assistant : Claude (Anthropic) ou une API compatible OpenAI.
+#   Clé Claude  : <source> | moli-os secrets set assistant anthropic_api_key
+#   Clé OpenAI  : <source> | moli-os secrets set assistant api_key   (la réflexion d'OpenAI, ou la voix de Claude)
 # [assistant]
-# model = "gpt-4.1-mini"
+# provider = "anthropic"            # "anthropic" | "openai" ; par défaut openai, sauf base_url d'Anthropic
+# model = "claude-opus-5-5"         # Claude : claude-opus-5-5 (défaut), claude-sonnet-5-5, claude-haiku-5-5, claude-fable-5-1
+#                                   # OpenAI : gpt-4.1-mini (défaut)
+# builder_model = "claude-opus-5-5" # brouillons d'automatismes (OpenAI : gpt-4.1)
+# effort = "low"                    # Claude : profondeur de réflexion en conversation (low … max)
+# builder_effort = "high"           # … et pour un brouillon d'automatisme
+# search_model = "claude-opus-5-5"  # questions sur le monde (recherche web du fournisseur) ; défaut : model ; "" = pas de web
+# base_url = "https://api.anthropic.com"   # défaut du fournisseur ; http://… pour un modèle OpenAI local
+# base_url_voice = "https://api.openai.com/v1"   # la voix (Anthropic n'en fait pas) ; défaut : OpenAI
 # transcribe_model = "gpt-4o-mini-transcribe"   # écoute cloud ; "" = Whisper local seulement
 # speech_model = "gpt-4o-mini-tts"              # voix cloud ; "" = Piper local seulement
 # speech_voice = "coral"            # une voix OpenAI ; essai : POST /api/assistant/speak {"text","voice"}

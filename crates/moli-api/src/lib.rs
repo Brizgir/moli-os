@@ -275,6 +275,7 @@ fn assistant_routes() -> Router<Hub> {
             get(assistant::settings).put(assistant::set_settings),
         )
         .route("/api/assistant/key", put(assistant::set_key))
+        .route("/api/assistant/brain", put(assistant::set_brain))
 }
 
 pub fn router(hub: Hub, shutdown: CancellationToken, options: &Options) -> Router {

@@ -4,15 +4,25 @@
 
 /// Dollars per million tokens: input, input read from the provider's cache,
 /// output.
-struct Rates {
-    input: f64,
-    cached: f64,
-    output: f64,
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct Rates {
+    pub input: f64,
+    pub cached: f64,
+    pub output: f64,
 }
 
-/// A thinking model's rates (the longest matching name first).
-fn rates(model: &str) -> Option<Rates> {
+/// What writing to Anthropic's cache costs, over the input rate (×1.25 for
+/// five minutes).
+const CACHE_WRITE: f64 = 0.25;
+
+/// A thinking model's rates (the longest matching name first). Haiku 5.5's
+/// are those of prompts up to 100 000 tokens, which the house's never pass.
+pub(crate) fn rates(model: &str) -> Option<Rates> {
     let (input, cached, output) = match model {
+        m if m.starts_with("claude-opus-5-5") => (4.00, 0.20, 20.00),
+        m if m.starts_with("claude-sonnet-5-5") => (2.00, 0.20, 10.00),
+        m if m.starts_with("claude-haiku-5-5") => (0.10, 0.01, 0.50),
+        m if m.starts_with("claude-fable-5-1") => (10.00, 0.25, 50.00),
         m if m.starts_with("gpt-4.1-nano") => (0.10, 0.025, 0.40),
         m if m.starts_with("gpt-4.1-mini") => (0.40, 0.10, 1.60),
         m if m.starts_with("gpt-4.1") => (2.00, 0.50, 8.00),
@@ -41,7 +51,17 @@ pub(crate) fn think(model: &str, prompt: u64, cached: u64, completion: u64) -> f
     })
 }
 
-/// `think` for a chat completion, from the `usage` it reports.
+/// What `written` tokens put in Anthropic's cache cost on top of `think`
+/// (which counts them as fresh input).
+#[allow(clippy::cast_precision_loss)]
+pub(crate) fn written(model: &str, written: u64) -> f64 {
+    rates(model).map_or(0.0, |r| {
+        written as f64 * r.input * CACHE_WRITE / 1_000_000.0
+    })
+}
+
+/// `think` for a chat completion, from the `usage` it reports (Moli's
+/// shape: Claude's is translated to it, cache writes included).
 pub(crate) fn chat(model: &str, usage: &serde_json::Value) -> f64 {
     think(
         model,
@@ -50,7 +70,7 @@ pub(crate) fn chat(model: &str, usage: &serde_json::Value) -> f64 {
             .as_u64()
             .unwrap_or(0),
         usage["completion_tokens"].as_u64().unwrap_or(0),
-    )
+    ) + written(model, usage["cache_written_tokens"].as_u64().unwrap_or(0))
 }
 
 /// Speech to text, by the minute.
@@ -74,8 +94,10 @@ pub(crate) fn speak(model: &str, chars: usize) -> f64 {
     per_minute * chars as f64 / 15.0 / 60.0
 }
 
-/// One web search (the provider bills each call, then its tokens).
+/// One web search (the provider bills each call, then its tokens): OpenAI's.
 pub(crate) const SEARCH: f64 = 0.025;
+/// Anthropic's: 10 dollars for 1 000 searches.
+pub(crate) const CLAUDE_SEARCH: f64 = 0.01;
 
 #[cfg(test)]
 mod tests {
@@ -92,5 +114,27 @@ mod tests {
         assert!((hear("gpt-4o-mini-transcribe", 60.0) - 0.003).abs() < 1e-12);
         assert!((speak("gpt-4o-mini-tts", 900) - 0.015).abs() < 1e-12);
         assert!(speak("", 900).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn claude_is_priced_cache_included() {
+        // Opus 5.5: 200 fresh, 5 000 read from the cache, 1 000 written, 40 out.
+        let usage = serde_json::json!({
+            "prompt_tokens": 6_200,
+            "prompt_tokens_details": { "cached_tokens": 5_000 },
+            "cache_written_tokens": 1_000,
+            "completion_tokens": 40,
+        });
+        let expected =
+            (200.0 * 4.0 + 1_000.0 * 4.0 * 1.25 + 5_000.0 * 0.20 + 40.0 * 20.0) / 1_000_000.0;
+        let cost = chat("claude-opus-5-5", &usage);
+        assert!((cost - expected).abs() < 1e-12, "{cost}");
+        for model in ["claude-sonnet-5-5", "claude-haiku-5-5", "claude-fable-5-1"] {
+            assert!(think(model, 1_000, 0, 0) > 0.0, "{model}");
+        }
+        assert!(
+            think("claude-haiku-5-5", 1_000_000, 0, 1_000_000)
+                < think("claude-sonnet-5-5", 1_000_000, 0, 0)
+        );
     }
 }

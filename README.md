@@ -33,8 +33,8 @@ Measured on 2026-10-04, next to a real Home Assistant on the same machine
   phones, plus declarative profiles (Daikin, Meross, Open-Meteo, Tempo, iopool…).
 - **Dashboard** (Svelte 5) embedded in the binary: rooms, lights, climate, cameras, energy,
   a live floor plan in 2D and 3D.
-- **Moli, the assistant**: conversation (text or voice) with an OpenAI-compatible model,
-  acting under the guard.
+- **Moli, the assistant**: conversation (text or voice) with Claude (Anthropic's Messages API,
+  native) or an OpenAI-compatible model, acting under the guard.
 - **Automations**: graphs drawn in a visual editor or by Moli, run by a deterministic engine,
   never active until a human validates the exact version.
 - **Mobile app** (`mobile/`, Expo): the dashboard, notifications, the phone as a sensor.

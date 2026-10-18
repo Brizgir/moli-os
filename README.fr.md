@@ -34,8 +34,8 @@ historique : [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md)) :
   téléphones, et des profils déclaratifs (Daikin, Meross, Open-Meteo, Tempo, iopool…).
 - **Le tableau de bord** (Svelte 5), embarqué dans le binaire : pièces, lumières, climat,
   caméras, énergie, plan de la maison en 2D et en 3D.
-- **Moli, l'assistant** : conversation (texte ou voix) avec un modèle compatible OpenAI, qui agit
-  sous la garde.
+- **Moli, l'assistant** : conversation (texte ou voix) avec Claude (API Messages d'Anthropic, en
+  natif) ou un modèle compatible OpenAI, qui agit sous la garde.
 - **Les automatismes** : des graphes dessinés dans un éditeur visuel ou par Moli, exécutés par un
   moteur déterministe, jamais actifs avant qu'une personne valide la version exacte.
 - **L'appli mobile** (`mobile/`, Expo) : le tableau de bord, les notifications, le téléphone comme
