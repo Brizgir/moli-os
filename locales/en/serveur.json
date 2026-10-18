@@ -160,5 +160,7 @@
   "serveur.maison.icone_inconnue": "unknown icon: {icon}",
   "serveur.maison.trop_d_alias": "{max} other names at most for a room",
   "serveur.maison.trop_de_pieces": "{max} rooms at most",
-  "serveur.maison.inconnue": "no room “{name}” in the list"
+  "serveur.maison.inconnue": "no room “{name}” in the list",
+  "serveur.maison.page_inconnue": "no page “{page}” in the menu",
+  "serveur.maison.choix_inconnu": "“{choice}”: automatic (auto), always or never"
 }

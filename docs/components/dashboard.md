@@ -25,10 +25,76 @@ Le flux SSE `/api/events` est ouvert **une seule fois** et partagé (`web/src/li
 | Impression 3D | `#/impression` | une carte par imprimante (Klipper, Bambu) : état, vignette du travail, progression, couche, temps restant et heure de fin, buse / plateau / enceinte, têtes et filaments (couleurs ; AMS pour Bambu), lumière, **pause / reprise / annulation** (annuler demande une confirmation) ; totaux (impressions, heures, km de filament). Sur l'Accueil, une pastille tant qu'une impression tourne, est en pause ou en erreur ; dans Pièces, une pastille sur la carte de la pièce |
 | Dehors | `#/dehors` | météo (soleil calculé), air/UV, piscine (pH, chlore, filtration), jardin, caméras extérieures |
 | Automatismes | `#/automatismes`, `#/automatismes/<id>` | liste, idées, éditeur à canevas (voir [automatismes.md](automatismes.md)) |
-| Système | `#/systeme` | **carte vivante** du système et comparaison avec HA (voir plus bas) |
+| Système | `#/systeme` | accès à l'**Atelier**, **Pages affichées** (voir « Ce qui s'affiche selon la maison »), **carte vivante** du système et comparaison avec HA (voir plus bas) |
 
-Navigation : rail à gauche (bas de l'écran sur téléphone, défilable) ; pied de rail : thème,
-Système, Atelier. Bulle « Demander à Moli » sur toutes les pages sauf Moli.
+Navigation : menu latéral avec le nom de chaque page sur grand écran (≥ 1100 px), rail étroit
+icône + nom sur tablette, et sur téléphone (< 768 px) une **barre d'onglets en bas** : Accueil,
+Pièces, Moli au centre, la première autre page que la maison affiche (dans l'ordre du menu),
+**Plus** (une feuille avec le reste du menu, Système, Atelier et le thème ; cibles ≥ 44 px). Pied du menu : thème, Système.
+L'Atelier s'ouvre depuis Système (sa première carte). Bulle « Demander à Moli » sur toutes les
+pages sauf Moli (sur téléphone, Moli est au centre de la barre).
+
+## Ce qui s'affiche selon la maison
+
+Principe : **rien n'est supprimé, ce qui ne sert pas est masqué, et revient de lui-même** dès
+qu'un appareil de ce type arrive. Le code des pages et des cartes reste ; seule leur condition
+d'affichage change.
+
+**Le menu.** Chaque page déclare ce qui la justifie (`web/src/maison/lib/pages.js`,
+`justified`, fonction pure testée par `pages.test.js`, `npm test`), calculé depuis
+`hub.devices` (sans les appareils `hidden`), `home.json`, `/api/plan`, `/api/energy`, les
+zones et téléphones (`/api/people`) et la voix de Moli :
+
+| Page | Apparaît quand… |
+|---|---|
+| Pièces, Automatismes, Demander à Moli | toujours |
+| Salon | une télé (`deviceKind` `tv`) ou `home.json` `salon` |
+| Plan | `data/plan.json` a au moins un étage |
+| Carte | une zone ou un téléphone déclaré |
+| Caméras | une caméra (`camera`) ou une caméra favorite |
+| Parler | un boîtier vocal (ESPHome, point `state` à `listening`) ou la voix de Moli (`/api/assistant` `speak`/`listen`) ; une Echo qui sait dire une phrase ne suffit pas |
+| Énergie | `/api/energy` répond (section `[energy]`) |
+| Solaire (lien de la page Énergie) | une production (point de puissance ou d'énergie `solar`, `pv_`, `production`) |
+| Impression 3D | une imprimante 3D ou papier |
+| Dehors | la météo (`outdoor.weather`, ou un point `weather_code`) |
+| Infra | jamais d'elle-même : c'est l'affaire de l'Atelier |
+
+Sans justification, la page sort du menu **mais sa route reste servie** (`#/energie` tapé
+affiche la page avec son état vide). Réglage humain dans Système, carte **« Pages
+affichées »** : trois états par page (Automatique / Toujours / Jamais), rangés dans
+`data/home.json` :
+
+```json
+{ "pages": { "energie": "never", "infra": "always" } }
+```
+
+écrits par `PUT /api/home/pages` (`crates/moli-api/src/home.rs`, comme les pièces : session
+humaine, code demandé au besoin, écriture atomique, `home_changed`). Le corps ne contient que
+les pages à changer ; `auto` efface le choix ; une page ou un choix inconnu est refusé (422).
+Les pages acceptées (`PAGES` côté Rust) sont celles de `PAGE_IDS` (`pages.js`), vérifié par un
+test. Une nouvelle page s'ajoute en trois endroits : `PAGE_IDS` et `justified` (`pages.js`),
+`PAGES` (`home.rs`), l'entrée du menu (`NAV` de `Maison.svelte`, avec son `id`) ; ses deux
+phrases « Affichée : … » / « Masquée : … » vont dans `systeme.pages.oui.<id>` /
+`systeme.pages.non.<id>`.
+
+**Les cartes des pages gardées.** Une carte ne s'affiche que si sa donnée existe :
+
+- Accueil : télécommande (une télé `salon.tv`), électricité (`/api/energy`), chauffage et
+  clims (les favorites `climate` qui existent ; titre « Chauffage », « Climatisation » ou
+  « Chauffage et climatisation » selon ce qu'elles contiennent), dehors en bref (qualité
+  de l'air, UV ou piscine ; l'humidité s'y ajoute si elle est là), caméra de la sonnette (une
+  caméra favorite). Lumières : les favorites, ou à défaut une tuile par pièce qui a des
+  lumières (sa pièce Hue sinon ses lampes ensemble). Sans alerte, une bande verte
+  **« Tout va bien : N services en marche, rien à surveiller »** (N : les pilotes dont un
+  appareil répond) remplace la zone d'alertes.
+- **Aujourd'hui** (`ui/Today.svelte`) : les automatismes horaires du jour, cochés une fois
+  passés ; aucun : pas de carte. Les automatismes sont lus une fois toutes les deux minutes
+  pour toutes les cartes (`lib/timed.svelte.js`).
+- Dehors : la carte du ciel seulement avec la météo, l'air seulement s'il est mesuré, la
+  piscine seulement si elle est déclarée.
+- Pièces : la température dans la ligne d'état de la carte, « sans thermomètre » à la place
+  pour une pièce qui n'en a pas ; une pièce protégée dit « Protégée : un automatisme ou Moli y attend ton code » ; une carte en pointillés
+  **« Nouvelle pièce »** en fin de liste ouvre la fiche (`ui/RoomForm.svelte`).
 
 ## La mise en page de la maison : `data/home.json`
 

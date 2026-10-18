@@ -1,0 +1,38 @@
+// The day's timed automations (« at 21:00 »): what already ran, what comes.
+// Pure: tested by `today.test.js`; the list comes from `GET /api/automations`.
+
+/** Monday 1 … Sunday 7, as the automations count the days. */
+export const weekday = (date) => ((date.getDay() + 6) % 7) + 1;
+
+const minutesOf = (at) => {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(String(at ?? '').trim());
+  if (!m) return null;
+  const h = Number(m[1]);
+  const min = Number(m[2]);
+  return h < 24 && min < 60 ? h * 60 + min : null;
+};
+
+/**
+ * The live automations (approved, switched on) with a time of day, on the
+ * day `offset` days after `now`: `[{ id, name, at, minutes, done }]` by
+ * time. `done`: already past today.
+ */
+export function timedOn(versions, now, offset = 0) {
+  const day = new Date(now);
+  day.setDate(day.getDate() + offset);
+  const today = weekday(day);
+  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+  const out = [];
+  for (const v of versions ?? []) {
+    const a = v.automation ?? v;
+    if (!v.approved || !a.enabled) continue;
+    for (const n of a.graph?.nodes ?? []) {
+      if (n.type !== 'at_time') continue;
+      const minutes = minutesOf(n.at);
+      if (minutes == null) continue;
+      if (n.days?.length && !n.days.includes(today)) continue;
+      out.push({ id: a.id, name: a.name, at: n.at, minutes, done: offset === 0 && minutes <= nowMinutes });
+    }
+  }
+  return out.sort((x, y) => x.minutes - y.minutes || String(x.name).localeCompare(String(y.name)));
+}

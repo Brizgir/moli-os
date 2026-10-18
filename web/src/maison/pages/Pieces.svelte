@@ -74,12 +74,22 @@
       .filter((s) => s.rooms.length),
   );
   const litIn = (list) => list.reduce((n, r) => n + r.lit, 0);
+  const litAll = $derived(litIn(all));
 </script>
+
+<!-- One more room: the sheet already there (a name, an icon, other names). -->
+{#snippet addRoom()}
+  <button class="add-room" onclick={() => (sheet = 'new')}>
+    <Icon name="plus" size={26} />
+    <span>{t('maison.pieces.nouvelle')}</span>
+    <small>{t('maison.pieces.nouvelle_indice')}</small>
+  </button>
+{/snippet}
 
 <div class="pieces">
   <header>
     <h1 class="page-title">{t('maison.pieces.titre')}</h1>
-    <p class="page-sub">{t('maison.pieces.sous_titre')}</p>
+    <p class="page-sub">{all.length ? `${t('maison.pieces.compte', { count: all.length })} · ${litAll ? t('maison.pieces.allumees', { count: litAll }) : t('maison.pieces.tout_eteint')}` : t('maison.pieces.sous_titre')}</p>
   </header>
 
   <div class="bar">
@@ -107,12 +117,21 @@
         {#each floor.rooms as room (room.name)}
           <div class="slot"><RoomCard {room} every={filter.includes('capteurs')} icons={look === 'icons'} onedit={(r) => (sheet = r)} /></div>
         {/each}
+        {#if floor === floors.at(-1)}
+          <div class="slot">{@render addRoom()}</div>
+        {/if}
       </div>
     </section>
   {/each}
 
   {#if !all.length}
     <p class="none">{t('maison.pieces.aucune')}</p>
+  {/if}
+
+  {#if !floors.length}
+    <div class="rooms">
+      <div class="slot">{@render addRoom()}</div>
+    </div>
   {/if}
 
   {#if sheet}
@@ -228,5 +247,34 @@
   .slot {
     break-inside: avoid;
     margin-bottom: 20px;
+  }
+
+  .add-room {
+    box-sizing: border-box;
+    width: 100%;
+    display: grid;
+    justify-items: center;
+    align-content: center;
+    gap: 6px;
+    min-height: 140px;
+    padding: 16px;
+    border: 2px dashed color-mix(in srgb, var(--ink-3) 40%, transparent);
+    border-radius: var(--r-lg);
+    background: transparent;
+    color: var(--ink-2);
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .add-room:hover {
+    border-color: var(--ink-3);
+    color: var(--ink);
+  }
+
+  .add-room small {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--ink-3);
   }
 </style>

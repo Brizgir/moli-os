@@ -229,5 +229,15 @@
   "maison.pieces.retirer": "Remove from the list",
   "maison.pieces.retirer_confirmer": "Remove “{name}” from the list? Its devices keep their room.",
   "maison.pieces.retiree": "{name}: removed from the list",
-  "maison.pieces.aucune": "No room yet: create the first one, then put your devices in it."
+  "maison.pieces.aucune": "No room yet: create the first one, then put your devices in it.",
+  "maison.accueil.tout_va_bien_one": "All is well: {count} service running, nothing to watch.",
+  "maison.accueil.tout_va_bien_other": "All is well: {count} services running, nothing to watch.",
+  "maison.accueil.tout_va_bien_court": "All is well at home, nothing to watch.",
+  "maison.accueil.aujourdhui": "Today",
+  "maison.accueil.fait": "done",
+  "maison.pieces.compte_one": "{count} room",
+  "maison.pieces.compte_other": "{count} rooms",
+  "maison.pieces.tout_eteint": "everything is off",
+  "maison.pieces.nouvelle_indice": "a name, an icon, other names",
+  "maison.dehors.sans_meteo": "No weather here yet: add it from the Atelier to see the sky, the wind and the rain."
 }

@@ -228,5 +228,10 @@
   "commun.piece.modifier": "Modifier la pièce",
   "commun.piece.modifier_nom": "Modifier {name}",
   "commun.piece.vide": "Aucun appareil ici pour l'instant.",
-  "commun.piece.vide_invitation": "Ranger un appareil dans cette pièce (Atelier)"
+  "commun.piece.vide_invitation": "Ranger un appareil dans cette pièce (Atelier)",
+  "commun.nav.solaire": "Solaire",
+  "commun.nav.plus": "Plus",
+  "commun.nav.plus_titre": "Le reste du menu",
+  "commun.piece.sans_thermometre": "sans thermomètre",
+  "commun.piece.protegee_phrase": "Protégée : un automatisme ou Moli y attend ton code."
 }

@@ -160,5 +160,7 @@
   "serveur.maison.icone_inconnue": "icône inconnue : {icon}",
   "serveur.maison.trop_d_alias": "{max} autres noms au plus pour une pièce",
   "serveur.maison.trop_de_pieces": "{max} pièces au plus",
-  "serveur.maison.inconnue": "pas de pièce « {name} » dans la liste"
+  "serveur.maison.inconnue": "pas de pièce « {name} » dans la liste",
+  "serveur.maison.page_inconnue": "pas de page « {page} » dans le menu",
+  "serveur.maison.choix_inconnu": "« {choice} » : automatique (auto), toujours (always) ou jamais (never)"
 }

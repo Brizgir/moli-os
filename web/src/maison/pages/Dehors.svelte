@@ -64,6 +64,7 @@
     <p class="page-sub">{t('maison.dehors.sous_titre')}</p>
   </header>
 
+  {#if w}
   <section class="card sky" class:night={!day}>
     <div class="now">
       <svg class="sky-icon" viewBox="0 0 24 24" aria-hidden="true"><path d={sky.icon} /></svg>
@@ -83,8 +84,13 @@
       <div class="sunline" aria-hidden="true"><i style="left:{sunPos * 100}%"></i></div>
     {/if}
   </section>
+  {:else}
+    <p class="muted">{t('maison.dehors.sans_meteo')}</p>
+  {/if}
 
   <div class="grid">
+    <!-- Each card only with its data (an air sensor, a pool): the code stays. -->
+    {#if aqi != null || uv != null || v(air, 'pm2_5') != null}
     <section class="card">
       <div class="card-head"><h2><Icon name="leaf" size={18} />{t('maison.dehors.air')}</h2><span class="chip {aqiTone}">{aqiWord}</span></div>
       <div class="pairs">
@@ -94,6 +100,7 @@
         <div><small>{t('maison.dehors.ozone')}</small><b class="num">{num(v(air, 'ozone'))} µg/m³</b></div>
       </div>
     </section>
+    {/if}
 
     {#if pool}
       <section class="card">

@@ -10,6 +10,9 @@
 //!   old name as an alias, so what a bridge calls the room still lands in it.
 //! - `DELETE /api/home/rooms/{name}`: forget the declaration (the devices
 //!   keep their labels).
+//! - `PUT /api/home/pages`: which pages the family's menu shows (`pages`:
+//!   `{ "energie": "never", "infra": "always" }`; `auto` forgets the choice,
+//!   the menu then follows what the house has).
 //!
 //! Every write is atomic (a unique temporary name, then a rename) and tells
 //! the dashboards (`home_changed` on the event stream). Whether a room is
@@ -85,6 +88,28 @@ pub(crate) const ROOM_ICONS: &[&str] = &[
     "water",
     "printer",
 ];
+
+/// The pages of the family's menu a person may show or hide (the routes of
+/// `web/src/maison/lib/pages.js`, `PAGE_IDS`). The home page always shows.
+pub(crate) const PAGES: &[&str] = &[
+    "pieces",
+    "salon",
+    "plan",
+    "carte",
+    "cameras",
+    "parler",
+    "energie",
+    "solaire",
+    "impression",
+    "dehors",
+    "automatismes",
+    "infra",
+    "moli",
+];
+
+/// What a person may choose for a page: `auto` (what the house has decides),
+/// `always`, `never`.
+const PAGE_CHOICES: &[&str] = &["auto", "always", "never"];
 
 /// What a person says about a room. `None` keeps what the file has.
 #[derive(Debug, Default, Deserialize)]
@@ -396,6 +421,46 @@ fn remove(layout: &mut Map<String, Json>, name: &str) -> Result<Change, (StatusC
     }
 }
 
+/// The pages' choices `wanted` merged into `pages` of the file: `auto`
+/// removes a page's entry, an empty `pages` goes.
+fn choose_pages(
+    layout: &mut Map<String, Json>,
+    wanted: &Map<String, Json>,
+) -> Result<Change, (StatusCode, String)> {
+    let invalid = |why| (StatusCode::UNPROCESSABLE_ENTITY, why);
+    let mut pages = layout
+        .get("pages")
+        .and_then(Json::as_object)
+        .cloned()
+        .unwrap_or_default();
+    for (page, choice) in wanted {
+        if !PAGES.contains(&page.as_str()) {
+            return Err(invalid(moli_i18n::tr!(
+                "serveur.maison.page_inconnue",
+                page = page
+            )));
+        }
+        let choice = choice.as_str().unwrap_or_default();
+        if !PAGE_CHOICES.contains(&choice) {
+            return Err(invalid(moli_i18n::tr!(
+                "serveur.maison.choix_inconnu",
+                choice = choice
+            )));
+        }
+        if choice == "auto" {
+            pages.remove(page);
+        } else {
+            pages.insert(page.clone(), Json::String(choice.to_owned()));
+        }
+    }
+    if pages.is_empty() {
+        layout.remove("pages");
+    } else {
+        layout.insert("pages".into(), Json::Object(pages));
+    }
+    Ok(Change::Changed)
+}
+
 /// A person's change to the rooms, written and told.
 async fn change(
     hub: &Hub,
@@ -492,6 +557,21 @@ pub(crate) async fn delete(
 ) -> Response {
     change(&hub, &store, &humans, &caller, &headers, |layout| {
         remove(layout, &name)
+    })
+    .await
+}
+
+/// `PUT /api/home/pages`: a person's choice of pages for the menu.
+pub(crate) async fn pages(
+    State(hub): State<Hub>,
+    Extension(store): Extension<HomeStore>,
+    Extension(humans): Extension<Arc<Sessions>>,
+    caller: Caller,
+    headers: HeaderMap,
+    axum::Json(wanted): axum::Json<Map<String, Json>>,
+) -> Response {
+    change(&hub, &store, &humans, &caller, &headers, |layout| {
+        choose_pages(layout, &wanted)
     })
     .await
 }
@@ -684,6 +764,51 @@ mod tests {
             "a broken file is never overwritten"
         );
         std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn pages_are_chosen_and_auto_forgets_the_choice() {
+        let mut l = layout(json!([{ "name": "Salon" }]));
+        let wanted = json!({ "energie": "never", "infra": "always" });
+        assert!(choose_pages(&mut l, wanted.as_object().unwrap()).is_ok());
+        assert_eq!(l["pages"], json!({ "energie": "never", "infra": "always" }));
+        assert_eq!(
+            l["hidden"],
+            json!(["tuya:1"]),
+            "the rest of the file is kept"
+        );
+        let wanted = json!({ "infra": "auto" });
+        choose_pages(&mut l, wanted.as_object().unwrap()).unwrap();
+        assert_eq!(l["pages"], json!({ "energie": "never" }));
+        let wanted = json!({ "energie": "auto" });
+        choose_pages(&mut l, wanted.as_object().unwrap()).unwrap();
+        assert!(l.get("pages").is_none(), "nothing chosen: no entry");
+        for wrong in [
+            json!({ "atelier": "never" }),
+            json!({ "salon": "sometimes" }),
+            json!({ "salon": 1 }),
+        ] {
+            let Err((status, _)) = choose_pages(&mut l, wrong.as_object().unwrap()) else {
+                panic!("accepted {wrong}")
+            };
+            assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+        }
+        assert!(l.get("pages").is_none(), "nothing written by a refusal");
+    }
+
+    /// The pages here are the dashboard's (`PAGE_IDS` of `pages.js`).
+    #[test]
+    fn pages_are_the_dashboard_s() {
+        let js = std::fs::read_to_string(
+            FsPath::new(env!("CARGO_MANIFEST_DIR")).join("../../web/src/maison/lib/pages.js"),
+        )
+        .unwrap();
+        let line = js
+            .lines()
+            .find(|l| l.starts_with("export const PAGE_IDS"))
+            .expect("PAGE_IDS in pages.js");
+        let ids: Vec<&str> = line.split('\'').skip(1).step_by(2).collect();
+        assert_eq!(ids, PAGES);
     }
 
     /// Every icon offered here exists in the dashboard's set.

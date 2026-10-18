@@ -240,5 +240,10 @@
   "commun.piece.modifier": "Edit the room",
   "commun.piece.modifier_nom": "Edit {name}",
   "commun.piece.vide": "No device here yet.",
-  "commun.piece.vide_invitation": "Put a device in this room (Workshop)"
+  "commun.piece.vide_invitation": "Put a device in this room (Workshop)",
+  "commun.nav.solaire": "Solar",
+  "commun.nav.plus": "More",
+  "commun.nav.plus_titre": "The rest of the menu",
+  "commun.piece.sans_thermometre": "no thermometer",
+  "commun.piece.protegee_phrase": "Protected: an automation or Moli waits for your code here."
 }

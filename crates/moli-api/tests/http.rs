@@ -1325,6 +1325,38 @@ async fn rooms_are_declared_by_a_person_and_a_rename_moves_the_labels() {
         "{seen:?}"
     );
 
+    // The menu's pages: a person's choice, kept beside the rest.
+    let choice = json!({ "energie": "never", "infra": "always" });
+    let (status, _) = request_with(&addr, "PUT", "/api/home/pages", Some(&choice), ui).await;
+    assert_eq!(status, 403, "a person's choice, not a header's");
+    let (status, body) = request_with(&addr, "PUT", "/api/home/pages", Some(&choice), &human).await;
+    assert_eq!(status, 200, "{body}");
+    let layout: Json = serde_json::from_str(&body).unwrap();
+    assert_eq!(layout["pages"], choice);
+    assert_eq!(layout["hidden"], json!(["tuya:9"]));
+    let (status, _) = request_with(
+        &addr,
+        "PUT",
+        "/api/home/pages",
+        Some(&json!({ "salon": "parfois" })),
+        &human,
+    )
+    .await;
+    assert_eq!(status, 422);
+    let (status, body) = request_with(
+        &addr,
+        "PUT",
+        "/api/home/pages",
+        Some(&json!({ "energie": "auto", "infra": "auto" })),
+        &human,
+    )
+    .await;
+    assert_eq!(status, 200, "{body}");
+    assert_eq!(
+        serde_json::from_str::<Json>(&body).unwrap().get("pages"),
+        None
+    );
+
     let (status, _) = request_with(&addr, "DELETE", "/api/home/rooms/Kids", None, &human).await;
     assert_eq!(status, 200, "by its alias too");
     let (status, _) = request_with(&addr, "DELETE", "/api/home/rooms/Kids", None, &human).await;
