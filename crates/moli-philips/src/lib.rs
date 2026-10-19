@@ -3,7 +3,8 @@
 //! current app. Turning on from standby also sends a Wake-on-LAN packet.
 //! Their Android side ([`android`]) opens apps and says what plays.
 
-mod android;
+use moli_androidtv::link as android;
+use moli_androidtv::pairer::{self, Pairer};
 
 use std::time::Duration;
 
@@ -405,7 +406,11 @@ fn device(ctx: &DriverCtx, id: &DeviceId, name: &str, max_volume: f64) -> Device
                 unit: None,
                 semantic: Semantic::Other,
             },
-        ],
+        ]
+        .into_iter()
+        // Pairing Android TV Remote from the dashboard (apps, the app on screen).
+        .chain(pairer::points())
+        .collect(),
     }
 }
 
@@ -690,6 +695,7 @@ async fn first_pin(config: &Config, ctx: &DriverCtx) -> anyhow::Result<String> {
     Ok(seen)
 }
 
+#[allow(clippy::too_many_lines)] // the loop: orders, both protocols, the poll
 async fn run(config: &Config, ctx: &mut DriverCtx) -> anyhow::Result<()> {
     let (Some(username), Some(password)) = (ctx.secret(USERNAME), ctx.secret(PASSWORD)) else {
         ctx.wait_for(moli_i18n::tr!(
@@ -722,6 +728,17 @@ async fn run(config: &Config, ctx: &mut DriverCtx) -> anyhow::Result<()> {
     ctx.upsert_device(device(ctx, &id, &name, max));
     let (mut android, mut ups) = android::Android::start(ctx, &config.host);
     ctx.ready();
+    // Not essential: JointSpace works unpaired; a code only when asked for.
+    let mut pairing = Pairer::new(&config.host, false, android.is_paired());
+    pairing.show(
+        ctx,
+        &id,
+        if android.is_paired() {
+            "paired"
+        } else {
+            "needed"
+        },
+    );
     let mut tick = tokio::time::interval(POLL);
     tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
     let mut online = None;
@@ -731,8 +748,11 @@ async fn run(config: &Config, ctx: &mut DriverCtx) -> anyhow::Result<()> {
         tokio::select! {
             command = ctx.next_command() => {
                 let Some(command) = command else { return Ok(()) };
-                order(command, &tv, &mut android, &mut waking, online, config, ctx).await;
+                if let Some(command) = pairing.order(command, ctx, &id, &mut android).await {
+                    order(command, &tv, &mut android, &mut waking, online, config, ctx).await;
+                }
             }
+            result = pairing.started() => pairing.on_started(result, ctx, &id),
             Some(up) = ups.recv() => android.on(up, ctx, &id).await,
             () = until(android.due()) => android.settle(),
             _ = tick.tick() => {

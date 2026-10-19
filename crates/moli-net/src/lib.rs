@@ -35,6 +35,8 @@ pub use http::Method;
 pub use hyper::body::Bytes as Body;
 /// A body read as it arrives ([`web_stream`]).
 pub use hyper::body::Incoming;
+/// What [`PinnedTls::connect`] gives (its peer's certificate is there).
+pub use tokio_rustls::client::TlsStream;
 
 /// Per step (connect, handshake, exchange).
 pub const TIMEOUT: Duration = Duration::from_secs(4);

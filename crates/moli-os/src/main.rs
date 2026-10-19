@@ -935,6 +935,7 @@ const KINDS: &[&str] = &[
     "hue",
     "igd",
     "orange",
+    "androidtv",
     "tapo",
     "philips",
     "frigate",
@@ -1080,6 +1081,9 @@ fn build_driver(
             config.options.clone().try_into().with_context(context)?,
         )),
         "orange" => Arc::new(moli_orange::Orange::new(
+            config.options.clone().try_into().with_context(context)?,
+        )),
+        "androidtv" => Arc::new(moli_androidtv::AndroidTv::new(
             config.options.clone().try_into().with_context(context)?,
         )),
         "tapo" => Arc::new(moli_tapo::Tapo::new(

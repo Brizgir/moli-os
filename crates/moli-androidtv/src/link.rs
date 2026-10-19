@@ -1,23 +1,24 @@
-//! The TV's Android side, beside JointSpace: the app on screen and launching
-//! apps (Android TV Remote, with the pairing Home Assistant made: secrets
-//! `atv_cert` / `atv_key`, PEM), what plays (Google Cast, nothing to pair).
-//! Both certificates are pinned on first contact, like the TV's own.
+//! A TV's Android side, for a driver: the app on screen and launching apps
+//! (Android TV Remote, with a pairing: secrets `atv_cert` / `atv_key`, PEM,
+//! made by [`crate::pairing`] or reused from Home Assistant), keys, text and
+//! what plays (Google Cast, nothing to pair). Both certificates are pinned
+//! on first contact.
 
 use std::collections::VecDeque;
 use std::sync::Arc;
 use std::time::Duration;
 
+use crate::{cast, remote};
 use anyhow::{Context as _, bail};
-use moli_androidtv::{cast, remote};
 use moli_core::{DeviceId, Value};
 use moli_net::PinnedTls;
 use moli_runtime::{CommandRequest, DriverCtx};
 use tokio::sync::{Notify, mpsc};
 use tokio::time::Instant;
 
-pub(crate) const ATV_CERT: &str = "atv_cert";
-pub(crate) const ATV_KEY: &str = "atv_key";
-const ATV_PIN: &str = "atv_pin";
+pub const ATV_CERT: &str = "atv_cert";
+pub const ATV_KEY: &str = "atv_key";
+pub const ATV_PIN: &str = "atv_pin";
 const CAST_PIN: &str = "cast_pin";
 const RETRY_MIN: Duration = Duration::from_secs(5);
 /// Deep standby closes both ports: no need to knock often (the TV coming
@@ -39,14 +40,15 @@ const BEFORE_DEADLINE: Duration = Duration::from_millis(300);
 
 /// One app link to the TV.
 fn send_link(side: Option<&Side<remote::Order>>, link: &str) -> anyhow::Result<()> {
-    let side = side.with_context(|| moli_i18n::tr!("pilotes.philips.pas_de_telecommande"))?;
+    let side = side.with_context(|| moli_i18n::tr!("pilotes.androidtv.pas_de_telecommande"))?;
     side.orders
         .try_send(remote::Order::Launch(link.to_owned()))
-        .map_err(|_| anyhow::anyhow!(moli_i18n::tr!("pilotes.philips.telecommande_ne_suit_pas")))
+        .map_err(|_| anyhow::anyhow!(moli_i18n::tr!("pilotes.androidtv.telecommande_ne_suit_pas")))
 }
 
 /// News from either side.
-pub(crate) enum Up {
+#[derive(Debug)]
+pub enum Up {
     Remote(remote::Event),
     Cast(cast::Event),
 }
@@ -86,14 +88,22 @@ struct Sent {
 }
 
 /// Who waits for an app's outcome, and until when (the hub's patience).
-pub(crate) struct Waiting {
-    pub(crate) answer: Box<dyn FnOnce(Result<(), String>) + Send>,
-    pub(crate) deadline: std::time::Instant,
+pub struct Waiting {
+    pub answer: Box<dyn FnOnce(Result<(), String>) + Send>,
+    pub deadline: std::time::Instant,
+}
+
+impl std::fmt::Debug for Waiting {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Waiting")
+            .field("deadline", &self.deadline)
+            .finish_non_exhaustive()
+    }
 }
 
 impl Waiting {
     /// An order of the hub's.
-    pub(crate) fn order(order: CommandRequest) -> Self {
+    pub fn order(order: CommandRequest) -> Self {
         let deadline = order.deadline;
         Self {
             answer: Box::new(move |result| order.reply(result)),
@@ -114,7 +124,7 @@ impl Sent {
     }
 }
 
-pub(crate) struct Android {
+pub struct Android {
     remote: Option<Side<remote::Order>>,
     cast: Option<Side<cast::Order>>,
     playing: Option<cast::Playing>,
@@ -123,50 +133,64 @@ pub(crate) struct Android {
     sent: Option<Sent>,
     /// When the remote last came up.
     ready_at: Option<Instant>,
-    /// The TV answered JointSpace at the last poll; when the connections were
+    /// The TV answered at the last poll; when the connections were
     /// last nudged (once on the TV's return, then once a minute at most: a
     /// remote that keeps failing must keep its slower pace).
     tv_was_online: bool,
     nudged: Option<Instant>,
+    /// Where the news go, and the TV, for a remote started later (paired).
+    news: mpsc::Sender<Up>,
+    host: String,
+    /// The remote is the TV's only word on power and volume (no maker API
+    /// beside it): they become points.
+    alone: bool,
+    /// What the remote said last.
+    power: Option<bool>,
+    volume: Option<(u64, u64, bool)>,
+}
+
+/// The remote's side, when paired (secrets `atv_cert` / `atv_key`).
+fn remote_side(ctx: &DriverCtx, host: &str, up: &mpsc::Sender<Up>) -> Option<Side<remote::Order>> {
+    let (cert, key) = (ctx.secret(ATV_CERT)?, ctx.secret(ATV_KEY)?);
+    let pin = ctx.secret(ATV_PIN);
+    match PinnedTls::with_client_cert(pin.clone(), &cert, &key) {
+        Ok(tls) => {
+            let nudge = Arc::new(Notify::new());
+            Some(Side {
+                orders: keep_remote(host.to_owned(), tls.clone(), up.clone(), nudge.clone()),
+                tls,
+                up: false,
+                pinned: pin.is_some(),
+                nudge,
+            })
+        }
+        Err(e) => {
+            tracing::warn!(instance = %ctx.instance(), error = %format!("{e:#}"), "android tv pairing unusable");
+            None
+        }
+    }
+}
+
+impl std::fmt::Debug for Android {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Android")
+            .field("paired", &self.remote.is_some())
+            .field("power", &self.power)
+            .finish_non_exhaustive()
+    }
 }
 
 impl Android {
     /// Starts both connections (the remote only when paired).
-    pub(crate) fn start(ctx: &DriverCtx, host: &str) -> (Self, mpsc::Receiver<Up>) {
+    pub fn start(ctx: &DriverCtx, host: &str) -> (Self, mpsc::Receiver<Up>) {
         let (up, ups) = mpsc::channel(32);
-        let remote = match (ctx.secret(ATV_CERT), ctx.secret(ATV_KEY)) {
-            (Some(cert), Some(key)) => {
-                let pin = ctx.secret(ATV_PIN);
-                match PinnedTls::with_client_cert(pin.clone(), &cert, &key) {
-                    Ok(tls) => {
-                        let nudge = Arc::new(Notify::new());
-                        Some(Side {
-                            orders: keep_remote(
-                                host.to_owned(),
-                                tls.clone(),
-                                up.clone(),
-                                nudge.clone(),
-                            ),
-                            tls,
-                            up: false,
-                            pinned: pin.is_some(),
-                            nudge,
-                        })
-                    }
-                    Err(e) => {
-                        tracing::warn!(instance = %ctx.instance(), error = %format!("{e:#}"), "android tv pairing unusable");
-                        None
-                    }
-                }
-            }
-            _ => None,
-        };
+        let remote = remote_side(ctx, host, &up);
         let pin = ctx.secret(CAST_PIN);
         let cast = match PinnedTls::new(pin.clone()) {
             Ok(tls) => {
                 let nudge = Arc::new(Notify::new());
                 Some(Side {
-                    orders: keep_cast(host.to_owned(), tls.clone(), up, nudge.clone()),
+                    orders: keep_cast(host.to_owned(), tls.clone(), up.clone(), nudge.clone()),
                     tls,
                     up: false,
                     pinned: pin.is_some(),
@@ -188,18 +212,73 @@ impl Android {
                 ready_at: None,
                 tv_was_online: false,
                 nudged: None,
+                news: up,
+                host: host.to_owned(),
+                alone: false,
+                power: None,
+                volume: None,
             },
             ups,
         )
     }
 
+    /// The remote is the TV's only word: power, volume and mute become
+    /// points (`power`, `volume`, `mute`).
+    #[must_use]
+    pub fn alone(mut self) -> Self {
+        self.alone = true;
+        self
+    }
+
+    /// Just paired (the secrets are stored): the remote starts.
+    pub fn paired(&mut self, ctx: &DriverCtx) {
+        self.remote = remote_side(ctx, &self.host, &self.news);
+    }
+
+    /// Paired: the remote may be up (or coming).
+    pub fn is_paired(&self) -> bool {
+        self.remote.is_some()
+    }
+
+    /// The remote is up: keys can go.
+    pub fn remote_up(&self) -> bool {
+        self.remote.as_ref().is_some_and(|s| s.up)
+    }
+
+    /// The screen, as the remote last said (`None`: not known).
+    pub fn power(&self) -> Option<bool> {
+        self.power
+    }
+
+    /// The volume, as the remote last said: level, maximum, muted.
+    pub fn volume(&self) -> Option<(u64, u64, bool)> {
+        self.volume
+    }
+
+    /// Android key codes, pressed once each, in order.
+    pub fn press(&self, codes: &[u32]) -> anyhow::Result<()> {
+        let side = self
+            .remote
+            .as_ref()
+            .filter(|s| s.up)
+            .with_context(|| moli_i18n::tr!("pilotes.androidtv.pas_de_telecommande"))?;
+        for code in codes {
+            side.orders
+                .try_send(remote::Order::Key(*code))
+                .map_err(|_| {
+                    anyhow::anyhow!(moli_i18n::tr!("pilotes.androidtv.telecommande_ne_suit_pas"))
+                })?;
+        }
+        Ok(())
+    }
+
     /// The remote says which app is on screen: JointSpace's word is not needed.
-    pub(crate) fn knows_the_app(&self) -> bool {
+    pub fn knows_the_app(&self) -> bool {
         self.remote.is_some()
     }
 
     /// Paired: an app can be opened (worth waking the TV for).
-    pub(crate) fn can_launch(&self) -> bool {
+    pub fn can_launch(&self) -> bool {
         self.remote.is_some()
     }
 
@@ -208,13 +287,13 @@ impl Android {
     /// refused every way to open it. The remote not ready yet (the TV waking
     /// up, the remote reconnecting): kept, sent as soon as it is, for
     /// [`HOLD`], and answered now (the TV may take a while).
-    pub(crate) fn launch(&mut self, target: &str, waiting: Waiting) {
+    pub fn launch(&mut self, target: &str, waiting: Waiting) {
         let Some(side) = self.remote.as_ref() else {
-            return waiting.reply(Err(moli_i18n::tr!("pilotes.philips.appairage")));
+            return waiting.reply(Err(moli_i18n::tr!("pilotes.androidtv.appairage")));
         };
         let target = target.trim().to_owned();
         if target.is_empty() {
-            return waiting.reply(Err(moli_i18n::tr!("pilotes.philips.quelle_appli")));
+            return waiting.reply(Err(moli_i18n::tr!("pilotes.androidtv.quelle_appli")));
         }
         if side.up {
             // The last word wins: an app still waiting must not come after.
@@ -261,7 +340,7 @@ impl Android {
 
     /// When an order waiting for the TV's word is answered anyway: no
     /// refusal for [`SETTLE`], and never past the hub's patience.
-    pub(crate) fn due(&self) -> Option<Instant> {
+    pub fn due(&self) -> Option<Instant> {
         let sent = self.sent.as_ref()?;
         let waiting = sent.waiting.as_ref()?;
         let deadline = Instant::from_std(waiting.deadline)
@@ -271,7 +350,7 @@ impl Android {
     }
 
     /// The TV did not refuse in time: the app opened.
-    pub(crate) fn settle(&mut self) {
+    pub fn settle(&mut self) {
         if self.due().is_some_and(|due| Instant::now() >= due)
             && let Some(sent) = &mut self.sent
         {
@@ -281,7 +360,7 @@ impl Android {
 
     /// At each poll of the TV: back on the network, the connections that are
     /// down try again now (not after their wait), and a kept app goes.
-    pub(crate) fn tick(&mut self, tv_online: bool) {
+    pub fn tick(&mut self, tv_online: bool) {
         let back = tv_online && !self.tv_was_online;
         self.tv_was_online = tv_online;
         let due = back || self.nudged.is_none_or(|at| at.elapsed() >= RETRY_MAX);
@@ -360,7 +439,7 @@ impl Android {
         } else {
             let app = sent.target.clone();
             sent.answer(Err(moli_i18n::tr!(
-                "pilotes.philips.appli_refusee",
+                "pilotes.androidtv.appli_refusee",
                 app = app
             )));
         }
@@ -378,12 +457,12 @@ impl Android {
     /// Play, pause or stop what Cast sees playing.
     /// `text` into the text field open on the TV (a search box); a final
     /// line break presses Enter, which starts the search.
-    pub(crate) fn write(&self, text: &str) -> anyhow::Result<()> {
+    pub fn write(&self, text: &str) -> anyhow::Result<()> {
         let side = self
             .remote
             .as_ref()
             .filter(|s| s.up)
-            .with_context(|| moli_i18n::tr!("pilotes.philips.pas_de_telecommande"))?;
+            .with_context(|| moli_i18n::tr!("pilotes.androidtv.pas_de_telecommande"))?;
         let (line, enter) = match text.strip_suffix('\n') {
             Some(line) => (line, true),
             None => (text, false),
@@ -397,35 +476,35 @@ impl Android {
         }
         for order in orders {
             side.orders.try_send(order).map_err(|_| {
-                anyhow::anyhow!(moli_i18n::tr!("pilotes.philips.telecommande_ne_suit_pas"))
+                anyhow::anyhow!(moli_i18n::tr!("pilotes.androidtv.telecommande_ne_suit_pas"))
             })?;
         }
         Ok(())
     }
 
-    pub(crate) fn control(&self, word: &str) -> anyhow::Result<()> {
+    pub fn control(&self, word: &str) -> anyhow::Result<()> {
         let order = match word {
             "play" => cast::Order::Play,
             "pause" => cast::Order::Pause,
             "stop" => cast::Order::Stop,
             other => bail!(moli_i18n::tr!(
-                "pilotes.philips.play_pause_stop",
+                "pilotes.androidtv.play_pause_stop",
                 word = format!("{other:?}")
             )),
         };
         let side = self
             .cast
             .as_ref()
-            .with_context(|| moli_i18n::tr!("pilotes.philips.cast_indisponible"))?;
+            .with_context(|| moli_i18n::tr!("pilotes.androidtv.cast_indisponible"))?;
         if !side.up || self.playing.as_ref().is_none_or(|p| p.state.is_none()) {
-            bail!(moli_i18n::tr!("pilotes.philips.rien_ne_joue"));
+            bail!(moli_i18n::tr!("pilotes.androidtv.rien_ne_joue"));
         }
         side.orders
             .try_send(order)
-            .map_err(|_| anyhow::anyhow!(moli_i18n::tr!("pilotes.philips.cast_ne_suit_pas")))
+            .map_err(|_| anyhow::anyhow!(moli_i18n::tr!("pilotes.androidtv.cast_ne_suit_pas")))
     }
 
-    pub(crate) async fn on(&mut self, up: Up, ctx: &DriverCtx, id: &DeviceId) {
+    pub async fn on(&mut self, up: Up, ctx: &DriverCtx, id: &DeviceId) {
         match up {
             Up::Remote(event) => {
                 let Some(side) = self.remote.as_mut() else {
@@ -438,15 +517,34 @@ impl Android {
                         self.ready_at = Some(Instant::now());
                         self.flush();
                     }
-                    remote::Event::Lost => side.up = false,
+                    remote::Event::Lost => {
+                        side.up = false;
+                        if self.alone {
+                            self.power = None;
+                        }
+                    }
                     remote::Event::Refused(what) => self.refused(&what),
                     remote::Event::App(app) => {
                         self.opened(&app);
                         ctx.set_state(id, "app", Value::Text(app.into()));
                     }
-                    remote::Event::Power(false) => ctx.set_state(id, "app", Value::Null),
-                    // JointSpace says these already.
-                    remote::Event::Power(true) | remote::Event::Volume { .. } => {}
+                    remote::Event::Power(on) => {
+                        self.power = Some(on);
+                        if !on {
+                            ctx.set_state(id, "app", Value::Null);
+                        }
+                        if self.alone {
+                            ctx.set_state(id, "power", Value::Bool(on));
+                        }
+                    }
+                    remote::Event::Volume { level, max, muted } => {
+                        self.volume = Some((level, max, muted));
+                        if self.alone {
+                            #[allow(clippy::cast_possible_wrap)]
+                            ctx.set_state(id, "volume", Value::Int(level as i64));
+                            ctx.set_state(id, "mute", Value::Bool(muted));
+                        }
+                    }
                 }
             }
             Up::Cast(event) => {
@@ -496,7 +594,7 @@ fn number(v: Option<f64>) -> Value {
     v.map_or(Value::Null, Value::Float)
 }
 
-pub(crate) fn media_values(p: &cast::Playing) -> [(&'static str, Value); 7] {
+pub fn media_values(p: &cast::Playing) -> [(&'static str, Value); 7] {
     [
         ("media_app", text(p.app.as_ref())),
         ("media_state", text(p.state.as_ref())),
@@ -632,6 +730,11 @@ mod tests {
             ready_at: None,
             tv_was_online: true,
             nudged: None,
+            news: mpsc::channel(1).0,
+            host: "192.168.1.20".into(),
+            alone: false,
+            power: None,
+            volume: None,
         }
     }
 

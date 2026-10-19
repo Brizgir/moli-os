@@ -32,6 +32,7 @@ moli-philips.workspace = true
 moli-tapo.workspace = true
 moli-igd.workspace = true
 moli-orange.workspace = true
+moli-androidtv.workspace = true
 moli-ipp.workspace = true
 moli-helpers.workspace = true
 moli-demo.workspace = true

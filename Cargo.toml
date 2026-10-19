@@ -108,6 +108,13 @@ assert_is_empty = "allow"
 # Line numbers in backtraces, without full debug info: target/ is several times smaller.
 debug = "line-tables-only"
 
+# The Android TV pairing makes an RSA key: seconds in an unoptimized build.
+[profile.dev.package.num-bigint-dig]
+opt-level = 3
+
+[profile.dev.package.rsa]
+opt-level = 3
+
 [profile.release]
 opt-level = "s"
 lto = "fat"
