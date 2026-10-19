@@ -1,6 +1,6 @@
 <script>
   import { onMount } from 'svelte';
-  import { hub, home, value, act, nameOf, roomOf, protectedRoom, num, deg, clock, hidden, heatedRoom, deviceKind, pending } from '../lib/home.svelte.js';
+  import { hub, home, value, act, nameOf, roomOf, protectedRoom, num, deg, clock, heatedRoom, heatedRooms, deviceKind, pending } from '../lib/home.svelte.js';
   import { timed, useTimed } from '../lib/timed.svelte.js';
   import { nextHeating } from '../lib/today.js';
   import { t } from '../../lib/i18n.svelte.js';
@@ -16,17 +16,7 @@
    *  change, the `planning` link, the `away` button), `title`. */
   let { only = null, next: showNext = true, planning = true, away: showAway = true, title = null } = $props();
 
-  const order = $derived(only ?? (home.config?.rooms ?? []).map((r) => r.name));
-  const rooms = $derived(
-    Object.values(hub.devices)
-      .filter((d) => !hidden(d.id) && heatedRoom(d))
-      .map((d) => ({ id: d.id, name: roomOf(d) ?? nameOf(d.id) }))
-      .filter((r) => !only || only.includes(r.name))
-      .sort((a, b) => {
-        const i = (n) => (order.includes(n) ? order.indexOf(n) : order.length);
-        return i(a.name) - i(b.name) || a.name.localeCompare(b.name);
-      }),
-  );
+  const rooms = $derived(heatedRooms(only));
 
   // The home the rooms belong to: its mode (`schedule`, `away`, `hg`).
   const homeDevice = $derived.by(() => {
