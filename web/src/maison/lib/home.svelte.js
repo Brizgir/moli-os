@@ -25,7 +25,7 @@ export const home = $state({
   energy: null,
 });
 
-function readPref(key, fallback) {
+export function readPref(key, fallback) {
   try {
     return localStorage.getItem(key) ?? fallback;
   } catch {
@@ -215,6 +215,18 @@ export const protectedRoom = (name) =>
 
 export function hidden(id) {
   return (home.config?.hidden ?? []).includes(id);
+}
+
+/** The heated rooms (Netatmo…) shown here, `{ id, name }` by the Moli
+ *  room's name, in the layout's order; `only`: these rooms, in that order. */
+export function heatedRooms(only = null) {
+  const order = only ?? (home.config?.rooms ?? []).map((r) => r.name);
+  const at = (n) => (order.includes(n) ? order.indexOf(n) : order.length);
+  return Object.values(hub.devices ?? {})
+    .filter((d) => !hidden(d.id) && heatedRoom(d))
+    .map((d) => ({ id: d.id, name: roomOf(d) ?? nameOf(d.id) }))
+    .filter((r) => !only || only.includes(r.name))
+    .sort((a, b) => at(a.name) - at(b.name) || a.name.localeCompare(b.name));
 }
 
 /** In its room but never a button (a dishwasher, a car charger): a chip

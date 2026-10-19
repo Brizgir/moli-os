@@ -2,6 +2,7 @@
   import { hub, home, value, act, note, nameOf, num } from '../lib/home.svelte.js';
   import { t, locale } from '../../lib/i18n.svelte.js';
   import Icon from '../ui/Icon.svelte';
+  import HeatingCurves from '../ui/HeatingCurves.svelte';
   import { DAY, WEEK, STEP, stretches, moveBoundary, paint, copyDay, clock, nudge, kindKey, zoneColor, draftOf, normalize } from '../lib/heating.js';
 
   /** The week of heating, as Netatmo keeps it, in the family's words: the
@@ -446,6 +447,11 @@
         </div>
       {/if}
     {/if}
+  {/if}
+
+  {#if homeId}
+    <!-- How each room went: read, aimed at, heated. -->
+    <HeatingCurves instance={hub.devices[homeId]?.instance ?? null} />
   {/if}
 </div>
 
