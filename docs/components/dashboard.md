@@ -24,7 +24,7 @@ Le flux SSE `/api/events` est ouvert **une seule fois** et partagé (`web/src/li
 | Caméras | `#/cameras` | mur d'images (rafraîchies si visibles ; caméras sur batterie, dont Ring, au toucher seulement, l'heure de l'image telle que la caméra la donne, `image_at`) ; sous une caméra qui les dit, son dernier appui et son dernier mouvement ; plein écran avec les passages du jour (sonnette, personne, véhicule, animal, colis, mouvement) et, avec `[server] captures_days`, la photo que Moli a gardée de chacun et celles des 7 derniers jours (`/api/captures`) : une photo touchée s'affiche en grand à la place du direct ; les modes de surveillance Ring (`RingModes.svelte` : Désactivé, Domicile, Absent, le code demandé à l'appui) |
 | Énergie | `#/energie` | en ce moment (Linky en direct coloré selon la conso, repère à `warn`, prochain changement heures creuses / pleines), aujourd'hui (au rythme d'hier), mois + projection vs mois dernier + part en heures creuses, Tempo ; **conseils du moment** (`lib/energy-advice.js` : porte ouverte clim allumée, grosse conso en heures pleines et qui tire, clim alors qu'il fait plus frais dehors, consignes, pompe de piscine en heures pleines, heures creuses en cours ou proches, talon (heure la plus calme de chaque jour, médiane sur 7 jours) en €/an) ; qui consomme maintenant ; où ça part (aujourd'hui / hier / ce mois, par circuit, %) ; **journée type** (moyenne heure par heure sur 7 jours, heures creuses **apprises** de l'historique du point PTEC, talon) ; graphe 24 h / 30 j / 12 mois. Mobile : une colonne, chiffres deux par deux **Journée type** : la journée en cours par-dessus (repère sur chaque heure passée, « aujourd'hui jusqu'à X h : … kWh, d'habitude … (± %) ») ; lumières estimées « ≈ estimé » dans « qui consomme » et « où ça part ». |
 | Impression 3D | `#/impression` | une carte par imprimante (Klipper, Bambu) : état, vignette du travail, progression, couche, temps restant et heure de fin, buse / plateau / enceinte, têtes et filaments (couleurs ; AMS pour Bambu), lumière, **pause / reprise / annulation** (annuler demande une confirmation) ; totaux (impressions, heures, km de filament). Sur l'Accueil, une pastille tant qu'une impression tourne, est en pause ou en erreur ; dans Pièces, une pastille sur la carte de la pièce |
-| Dehors | `#/dehors` | météo (soleil calculé), air/UV, piscine (pH, chlore, filtration), jardin, caméras extérieures |
+| Dehors | `#/dehors` | **le ciel maintenant** (température, ressenti, min et max, humidité, vent et rafales, pluie du jour, nuages, la phrase d'horizon de `lib/sky.svelte.js` « Pluie probable vers 16 h ») et **le soleil** (`ui/SunArc.svelte` : l'arc du jour avec le soleil où il en est, lever et coucher, midi solaire, durée du jour, temps avant le coucher ou le lever) ; **les prochaines heures** et **7 jours** (`ui/Forecast.svelte`, la même prévision que la fenêtre de l'accueil) ; **le jardin et la terrasse** (`ui/OutdoorPlan.svelte` : le rez-de-chaussée du plan vu de dessus, tourné d'un quart si le terrain est en longueur, les espaces dehors (`garden`, `terrace`, `deck`, `pool`, `driveway`) teintés avec leur surface en m², le jardin avec la température de la météo, les caméras et la sonnette posées sur le plan, un appui ouvre le plan) ; **depuis hier** (`ui/OutdoorDay.svelte` : la température extérieure sur 24 h lue dans l'historique, le plus froid, le plus chaud, l'écart avec hier à la même heure) ; **dehors en ce moment** (`ui/OutdoorCameras.svelte` : les caméras extérieures, c'est-à-dire toutes sauf celles d'une pièce protégée et celles que le plan place dans une pièce de la maison, image au toucher pour celles sur batterie, dernier appui et dernier mouvement sous chacune, et **les passages** depuis hier lus dans l'historique, avec la photo gardée par Moli quand il y en a une, un appui ouvre les caméras) ; **qui est sorti** (la présence, les personnes dehors en premier) ; air/UV, piscine (pH, chlore, filtration) et lumières du jardin quand la maison les a. Logique pure et testée : `lib/outside.js` (`outside.test.js`). |
 | Automatismes | `#/automatismes`, `#/automatismes/<id>` | liste, idées, éditeur à canevas (voir [automatismes.md](automatismes.md)) |
 | Système | `#/systeme` | accès à l'**Atelier**, **Pages affichées** (voir « Ce qui s'affiche selon la maison »), **carte vivante** du système et comparaison avec HA (voir plus bas) |
 
@@ -103,8 +103,10 @@ test.
 - **Aujourd'hui** (`ui/Today.svelte`) : les automatismes horaires du jour, cochés une fois
   passés ; aucun : pas de carte. Les automatismes sont lus une fois toutes les deux minutes
   pour toutes les cartes (`lib/timed.svelte.js`).
-- Dehors : la carte du ciel seulement avec la météo, l'air seulement s'il est mesuré, la
-  piscine seulement si elle est déclarée.
+- Dehors : la carte du ciel, le soleil, les prévisions et la courbe d'hier seulement avec la
+  météo ; le jardin seulement avec un plan dessiné qui a un espace dehors ; les caméras
+  seulement s'il y en a dehors ; qui est sorti seulement avec des personnes déclarées ;
+  l'air seulement s'il est mesuré, la piscine seulement si elle est déclarée.
 - Pièces : en tête de carte, « 20,2° → 18° » (température, et consigne d'une pièce Netatmo),
   « sans thermomètre » dans la ligne d'état d'une pièce qui n'en a pas ; une pièce protégée
   dit « Protégée : un automatisme ou Moli y attend ton code » ; une carte en pointillés
@@ -237,6 +239,10 @@ appareils les nomment).
   automatismes (avec empreintes), `asHuman`.
 - `energy-live.svelte.js` : résumé énergie partagé (une seule requête par minute quel que soit
   le nombre de cartes).
+- `outside.js` : dehors en chiffres, pur et testé : le jour du soleil (`sunFacts`), l'étage au
+  sol et ses espaces dehors (`groundFloor`, `outdoorSpaces`), le petit plan tourné dans le
+  sens de la carte (`miniPlan`), une caméra que le plan met dedans (`placedIndoors`), la
+  journée d'une température depuis l'historique et son tracé (`temperatureDay`, `sparkPath`).
 
 ## La carte vivante « Comment ça marche » (`pages/Systeme.svelte`)
 
