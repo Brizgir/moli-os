@@ -22,3 +22,10 @@ options = ["host"]
 [origin]
 reused = ""
 author = "agent"
+
+# Replayed by the crate's tests (crates/moli-orange/src/lib.rs).
+[[fixture]]
+file = "fixtures/status-on.json"
+
+[[fixture]]
+file = "fixtures/status-standby.json"
