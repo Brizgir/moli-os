@@ -22,3 +22,15 @@ export function roomTvs(devices, { room = null, first = null, also = [], roomOf,
 /** The TV chosen among `tvs`: the one picked before if it is still there,
  *  else the first. */
 export const chosen = (tvs, picked) => (tvs.includes(picked) ? picked : (tvs[0] ?? null));
+
+/** How a TV's pairing code looks, from its `pairing_code` point: a numeric
+ *  point takes as many digits as its `max` has (Hisense: 4), a text one the
+ *  6 hexadecimal characters of Android TV. */
+export function codeShape(points) {
+  const kind = points?.find((p) => p.key === 'pairing_code')?.kind;
+  if (kind?.type === 'numeric' && kind.max != null) return { digits: String(Math.round(kind.max)).length };
+  return { hex: 6 };
+}
+
+/** Whether `code` is complete for `shape` (nothing is sent before). */
+export const codeReady = (shape, code) => (shape.digits ? new RegExp(`^[0-9]{${shape.digits}}$`).test(code) : /^[0-9a-f]{6}$/i.test(code));

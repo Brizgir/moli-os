@@ -203,5 +203,6 @@
   "salon.papier.page_impossible": "page impossible à préparer",
   "salon.papier.choisir": "Choisis une photo ou un PDF.",
   "salon.papier.erreur": "erreur {status}",
-  "salon.cameras.mouvement": "Dernier mouvement {when}"
+  "salon.cameras.mouvement": "Dernier mouvement {when}",
+  "salon.appairage.taper_chiffres": "Tapez les {n} chiffres affichés sur la télé."
 }

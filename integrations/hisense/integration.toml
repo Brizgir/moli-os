@@ -1,0 +1,71 @@
+[integration]
+id = "hisense"
+name = "Télé Hisense VIDAA"
+# Any Hisense TV running VIDAA (not the Android TV ones: those take the
+# `androidtv` driver), by the VIDAA app's own remote protocol.
+brands = ["Hisense"]
+models = ["VIDAA"]
+transport = "mqtt"
+driver = "hisense"
+crate = "moli-hisense"
+
+[discovery]
+# The TV answers SSDP as a media renderer; the instance gives its address.
+mdns = []
+ssdp = ["urn:schemas-upnp-org:device:MediaRenderer:1"]
+# 36669 the TV's MQTT broker over TLS (the remote); 38400 its UPnP
+# description (which login it takes; 18400 on some firmware).
+ports = [36669, 38400]
+
+[needs]
+# `client_cert` / `client_key` (PEM): the VIDAA app's client certificate,
+# which recent TVs demand and which is the app's (never in this repository):
+# see onboarding.md. Written by the driver itself: `pin` (the TV's
+# certificate, pinned at first contact), `client_mac` (the address Moli
+# makes up for itself), `session` (the pairing: client id, user name,
+# tokens).
+secrets = ["client_cert", "client_key"]
+vars = []
+options = ["host"]
+
+[origin]
+reused = "Protocol facts (topics, messages, key names, the login algorithm and its verified vector, the pairing and tokens) from hisensetv (newAM), ha_hisense_tv (sehaas), hisense_vidaa (stevene1919) and pyvidaa (warrenrees), all MIT; no code copied"
+author = "agent"
+
+# Replayed by the crate's tests (crates/moli-hisense/src/*.rs): what the
+# TV says, as these projects document it, with made-up names and ids.
+[[fixture]]
+file = "fixtures/rendererdevicedesc.xml"
+
+[[fixture]]
+file = "fixtures/state-sourceswitch.json"
+
+[[fixture]]
+file = "fixtures/state-app.json"
+
+[[fixture]]
+file = "fixtures/state-livetv.json"
+
+[[fixture]]
+file = "fixtures/state-fake-sleep.json"
+
+[[fixture]]
+file = "fixtures/sourcelist.json"
+
+[[fixture]]
+file = "fixtures/applist.json"
+
+[[fixture]]
+file = "fixtures/getvolume.json"
+
+[[fixture]]
+file = "fixtures/volumechange-mute.json"
+
+[[fixture]]
+file = "fixtures/authenticationcode-ok.json"
+
+[[fixture]]
+file = "fixtures/authenticationcode-wrong.json"
+
+[[fixture]]
+file = "fixtures/tokenissuance.json"

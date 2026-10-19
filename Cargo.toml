@@ -48,6 +48,7 @@ moli-netatmo = { path = "crates/moli-netatmo" }
 moli-ring = { path = "crates/moli-ring" }
 moli-demo = { path = "crates/moli-demo" }
 moli-weather = { path = "crates/moli-weather" }
+moli-hisense = { path = "crates/moli-hisense" }
 
 aes = "0.8"
 anyhow = "1"

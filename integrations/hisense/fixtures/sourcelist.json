@@ -1,0 +1,8 @@
+[
+  {"displayname":"TV","hotel_mode":"0","is_lock":"false","is_signal":"1","sourceid":"1","sourcename":"TV"},
+  {"displayname":"HDMI 1","hotel_mode":"0","is_lock":"false","is_signal":"0","sourceid":"2","sourcename":"HDMI 1"},
+  {"displayname":"HDMI 2","hotel_mode":"0","is_lock":"false","is_signal":"1","sourceid":"3","sourcename":"HDMI 2"},
+  {"displayname":"HDMI 3","hotel_mode":"0","is_lock":"false","is_signal":"0","sourceid":"4","sourcename":"HDMI 3"},
+  {"displayname":"PC","hotel_mode":"0","is_lock":"false","is_signal":"1","sourceid":"5","sourcename":"HDMI 4"},
+  {"displayname":"Composite","hotel_mode":"0","is_lock":"false","is_signal":"0","sourceid":"6","sourcename":"Composite"}
+]
