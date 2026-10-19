@@ -7,6 +7,7 @@
   import AlexaAccount from '../ui/AlexaAccount.svelte';
   import NetatmoAccount from '../ui/NetatmoAccount.svelte';
   import RingAccount from '../ui/RingAccount.svelte';
+  import TvPairing from '../ui/TvPairing.svelte';
   import DashboardCode from '../ui/DashboardCode.svelte';
   import PeopleCard from '../ui/PeopleCard.svelte';
   import PagesSetting from '../ui/PagesSetting.svelte';
@@ -197,6 +198,10 @@
 
   <NetatmoAccount />
   <RingAccount />
+  <!-- TVs that pair by a code they show (also in their remote). -->
+  {#each Object.values(hub.devices ?? {}).filter((d) => d.points?.some((p) => p.key === 'pairing_code')) as d (d.id)}
+    <TvPairing tv={d.id} named />
+  {/each}
 
   <TuyaCloudKeys />
 

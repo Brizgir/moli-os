@@ -2,12 +2,15 @@
   import { act, value, reachable, savePref, num, hub, home } from '../lib/home.svelte.js';
   import { t } from '../../lib/i18n.svelte.js';
   import Icon from './Icon.svelte';
+  import TvPairing from './TvPairing.svelte';
 
-  /** The living-room remote. Keys go straight to the TV, one press each.
+  /** A TV's remote (the living room's, or any room's). Keys go straight
+   *  to the TV, one press each; a TV not paired yet shows its pairing first.
    *  `speaker`: a soundbar beside it; while it plays the TV (its `source`
    *  is `tv`), the volume is the speaker's: the TV's own then sets its
-   *  silent speakers. By default, the living room's of the layout. */
-  let { tv, speaker = null } = $props();
+   *  silent speakers. By default, the living room's of the layout.
+   *  `keyboard`: the arrow keys drive it (one remote on the page). */
+  let { tv, speaker = null, keyboard = true } = $props();
   const soundbar = $derived(speaker ?? (home.config?.salon?.tv === tv ? home.config?.salon?.speaker : null));
   const sound = $derived(soundbar && value(soundbar, 'source') === 'tv' ? soundbar : null);
   const target = $derived(sound ?? tv);
@@ -186,6 +189,7 @@
   }
 
   function onkey(e) {
+    if (!keyboard) return;
     if (e.defaultPrevented || e.target.closest?.('input, textarea, select, button, [contenteditable]')) return;
     const map = { ArrowUp: 'CursorUp', ArrowDown: 'CursorDown', ArrowLeft: 'CursorLeft', ArrowRight: 'CursorRight', Enter: 'Confirm', Backspace: 'Back' };
     if (map[e.key]) {
@@ -198,6 +202,7 @@
 <svelte:window onkeydown={onkey} />
 
 <section class="remote" class:on aria-label={t('salon.tele.region')}>
+  <TvPairing {tv} />
   <header>
     <div class="modes" role="group" aria-label={t('salon.tele.navigation')}>
       <button aria-pressed={mode === 'keys'} onclick={() => setMode('keys')}>{t('salon.tele.touches')}</button>

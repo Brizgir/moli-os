@@ -7,6 +7,7 @@
   import CoverTile from './CoverTile.svelte';
   import DiffuserCard from './DiffuserCard.svelte';
   import SpeakerCard from './SpeakerCard.svelte';
+  import Remote from './Remote.svelte';
   import AmbiancePicker from './AmbiancePicker.svelte';
   import { phase, PHASES } from '../lib/printers.js';
 
@@ -138,7 +139,7 @@
   /** The pads: lights, then TV and speakers, then plugs. */
   const pads = $derived([
     ...room.lights.map((d) => ({ d, point: null })),
-    ...room.media.map((d) => ({ d, point: deviceKind(d) === 'tv' ? 'power' : null, speaker: deviceKind(d) === 'speaker' })),
+    ...room.media.map((d) => ({ d, point: deviceKind(d) === 'tv' ? 'power' : null, speaker: deviceKind(d) === 'speaker', tv: deviceKind(d) === 'tv' })),
     ...room.plugs.flatMap(plugPads),
   ]);
 
@@ -233,7 +234,7 @@
 
   {#if pads.length}
     <div class="pads" class:icons>
-      {#each pads as { d, point, speaker, outlets, name } (`${d.id}/${point}`)}
+      {#each pads as { d, point, speaker, tv, outlets, name } (`${d.id}/${point}`)}
         {@const lit = speaker ? speakerState(d.id) === 'playing' : outlets ? litCount(outlets, d.id) > 0 : isOn(d.id, point)}
         {@const cut = unpowered(d.id) && !isFixture(d)}
         {@const more = !speaker && !point && !cut && (fine(d) || hasFan(d.id) || (isFixture(d) && d.members?.some(hasFan)))}
@@ -250,7 +251,11 @@
               {#if !icons}<b>{label}</b><small>{stateOf(d, point, outlets)}</small>{/if}
             </button>
           {/if}
-          {#if more}
+          {#if tv}
+            <button class="more" class:open={open === d.id} onclick={() => (open = open === d.id ? null : d.id)} aria-expanded={open === d.id} title={t('commun.piece.telecommande')} aria-label={t('commun.piece.telecommande_nom', { name: nameOf(d.id) })}>
+              <Icon name="remote" size={13} />
+            </button>
+          {:else if more}
             <button class="more" class:open={open === d.id} onclick={() => (open = open === d.id ? null : d.id)} aria-expanded={open === d.id} title={t('commun.piece.regler')} aria-label={t('commun.piece.regler_nom', { name: nameOf(d.id) })}>
               <Icon name="tune" size={13} />
             </button>
@@ -260,6 +265,8 @@
     </div>
     {#if open && pads.some((p) => p.d.id === open && p.speaker)}
       <SpeakerCard id={open} inline />
+    {:else if open && pads.some((p) => p.d.id === open && p.tv)}
+      <div class="tv-remote"><Remote tv={open} keyboard={false} /></div>
     {:else if open && pads.some((p) => p.d.id === open)}
       <LightTile id={open} dimmer />
     {/if}
@@ -300,6 +307,11 @@
 </section>
 
 <style>
+  /* A TV's remote, opened in its room's card. */
+  .tv-remote {
+    padding-top: 4px;
+  }
+
   .room {
     display: grid;
     gap: 12px;

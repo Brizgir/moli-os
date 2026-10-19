@@ -160,6 +160,8 @@
   "commun.piece.label_eteindre": "{name}: all off",
   "commun.piece.regler": "Adjust",
   "commun.piece.regler_nom": "Adjust {name}",
+  "commun.piece.telecommande": "Remote",
+  "commun.piece.telecommande_nom": "Remote for {name}",
   "commun.piece.coupee": "No power",
   "commun.piece.injoignable": "Unreachable",
   "commun.piece.eteinte": "Off",

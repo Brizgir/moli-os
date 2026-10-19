@@ -160,6 +160,8 @@
   "commun.piece.label_eteindre": "{name} : tout éteindre",
   "commun.piece.regler": "Régler",
   "commun.piece.regler_nom": "Régler {name}",
+  "commun.piece.telecommande": "Télécommande",
+  "commun.piece.telecommande_nom": "Télécommande de {name}",
   "commun.piece.coupee": "Coupée",
   "commun.piece.injoignable": "Injoignable",
   "commun.piece.eteinte": "Éteinte",
