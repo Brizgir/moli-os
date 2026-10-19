@@ -353,6 +353,8 @@ mod tests {
 
     const ON: &str = include_str!("../../../integrations/orange/fixtures/status-on.json");
     const STANDBY: &str = include_str!("../../../integrations/orange/fixtures/status-standby.json");
+    const WHD94: &str =
+        include_str!("../../../integrations/orange/fixtures/status-homepage-whd94.json");
 
     #[test]
     fn reads_the_decoder_state() {
@@ -368,6 +370,20 @@ mod tests {
         let standby = parse_status(STANDBY).unwrap();
         assert!(!standby.on);
         assert_eq!(standby.screen, None, "« NA » is no value");
+    }
+
+    #[test]
+    fn the_older_decoder_answers_the_same() {
+        // A Sagem WHD94 (an older kernel), on its home page.
+        assert_eq!(
+            parse_status(WHD94).unwrap(),
+            Status {
+                on: true,
+                screen: Some("HOMEPAGE".into()),
+                mac: Some("02:00:00:00:00:02".into()),
+                name: Some("Decodeur TV UHD".into()),
+            }
+        );
     }
 
     #[test]

@@ -29,3 +29,6 @@ file = "fixtures/status-on.json"
 
 [[fixture]]
 file = "fixtures/status-standby.json"
+
+[[fixture]]
+file = "fixtures/status-homepage-whd94.json"

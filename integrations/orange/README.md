@@ -8,4 +8,6 @@
   pas déjà dans l'état demandé.
 - Points : `power` (lu toutes les 5 s, écrit), `screen` (le contexte affiché : `LIVE`, une
   appli…), `key` (appui seul, mêmes noms que les autres télés : une seule télécommande).
-- Vérifié sur un décodeur Sagem (WHD95). Fixtures : réponses réelles, MAC remplacée.
+- Vérifié sur deux décodeurs Sagem : WHD95 (« Decodeur TV Orange ») et WHD94 (« Decodeur TV UHD »,
+  noyau plus ancien) : même API, même réponse ; au repos le WHD94 dit `HOMEPAGE`. Une instance
+  par décodeur. Fixtures : réponses réelles, MAC remplacée.
