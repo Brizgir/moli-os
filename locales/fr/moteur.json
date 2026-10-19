@@ -184,5 +184,10 @@
   "moteur.notice.boucle_titre": "Automatisme coupé",
   "moteur.notice.boucle": "« {nom} » se lançait en boucle : je l'ai arrêté. À vérifier dans Automatismes.",
 
-  "moteur.refus.nom_note": "Seule une personne (code de la maison) peut renommer un automatisme validé ou changer sa note."
+  "moteur.refus.nom_note": "Seule une personne (code de la maison) peut renommer un automatisme validé ou changer sa note.",
+
+  "moteur.proposition.deja_actif": "Cet automatisme tourne déjà.",
+  "moteur.proposition.deja_coupe": "Cet automatisme est déjà coupé.",
+  "moteur.proposition.a_corriger": "Cet automatisme a des problèmes à corriger avant de tourner.",
+  "moteur.proposition.pas_valide": "Cet automatisme n’est pas actif : il faut d’abord le valider."
 }

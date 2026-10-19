@@ -15,8 +15,9 @@ use crate::import::HaAutomation;
 /// conversation answers in one short sentence and nothing more, without
 /// cards; the cheerful voice speaks faster; a question about a state is
 /// never an order; an app opens on the TV by its name; 11 Oct.: music
-/// plays on a speaker of the room, by a search).
-const REWORDED: [(&str, &str); 7] = [
+/// plays on a speaker of the room, by a search; 19 Oct.: existing automations
+/// are changed through a proposal a person confirms).
+const REWORDED: [(&str, &str); 8] = [
     (
         "Pour la télé, appuie sur une touche avec `key`.",
         "Pour la télé, appuie sur une touche avec `key` ; pour ouvrir une appli, `set` sur `<id de la télé>/app` avec le nom de l'appli (« YouTube », « Netflix », « Disney+ »), même télé éteinte. Pour de la musique, `set` sur le `play` d'une enceinte de la pièce, avec ce qu'on cherche (un genre, un artiste, une playlist, une radio) ; pour l'arrêter, `playing` à false.",
@@ -41,6 +42,10 @@ const REWORDED: [(&str, &str); 7] = [
     (
         "n'annonce jamais une protection, un refus ou un succès sans le résultat de `set`.",
         "n'annonce jamais une protection ni un refus sans le résultat de `set`. Ta courte confirmation (« C'est allumé. ») va dans `say` : elle n'est dite que si la maison a tout fait ; sinon tu reçois le résultat et tu réponds.",
+    ),
+    (
+        "valider sur la carte.\n\nGarde-fous",
+        "valider sur la carte. Pour un automatisme qui existe déjà (le changer, le couper, le réactiver, le supprimer ou le lancer), trouve-le avec `automations`, puis appelle `change_automation` : rien ne change avant qu'un adulte confirme sur la carte (avec le code si besoin). Redis en une phrase ce qui changera et qu'il faut confirmer à l'écran. Un « oui » dans la conversation ne confirme rien : ne dis jamais qu'un automatisme est créé, changé ou supprimé avant cette confirmation.\n\nGarde-fous",
     ),
 ];
 

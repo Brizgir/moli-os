@@ -351,6 +351,10 @@ export const api = {
   check: (graph) => call('POST', '/api/automations/check', { graph }),
   draft: (request, current) => call('POST', '/api/automations/draft', { request, current }),
   runs: (limit = 20) => call('GET', `/api/automations/runs?limit=${limit}`),
+  // What Moli proposed about an automation: a person confirms (code), anyone says no.
+  proposals: () => call('GET', '/api/automations/proposals'),
+  confirm: (id) => call('POST', `/api/automations/proposals/${encodeURIComponent(id)}/confirm`),
+  dismiss: (id) => call('POST', `/api/automations/proposals/${encodeURIComponent(id)}/dismiss`),
 };
 
 /** What a person does (approve, run, delete) needs « c'est moi »: asks the

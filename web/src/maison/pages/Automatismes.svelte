@@ -117,6 +117,7 @@
     <footer>
       <span class="pill {st}">{label}</span>
       {#if AUTHOR[a.author]}<span class="pill">{AUTHOR[a.author]}</span>{/if}
+      {#if item.proposal}<span class="pill lock"><Icon name="sparkles" size={12} />{t('automatismes.proposition.en_attente')}</span>{/if}
       {#if item.protected?.length}<span class="pill lock"><Icon name="lock" size={12} />{item.protected.join(', ')}</span>{/if}
       <span class="last muted">
         {#if item.last_run}

@@ -4,6 +4,7 @@
   import Canvas from './Canvas.svelte';
   import Inspector from './Inspector.svelte';
   import Palette from './Palette.svelte';
+  import Proposal from './Proposal.svelte';
   import Orb from '../moli/Orb.svelte';
   import { home, note, relative, clock } from '../lib/home.svelte.js';
   import { api, asHuman, layout, needsLayout, newNode, isTrigger, liveRuns, pending, renamedIn, NODE_W } from '../lib/auto.svelte.js';
@@ -12,7 +13,7 @@
   let { id } = $props();
 
   let a = $state(null);
-  let meta = $state({ approved: false, live: false, author: 'human', note: null, fingerprint: null, canRestore: false });
+  let meta = $state({ approved: false, live: false, author: 'human', note: null, fingerprint: null, canRestore: false, proposal: null });
   let check = $state({ summary: '', problems: [], protected: [] });
   let runs = $state([]);
   let dirty = $state(false);
@@ -51,7 +52,7 @@
       };
       if (needsLayout(a.graph)) layout(a.graph);
       dirty = !!draft;
-      meta = { approved: false, live: false, author: draft ? 'assistant' : 'human', note: draft?.note ?? null, fingerprint: null, canRestore: false };
+      meta = { approved: false, live: false, author: draft ? 'assistant' : 'human', note: draft?.note ?? null, fingerprint: null, canRestore: false, proposal: null };
     } else {
       try {
         const v = await api.get(id);
@@ -77,6 +78,7 @@
       note: v.automation.note,
       fingerprint: v.fingerprint,
       canRestore: v.can_restore,
+      proposal: v.proposal ?? null,
     };
   }
 
@@ -369,6 +371,9 @@
 
     <section class="sentence" class:bad={errors.length}>
       <p>{check.summary || '…'}</p>
+      {#if meta.proposal}
+        <Proposal proposal={meta.proposal} before={check.summary} ondone={(done) => (done?.deleted ? (location.hash = '#/automatismes') : load())} />
+      {/if}
       {#if check.protected?.length}
         <p class="warn"><Icon name="lock" size={16} />{t('automatismes.editeur.protegee', { pieces: check.protected.join(', ') })}</p>
       {/if}

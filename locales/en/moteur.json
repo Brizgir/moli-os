@@ -184,5 +184,10 @@
   "moteur.notice.boucle_titre": "Automation turned off",
   "moteur.notice.boucle": "“{nom}” kept starting in a loop, so I stopped it. Check it in Automations.",
 
-  "moteur.refus.nom_note": "Only a person (house code) can rename an approved automation or change its note."
+  "moteur.refus.nom_note": "Only a person (house code) can rename an approved automation or change its note.",
+
+  "moteur.proposition.deja_actif": "This automation is already running.",
+  "moteur.proposition.deja_coupe": "This automation is already switched off.",
+  "moteur.proposition.a_corriger": "This automation has problems to fix before it can run.",
+  "moteur.proposition.pas_valide": "This automation is not on: it has to be approved first."
 }

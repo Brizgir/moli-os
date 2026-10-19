@@ -336,5 +336,25 @@
   "automatismes.routines.titre": "Routines",
   "automatismes.routines.tous": "Tous les automatismes",
   "automatismes.routines.lancee": "« {nom} » lancée",
-  "automatismes.routines.erreur": "{nom} : {message}"
+  "automatismes.routines.erreur": "{nom} : {message}",
+
+  "automatismes.proposition.titre_update": "Moli propose de le modifier",
+  "automatismes.proposition.titre_pause": "Moli propose de le couper",
+  "automatismes.proposition.titre_resume": "Moli propose de le réactiver",
+  "automatismes.proposition.titre_delete": "Moli propose de le supprimer",
+  "automatismes.proposition.titre_run": "Moli propose de le lancer maintenant",
+  "automatismes.proposition.avant": "Avant : {texte}",
+  "automatismes.proposition.apres": "Après : {texte}",
+  "automatismes.proposition.confirmer_update": "Appliquer et activer",
+  "automatismes.proposition.confirmer_pause": "Couper",
+  "automatismes.proposition.confirmer_resume": "Réactiver",
+  "automatismes.proposition.confirmer_delete": "Supprimer",
+  "automatismes.proposition.confirmer_run": "Lancer",
+  "automatismes.proposition.label": "{action} « {nom} »",
+  "automatismes.proposition.refuser": "Non merci",
+  "automatismes.proposition.refusee": "Proposition écartée : rien n’a changé.",
+  "automatismes.proposition.faite": "C’est fait.",
+  "automatismes.proposition.expiree": "Cette proposition n’est plus valable : redemande à Moli.",
+  "automatismes.proposition.rien_avant": "Rien ne change avant ta confirmation.",
+  "automatismes.proposition.en_attente": "Proposition de Moli"
 }

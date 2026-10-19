@@ -291,6 +291,44 @@ fn people(
 }
 
 /// Moli: the conversation, the voice, its history and its settings.
+/// The automations: saving, approving (a person), Moli's drafts and proposals.
+fn automation_routes(humans: &Arc<session::Sessions>) -> Router<Hub> {
+    Router::new()
+        .route(
+            "/api/automations",
+            get(automations::list).post(automations::create),
+        )
+        .route("/api/automations/check", post(automations::check))
+        .route("/api/automations/draft", post(automations::draft))
+        .route(
+            "/api/automations/import",
+            upload(post(automations::import), BIG_BODY, humans),
+        )
+        .route("/api/automations/runs", get(automations::runs))
+        .route("/api/automations/live", get(automations::live))
+        // What Moli proposed about an automation: a person confirms it.
+        .route("/api/automations/proposals", get(automations::proposals))
+        .route(
+            "/api/automations/proposals/{id}/confirm",
+            post(automations::confirm),
+        )
+        .route(
+            "/api/automations/proposals/{id}/dismiss",
+            post(automations::dismiss),
+        )
+        .route(
+            "/api/automations/{id}",
+            get(automations::get)
+                .put(automations::update)
+                .delete(automations::delete),
+        )
+        .route("/api/automations/{id}/approve", post(automations::approve))
+        .route("/api/automations/{id}/enabled", post(automations::enabled))
+        .route("/api/automations/{id}/run", post(automations::run))
+        .route("/api/automations/{id}/test", post(automations::test))
+        .route("/api/automations/{id}/restore", post(automations::restore))
+}
+
 fn assistant_routes() -> Router<Hub> {
     Router::new()
         .route(
@@ -346,29 +384,7 @@ pub fn router(hub: Hub, shutdown: CancellationToken, options: &Options) -> Route
         .route("/api/energy", get(rest::energy))
         .route("/api/energy/series", get(rest::energy_series))
         .merge(assistant_routes())
-        .route(
-            "/api/automations",
-            get(automations::list).post(automations::create),
-        )
-        .route("/api/automations/check", post(automations::check))
-        .route("/api/automations/draft", post(automations::draft))
-        .route(
-            "/api/automations/import",
-            upload(post(automations::import), BIG_BODY, &humans),
-        )
-        .route("/api/automations/runs", get(automations::runs))
-        .route("/api/automations/live", get(automations::live))
-        .route(
-            "/api/automations/{id}",
-            get(automations::get)
-                .put(automations::update)
-                .delete(automations::delete),
-        )
-        .route("/api/automations/{id}/approve", post(automations::approve))
-        .route("/api/automations/{id}/enabled", post(automations::enabled))
-        .route("/api/automations/{id}/run", post(automations::run))
-        .route("/api/automations/{id}/test", post(automations::test))
-        .route("/api/automations/{id}/restore", post(automations::restore))
+        .merge(automation_routes(&humans))
         .route("/api/events", get(sse::events))
         .nest_service(
             "/mcp",

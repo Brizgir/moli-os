@@ -1,16 +1,19 @@
 <script>
   import { onMount } from 'svelte';
   import Icon from '../ui/Icon.svelte';
+  import Proposal from '../auto/Proposal.svelte';
   import { note } from '../lib/home.svelte.js';
   import { api, asHuman, CANCELLED } from '../lib/auto.svelte.js';
   import { t } from '../../lib/i18n.svelte.js';
 
   /** An automation Moli drafted in the conversation: what it does, and one
-   *  gesture to approve it. */
+   *  gesture to approve it. Or one it proposed to change, switch off or on,
+   *  delete or run: the proposal, and one gesture to confirm or refuse it. */
   let { id } = $props();
 
   let v = $state(null);
   let failed = $state(false);
+  let gone = $state(false);
 
   async function load() {
     try {
@@ -20,6 +23,11 @@
     }
   }
   onMount(load);
+
+  function settled(done) {
+    if (done?.deleted) gone = true;
+    else load();
+  }
 
   const errors = $derived((v?.problems ?? []).filter((p) => p.level === 'error'));
 
@@ -38,7 +46,9 @@
 </script>
 
 <section class="card auto">
-  {#if failed}
+  {#if gone}
+    <p class="muted">{t('automatismes.editeur.supprime')}</p>
+  {:else if failed}
     <p class="muted">{t('automatismes.carte.introuvable')}</p>
   {:else if !v}
     <p class="muted">…</p>
@@ -48,10 +58,13 @@
       <span class="pill" class:live={v.live}>{v.live ? t('automatismes.etat.live') : t('automatismes.etat.brouillon')}</span>
     </div>
     <p class="summary">{v.summary}</p>
+    {#if v.proposal}
+      <Proposal proposal={v.proposal} before={v.summary} ondone={settled} />
+    {/if}
     {#if v.protected?.length}<p class="lock"><Icon name="lock" size={14} />{t('automatismes.carte.agit_dans', { pieces: v.protected.join(', ') })}</p>{/if}
     {#if errors.length}<p class="err">{errors[0].message}</p>{/if}
     <div class="row">
-      {#if !v.live}
+      {#if !v.live && !v.proposal}
         <button class="primary" onclick={approve} disabled={errors.length > 0}><Icon name="shield" size={16} />{t('automatismes.carte.valider')}</button>
       {/if}
       <a class="ghost" href="#/automatismes/{id}"><Icon name="branch" size={16} />{t('automatismes.carte.voir')}</a>

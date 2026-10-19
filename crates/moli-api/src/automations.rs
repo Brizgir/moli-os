@@ -14,7 +14,9 @@ use axum::response::sse::{Event as SseEvent, KeepAlive, Sse};
 use axum::response::{IntoResponse, Response};
 use futures::Stream;
 use futures::stream::{self, StreamExt};
-use moli_automation::{Actor, Author, Automation, AutomationError, Automations, Graph, Step};
+use moli_automation::{
+    Actor, Author, Automation, AutomationError, Automations, Confirmed, Graph, Step,
+};
 use moli_core::{Origin, PointId};
 use moli_runtime::Hub;
 use serde::Deserialize;
@@ -83,6 +85,8 @@ fn view_with(
         // What a person approves: the version they are looking at.
         "fingerprint": fingerprint,
         "can_restore": a.approved_version.is_some() && !approved,
+        // What Moli proposed about it, waiting for a person (or null).
+        "proposal": autos.proposal_for(&a.id),
         "last_run": last.map(|r| json!({ "id": r.id, "status": r.status, "started": r.started, "why": r.why, "dry": r.dry })),
     })
 }
@@ -424,5 +428,42 @@ pub(crate) async fn import(
     match moli.import_ha(&autos, body.automations) {
         Ok(n) => (StatusCode::ACCEPTED, axum::Json(json!({ "started": n }))).into_response(),
         Err(e) => crate::assistant::failure(&e),
+    }
+}
+
+/// What Moli proposed about existing automations (change, pause, resume,
+/// delete, run), waiting for a person.
+pub(crate) async fn proposals(Extension(Autos(autos)): Extension<Autos>) -> Response {
+    let Some(autos) = autos else { return off() };
+    axum::Json(json!({ "proposals": autos.proposals() })).into_response()
+}
+
+/// A person confirms what Moli proposed: carried out in their name, by the
+/// same paths as the dashboard's buttons. Never an agent, never Moli.
+pub(crate) async fn confirm(
+    Extension(Autos(autos)): Extension<Autos>,
+    Extension(humans): Humans,
+    caller: Caller,
+    headers: HeaderMap,
+    Path(id): Path<u64>,
+) -> Response {
+    let Some(autos) = autos else { return off() };
+    match autos.confirm(id, actor(&headers, &humans, &caller)).await {
+        Ok(Confirmed::Automation(a)) => axum::Json(view(&autos, &a)).into_response(),
+        Ok(Confirmed::Run(run)) => axum::Json(json!({ "run": run })).into_response(),
+        Ok(Confirmed::Deleted) => axum::Json(json!({ "deleted": true })).into_response(),
+        Err(e) => failure(&e),
+    }
+}
+
+/// Saying no moves nothing: anyone may.
+pub(crate) async fn dismiss(
+    Extension(Autos(autos)): Extension<Autos>,
+    Path(id): Path<u64>,
+) -> Response {
+    let Some(autos) = autos else { return off() };
+    match autos.dismiss(id) {
+        Ok(()) => axum::Json(json!({ "ok": true })).into_response(),
+        Err(e) => failure(&e),
     }
 }

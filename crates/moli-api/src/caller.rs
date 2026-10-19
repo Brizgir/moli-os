@@ -400,6 +400,7 @@ mod tests {
             (Method::POST, "/api/automations"),
             (Method::PUT, "/api/automations/soir"),
             (Method::POST, "/api/automations/soir/approve"),
+            (Method::POST, "/api/automations/proposals/3/confirm"),
             (Method::POST, "/api/automations/draft"),
             (Method::PUT, "/api/assistant/recording"),
             (Method::POST, "/api/assistant/recap"),

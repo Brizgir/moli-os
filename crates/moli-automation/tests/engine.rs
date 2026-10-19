@@ -4,8 +4,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use moli_automation::{
-    Actor, Author, Automation, AutomationError, Automations, Config, Graph, Mode, RunStatus, Step,
-    Writer,
+    Actor, Author, Automation, AutomationError, Automations, Config, Confirmed, Graph, Intent,
+    Mode, RunStatus, Step, Writer,
 };
 use moli_core::{Access, Device, InstanceId, Kind, Origin, PointId, PointSpec, Semantic, Value};
 use moli_runtime::{BoxFuture, Driver, DriverCtx, Hub, HubOptions, spawn_driver};
@@ -589,4 +589,186 @@ async fn said_aloud_through_every_speaker() {
         hub.state(&said).map(|s| s.value),
         Some(Value::Text("Quelqu'un est à la porte".into()))
     );
+}
+
+const MOLI: Actor = Actor {
+    human: false,
+    author: Author::Assistant,
+};
+
+fn switch_lights_lamp_off() -> serde_json::Value {
+    serde_json::json!({
+        "nodes": [
+            { "id": "t", "type": "when_state", "point": "fake:switch/on", "to": true },
+            { "id": "s", "type": "set", "point": "fake:lamp/on", "value": false }
+        ],
+        "edges": [{ "from": "t", "to": "s" }]
+    })
+}
+
+/// Moli proposes a new version of an approved automation: nothing changes,
+/// the approved one keeps running, until a person confirms. Moli and agents
+/// cannot confirm.
+#[tokio::test]
+async fn a_proposed_change_waits_for_a_person() {
+    let (hub, autos, _c) = setup().await;
+    let a = approved(&autos, switch_lights_lamp()).await;
+    let mut new = automation(switch_lights_lamp_off());
+    new.name = "Interrupteur éteint la lampe".into();
+    let p = autos
+        .propose(&a.id, Intent::Update(Box::new(new)), MOLI)
+        .unwrap();
+    assert_eq!(p.kind, "update");
+    assert_eq!(p.summary, "Quand switch s'allume, éteindre lamp.");
+    let now = autos.get(&a.id).unwrap();
+    assert_eq!(now.fingerprint(), a.fingerprint(), "nothing moved");
+    assert!(now.is_live(), "the approved version still runs");
+    assert_eq!(autos.proposal_for(&a.id).unwrap().id, p.id);
+
+    for who in [MOLI, AGENT] {
+        assert!(matches!(
+            autos.confirm(p.id, who).await,
+            Err(AutomationError::NeedsHuman)
+        ));
+    }
+    assert!(autos.proposal_for(&a.id).is_some(), "still waiting");
+    flip_switch(&hub, true).await;
+    assert!(lamp_turns(&hub, true).await, "the old version still acts");
+
+    let Confirmed::Automation(done) = autos.confirm(p.id, HUMAN).await.unwrap() else {
+        panic!("an update gives the automation back");
+    };
+    assert!(done.is_live(), "confirmed is approved and on");
+    assert_eq!(done.name, "Interrupteur éteint la lampe");
+    assert_eq!(done.author, Author::Human, "who wrote it first stays");
+    assert!(autos.proposal_for(&a.id).is_none());
+    assert!(
+        matches!(
+            autos.confirm(p.id, HUMAN).await,
+            Err(AutomationError::Unknown)
+        ),
+        "a proposal is confirmed once"
+    );
+    flip_switch(&hub, false).await;
+    flip_switch(&hub, true).await;
+    assert!(lamp_turns(&hub, false).await, "the new version acts");
+    let journal = hub.journal(10);
+    assert!(
+        journal.iter().any(|e| e.origin == Origin::Ui),
+        "carried out in the person's name"
+    );
+}
+
+/// Pause, resume, delete and run go through the same door.
+#[tokio::test]
+async fn pausing_resuming_deleting_and_running_need_a_person_too() {
+    let (hub, autos, _c) = setup().await;
+    let a = approved(&autos, switch_lights_lamp()).await;
+
+    let pause = autos.propose(&a.id, Intent::Pause, MOLI).unwrap();
+    assert!(autos.get(&a.id).unwrap().is_live(), "not off yet");
+    autos.confirm(pause.id, HUMAN).await.unwrap();
+    assert!(!autos.get(&a.id).unwrap().enabled);
+
+    let resume = autos.propose(&a.id, Intent::Resume, MOLI).unwrap();
+    assert!(!autos.get(&a.id).unwrap().enabled, "not on yet");
+    autos.confirm(resume.id, HUMAN).await.unwrap();
+    assert!(autos.get(&a.id).unwrap().is_live());
+
+    let run = autos.propose(&a.id, Intent::Run, MOLI).unwrap();
+    assert!(autos.runs(Some(&a.id), 5).is_empty(), "nothing ran yet");
+    assert!(matches!(
+        autos.confirm(run.id, HUMAN).await.unwrap(),
+        Confirmed::Run(_)
+    ));
+    assert!(lamp_turns(&hub, true).await, "run for real once confirmed");
+
+    // Saying no moves nothing.
+    let delete = autos.propose(&a.id, Intent::Delete, MOLI).unwrap();
+    autos.dismiss(delete.id).unwrap();
+    assert!(autos.get(&a.id).is_some());
+    assert!(autos.proposal_for(&a.id).is_none());
+    let delete = autos.propose(&a.id, Intent::Delete, MOLI).unwrap();
+    assert!(
+        autos.get(&a.id).is_some(),
+        "not gone before a person says so"
+    );
+    assert!(matches!(
+        autos.confirm(delete.id, HUMAN).await.unwrap(),
+        Confirmed::Deleted
+    ));
+    assert!(autos.get(&a.id).is_none());
+}
+
+/// What cannot be proposed: an unknown automation, a version that reaches
+/// an unknown device or commands a value that only reads, running a draft,
+/// resuming what runs, pausing what is off.
+#[tokio::test]
+async fn impossible_proposals_are_refused() {
+    let (_hub, autos, _c) = setup().await;
+    assert!(matches!(
+        autos.propose("nope", Intent::Pause, MOLI),
+        Err(AutomationError::Unknown)
+    ));
+    let a = approved(&autos, switch_lights_lamp()).await;
+    let unknown = automation(serde_json::json!({
+        "nodes": [
+            { "id": "t", "type": "when_state", "point": "fake:switch/on", "to": true },
+            { "id": "s", "type": "set", "point": "fake:garage/on", "value": true }
+        ],
+        "edges": [{ "from": "t", "to": "s" }]
+    }));
+    let Err(AutomationError::Invalid(why)) =
+        autos.propose(&a.id, Intent::Update(Box::new(unknown)), MOLI)
+    else {
+        panic!("an unknown device is refused");
+    };
+    assert!(why.contains("garage"), "{why}");
+    assert!(matches!(
+        autos.propose(&a.id, Intent::Resume, MOLI),
+        Err(AutomationError::Invalid(_))
+    ));
+    let draft = autos
+        .save(automation(switch_lights_lamp_off()), MOLI)
+        .await
+        .unwrap();
+    assert!(
+        matches!(
+            autos.propose(&draft.id, Intent::Run, MOLI),
+            Err(AutomationError::Invalid(_))
+        ),
+        "a draft never runs for real"
+    );
+    assert!(matches!(
+        autos.propose(&draft.id, Intent::Pause, MOLI),
+        Err(AutomationError::Invalid(_))
+    ));
+    assert!(autos.proposals().is_empty(), "nothing waits");
+}
+
+/// Someone changes the automation while Moli's proposal waits: the proposal
+/// no longer applies, confirming it finds nothing.
+#[tokio::test]
+async fn a_proposal_about_a_changed_automation_is_dropped() {
+    let (_hub, autos, _c) = setup().await;
+    let a = approved(&autos, switch_lights_lamp()).await;
+    let p = autos
+        .propose(
+            &a.id,
+            Intent::Update(Box::new(automation(switch_lights_lamp_off()))),
+            MOLI,
+        )
+        .unwrap();
+    let mut other = a.clone();
+    other.graph.nodes[0].step = Step::WhenState {
+        point: "fake:switch/on".into(),
+        to: Some(serde_json::json!(false)),
+        from: None,
+        for_s: 0,
+    };
+    autos.save(other, HUMAN).await.unwrap();
+    assert!(matches!(
+        autos.confirm(p.id, HUMAN).await,
+        Err(AutomationError::Unknown)
+    ));
 }

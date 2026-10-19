@@ -107,10 +107,26 @@ lui fait perdre sa validation, la maison est prévenue (notice dans le dashboard
   `…/{id}/enabled {on, fingerprint}` (allumer = valider ; éteindre : tout le monde),
   `…/{id}/restore` (humain), `…/{id}/run {fingerprint}` (humain), `…/{id}/test` (à blanc),
   `POST /api/automations/check` (validation + phrase en français), `…/draft` (Moli),
-  `…/import` (HA, humain), `GET …/runs`, `GET …/live` (SSE).
+  `…/import` (HA, humain), `GET …/runs`, `GET …/live` (SSE),
+  `GET …/proposals`, `POST …/proposals/{id}/confirm` (humain), `…/proposals/{id}/dismiss`.
 - MCP : `list_automations`, `get_automation`, `save_automation_draft` (brouillon non
   validé, documentation du format dans la description de l'outil), `test_automation`.
-- Moli (conversation) : « préviens-moi quand… » → brouillon + carte « Valider ».
+- Moli (conversation, écrite ou parlée) : « préviens-moi quand… » → brouillon + carte
+  « Valider ». « Coupe / réactive / supprime / lance / change l'automatisme… » → une
+  **proposition** sur la carte de l'automatisme ; une personne la confirme (code si besoin)
+  ou la refuse. Rien ne bouge avant : la version validée continue de tourner. Détail dans
+  [moli.md](moli.md#agir-sur-les-automatismes-en-parlant-19-oct).
+
+### Propositions (`proposal.rs`)
+
+`Automations::propose(id, Intent, by)` garde en mémoire une proposition par automatisme
+(10 min, 20 au plus) ; `confirm(id, by)` exige `by.human` et passe par `save` + `approve`
+(nouvelle version), `set_enabled(false)`, `approve` (version actuelle), `delete` ou
+`run_now` ; `dismiss` l'oublie. Refusé à la proposition : automatisme inconnu, nouvelle
+version avec une erreur du vérificateur, réactiver ce qui tourne, couper ce qui est coupé,
+lancer ce qui n'est pas validé et allumé. Un changement de logique, une restauration ou une
+suppression faits entre-temps effacent la proposition. Les propositions ne survivent pas à
+un redémarrage (elles ne sont qu'une question en attente).
 
 ## Éditeur (onglet « Automatismes »)
 
