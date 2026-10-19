@@ -1,0 +1,24 @@
+[integration]
+id = "orange"
+name = "Décodeur TV Orange"
+brands = ["Orange"]
+models = []
+transport = "http"
+driver = "orange"
+crate = "moli-orange"
+
+[discovery]
+mdns = []
+# The decoder announces urn:schemas-orange-com:service:X_OrangeSTBRemoteControl:3;
+# the instance gives its address.
+ssdp = ["urn:schemas-orange-com:service:X_OrangeSTBRemoteControl:3"]
+ports = [8080]
+
+[needs]
+secrets = []
+vars = []
+options = ["host"]
+
+[origin]
+reused = ""
+author = "agent"

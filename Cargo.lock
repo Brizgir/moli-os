@@ -1527,6 +1527,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "moli-orange"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "moli-core",
+ "moli-i18n",
+ "moli-net",
+ "moli-runtime",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "moli-os"
 version = "0.1.0"
 dependencies = [
@@ -1556,6 +1571,7 @@ dependencies = [
  "moli-moonraker",
  "moli-net",
  "moli-netatmo",
+ "moli-orange",
  "moli-philips",
  "moli-phones",
  "moli-presence",
