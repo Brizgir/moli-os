@@ -72,7 +72,7 @@ Le hub l'appelle quand une surface demande une image : rien n'est récupéré po
 ```toml
 [[driver]]
 id = "enceinte"         # non vide, sans ':' ni '/', unique ; réservés : core, assistant, automations
-kind = "sonos"          # z2m, hue, tuya, reolink, sonos, philips, frigate, bambu, tapo, igd, helpers, ecowitt, profile
+kind = "sonos"          # z2m, hue, tuya, reolink, sonos, philips, androidtv, orange, frigate, bambu, tapo, igd, helpers, ecowitt, profile
 # enabled = false       # désactive l'instance sans la supprimer
 
 [driver.options]        # s'applique au [[driver]] qui précède ; clés inconnues refusées
@@ -426,11 +426,38 @@ mac = "aa:bb:cc:dd:ee:ff"   # pour le Wake-on-LAN
 ```
 
 - **Côté Android** (`crates/moli-androidtv`, réutilisable pour toute Google TV) : Android TV Remote v2 (TLS **6466**, certificat client, messages protobuf préfixés d'un varint ; la télé parle d'abord, ping toutes les 5 s, connexion morte après 16 s de silence) et Google Cast (TLS **8009**, enveloppe protobuf autour de JSON : état du récepteur puis canal média de l'appli). Deux connexions tenues par le pilote, reprises de 5 s à 60 s (veille profonde = ports fermés). Un ordre donné pendant une coupure est refusé, jamais rejoué.
-- **Secrets** : `username`, `password` (identifiants d'appairage JointSpace, posés par l'humain), `cert` écrit par le pilote ; `atv_cert` / `atv_key` (PEM, l'appairage Android TV Remote **repris de HA**, `.storage/androidtv_remote_*.pem`, par tube) ; `atv_pin`, `cast_pin` écrits par le pilote. Le pilote ne fait **pas** l'appairage lui-même (provenance des identifiants : à vérifier, probablement repris de HA).
+- **Secrets** : `username`, `password` (identifiants d'appairage JointSpace, posés par l'humain), `cert` écrit par le pilote ; `atv_cert` / `atv_key` (PEM, l'appairage Android TV Remote **repris de HA**, `.storage/androidtv_remote_*.pem`, par tube) ; `atv_pin`, `cast_pin` écrits par le pilote. Le JointSpace ne s'appaire pas depuis Moli (provenance des identifiants : à vérifier, probablement repris de HA) ; l'**Android TV Remote**, si : points `pairing` / `pairing_code`, comme le pilote `androidtv` ci-dessous (la télé n'affiche un code que si on le demande : `pairing` = `code`).
 - **Points** : `power`, `volume` (0 à max lu sur la télé, 60 par défaut), `mute`, `ambilight` **écrivables** ; `app` : l'appli au premier plan (paquet Android, dit par Android TV Remote : JointSpace ne la connaît pas sur une Google TV), **écrire** un paquet, un lien ou le nom d'une appli connue (Netflix, YouTube, Disney+, Prime Video, Jellyfin, Moonlight) l'ouvre : son lien web d'abord (une Google TV peut refuser `market://launch?id=…`, vu sur une Philips le 9 oct.), puis celui du Store (`moli_androidtv::remote::app_links`). L'ordre attend la réponse de la télé : l'appli à l'écran ou 1 s sans refus = ouverte ; tous les liens refusés = erreur « la télé a refusé d'ouvrir … », dite à qui a demandé ; `media_app`, `media_state` (`playing`, `paused`, `buffering`, `idle`), `media_title`, `media_subtitle`, `media_image` (URL), `media_duration`, `media_position` (s) en lecture (Cast) ; `media_control` (`play`, `pause`, `stop`) en écriture seule ; `key` en **écriture seule** (enum de 24 touches : curseurs, `Confirm`, `Back`, `Home`, lecture, volume, chaînes, `Source`, `WatchTV`…).
 - **Pièges** : la télé route sur l'en-tête `Host` **complet** : sans le port, elle répond 404 (d'où le `Host` avec port de `PinnedHttps`). Allumage : WoL puis 5 essais espacés de 2 s (l'API se réveille après). Extinction : `powerstate = Standby`, sinon touche `Standby` **seulement si** la télé est allumée (la touche bascule). Un appui de touche n'est jamais rejoué. En veille profonde l'API dort : appareil hors ligne et `power = false`.
 - **Identité** : ⚠️ l'id natif est **l'adresse `host`** (`ctx.device_id(&config.host)`), pas un identifiant de l'appareil : un changement d'IP créerait un nouvel appareil.
 - **Tests** : digest vérifié sur l'exemple de la RFC 2617.
+
+## `androidtv` : télé Android TV / Google TV (`crates/moli-androidtv`)
+
+- **Couvre** : toute télé ou boîtier Android TV / Google TV, sans API du fabricant : touches, marche/veille, volume, sourdine, appli au premier plan et ouverture d'une appli, texte dans le champ ouvert, ce qui se joue (Cast). Même logique Android que Philips (module partagé `link.rs`).
+- **Protocole** : Android TV Remote v2 (TLS **6466**, certificat client) et Google Cast (TLS **8009**), comme ci-dessus ; **appairage intégré** « polo » (TLS **6467**, `pairing.rs`) : Moli crée un certificat RSA 2048 (crates `rsa` et `rcgen`, MIT/Apache-2.0 ; `rsa` ne sert qu'à générer la clé, ring signe), la télé affiche 6 caractères hexadécimaux, le secret envoyé est le SHA-256 des modules et exposants des deux certificats et des deux derniers octets du code (le premier octet du code doit être le premier du hash : un code mal tapé est refusé avant tout envoi). Messages `OuterMessage` (`protocol_version` 2, `status` 200) préfixés d'un varint, d'après `polo.proto` d'androidtvremote2 (Apache-2.0, aucun code repris).
+- **Configuration** :
+
+```toml
+[[driver]]
+id = "tele-chambre"
+kind = "androidtv"
+[driver.options]
+host = "192.168.1.x"
+mac = "aa:bb:cc:dd:ee:ff"   # facultatif : Wake-on-LAN depuis la veille profonde
+name = "Télé de la chambre" # facultatif
+```
+
+- **Appairage** (`pairer.rs`, partagé avec `philips`) : non appairé, le pilote attend (`wait_for`, la marche à suivre) et demande **une fois** un code par lui-même (toutes les 30 s tant que la télé ne répond pas, jamais plus après qu'elle en a montré un) ; ensuite seulement sur demande (`pairing` = `code`). Le code se tape dans le tableau de bord (`pairing_code`, sémantique `Secret` : jamais d'un agent, jamais journalisé ni gardé). Réussi : `atv_cert` / `atv_key` au coffre, la télécommande démarre.
+- **Points** : `power`, `volume` (0 à max dit par la télé ; réglé par appuis successifs, au plus 40 par ordre : le protocole n'a pas de volume absolu), `mute`, `app`, `text`, `key` (34 touches, mêmes noms que les autres télés, codes `KeyEvent` d'Android), `media_*`, `media_control`, `pairing` (`paired`, `code`, `needed`, `waiting`), `pairing_code`.
+- **Pièges** : POWER est une bascule : appuyée seulement si l'état connu (message `RemoteStart`) diffère. Télécommande injoignable = veille profonde : hors ligne, `power = false`, l'allumage passe par le Wake-on-LAN.
+- **Identité** : l'adresse `host`, comme Philips.
+- **Tests** : l'échange d'appairage rejoué octet par octet (`integrations/androidtv/fixtures/pairing.txt`, encodé indépendamment d'après `polo.proto`), un appairage complet contre une fausse télé en TLS (certificats RSA générés), le calcul du secret, les touches, le volume par appuis.
+- **À vérifier sur la vraie télé** : voir `integrations/androidtv/README.md`.
+
+## `orange` : décodeur TV Orange (`crates/moli-orange`)
+
+- **Couvre** : la télécommande locale du décodeur (Sagem WHD95…) : marche/veille, ce qui est à l'écran, touches. HTTP en clair, port 8080, sans appairage (`/remoteControl/cmd?operation=10` : l'état ; `operation=01&key=<code>&mode=0` : une touche, codes d'entrée Linux). Marche = touche bascule, appuyée seulement si elle change quelque chose. Points `power`, `screen`, `key` (mêmes noms que les autres télés). Détails : `integrations/orange/README.md`.
 
 ## `frigate` : NVR Frigate (`crates/moli-frigate`)
 
@@ -769,6 +796,8 @@ ni pièce native). Il ne déplace jamais rien. Sans argument : plan à blanc ; `
 | `sonos` | `moli-sonos` | UPnP/SOAP HTTP 1400 ; annonces en WebSocket TLS 1443 | oui : lecture, volume, sourdine, annonces | Sonos Beam |
 | `alexa` | `moli-alexa` | HTTPS, interface de l'appli Alexa (non officielle) | oui : lecture, volume, musique, phrases, annonces, commandes | Echo Dot, Spot, Show 5 et groupes (lecture partielle, en cours) |
 | `philips` | `moli-philips` | JointSpace HTTPS 1926, digest, WoL ; Android TV Remote, Cast | oui : alimentation, volume, sourdine, Ambilight, touches, appli | Philips Google TV (lecture) |
+| `androidtv` | `moli-androidtv` | Android TV Remote TLS 6466, appairage polo TLS 6467, Cast TLS 8009, WoL | oui : alimentation, volume (par appuis), sourdine, touches, appli, texte, lecture | pas encore (cible : TCL Google TV) |
+| `orange` | `moli-orange` | HTTP local 8080 | oui : alimentation, touches | décodeur Sagem WHD95 (lecture) |
 | `frigate` | `moli-frigate` | MQTT + HTTP interne 5000 | oui : détection, enregistrement, instantanés | Frigate |
 | `bambu` | `moli-bambu` | MQTT TLS 8883, épinglé | lumière, `control` (humain pour un agent) | pas encore (cible : Bambu Lab A1) |
 | `moonraker` | `moli-moonraker` | HTTP local 7125 | lumière, `control` (humain pour un agent) | Snapmaker U1 |

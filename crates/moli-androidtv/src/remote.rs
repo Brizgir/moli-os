@@ -278,7 +278,7 @@ fn encode(order: &Order, (ime, field): (u64, u64)) -> Vec<u8> {
     }
 }
 
-async fn read_frame<R: AsyncRead + Unpin>(read: &mut R) -> anyhow::Result<Vec<u8>> {
+pub(crate) async fn read_frame<R: AsyncRead + Unpin>(read: &mut R) -> anyhow::Result<Vec<u8>> {
     let mut len = 0u64;
     for shift in (0..35).step_by(7) {
         let byte = read.read_u8().await?;
@@ -296,7 +296,10 @@ async fn read_frame<R: AsyncRead + Unpin>(read: &mut R) -> anyhow::Result<Vec<u8
     bail!("bad frame length from the TV")
 }
 
-async fn send<W: AsyncWrite + Unpin>(write: &mut W, message: &[u8]) -> anyhow::Result<()> {
+pub(crate) async fn send<W: AsyncWrite + Unpin>(
+    write: &mut W,
+    message: &[u8],
+) -> anyhow::Result<()> {
     let mut frame = Vec::with_capacity(message.len() + 4);
     varint(message.len() as u64, &mut frame);
     frame.extend_from_slice(message);

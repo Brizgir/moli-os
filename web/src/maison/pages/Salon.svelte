@@ -1,5 +1,6 @@
 <script>
-  import { home, value, reachable, nameOf, act, since, clock } from '../lib/home.svelte.js';
+  import { home, hub, value, reachable, nameOf, act, since, clock, roomOf, hidden, savePref } from '../lib/home.svelte.js';
+  import { roomTvs, chosen } from '../lib/tvs.js';
   import { t } from '../../lib/i18n.svelte.js';
   import Icon from '../ui/Icon.svelte';
   import Remote from '../ui/Remote.svelte';
@@ -8,9 +9,25 @@
   import AmbiancePicker from '../ui/AmbiancePicker.svelte';
 
   const s = $derived(home.config?.salon ?? {});
-  const tv = $derived(s.tv);
+  // Every TV of the living room (the layout's `salon.tv` first, its
+  // `salon.tvs` next, then the room's others): one remote, a tab each.
+  const tvs = $derived(roomTvs(Object.values(hub.devices ?? {}), { first: s.tv, also: s.tvs ?? [], roomOf, nameOf, hidden }));
+  let picked = $state(readPicked());
+  function readPicked() {
+    try {
+      return localStorage.getItem('salon-tv');
+    } catch {
+      return null;
+    }
+  }
+  function pick(id) {
+    picked = id;
+    savePref('salon-tv', id);
+  }
+  const tv = $derived(chosen(tvs, picked) ?? s.tv);
   const sp = $derived(s.speaker);
   const tvOn = $derived(value(tv, 'power') === true);
+  const has = (key) => (hub.devices[tv]?.points ?? []).some((p) => p.key === key);
   const app = $derived(value(tv, 'app'));
 
   const APPS = {
@@ -71,7 +88,16 @@
 
   <div class="layout">
     <div class="remote-col">
-      {#if tv}<Remote {tv} />{/if}
+      {#if tvs.length > 1}
+        <div class="tvs" role="tablist" aria-label={t('salon.quelle_tele')}>
+          {#each tvs as id (id)}
+            <button role="tab" aria-selected={id === tv} class:on={id === tv} onclick={() => pick(id)}>{nameOf(id)}</button>
+          {/each}
+        </div>
+      {/if}
+      {#if tv}
+        {#key tv}<Remote {tv} />{/key}
+      {/if}
     </div>
 
     <div class="now-col">
@@ -97,11 +123,11 @@
             {#if tvOn}{t('salon.aide_allumee')}{:else}{t('salon.aide_eteinte')}{/if}
           </p>
         {/if}
-        <div class="apps" role="group" aria-label={t('salon.ouvrir_une_appli')}>
+        {#if has('app')}<div class="apps" role="group" aria-label={t('salon.ouvrir_une_appli')}>
           {#each LAUNCH as pkg (pkg)}
             <button class:on={app === pkg} disabled={!tvOn || busy != null} onclick={() => open(pkg)}>{appLabel(pkg)}</button>
           {/each}
-        </div>
+        </div>{/if}
       </section>
 
       {#if sp}<SpeakerCard id={sp} name={nameOf(sp, t('salon.barre_de_son'))} />{/if}
@@ -110,7 +136,7 @@
         <div class="card-head"><h2><Icon name="light-group" size={18} />{t('salon.ambiance')}</h2></div>
         <div class="amb">
           {#if s.room_light}<LightTile id={s.room_light} name={t('salon.tout_le_salon')} icon="sofa" dimmer members={s.lamps ?? []} />{/if}
-          {#if tv}<LightTile id={tv} point="ambilight" name="Ambilight" icon="ambilight" />{/if}
+          {#if tv && has('ambilight')}<LightTile id={tv} point="ambilight" name="Ambilight" icon="ambilight" />{/if}
         </div>
         <AmbiancePicker lights={s.lamps ?? []} label={t('salon.titre')} />
         <div class="lamps">
@@ -139,6 +165,39 @@
   .remote-col {
     position: sticky;
     top: 24px;
+    display: grid;
+    gap: 14px;
+  }
+
+  /* The living room's TVs (the TV, the decoder plugged into it…). */
+  .tvs {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 6px;
+    padding: 4px;
+    border-radius: 999px;
+    background: var(--surface-2);
+    justify-self: center;
+    max-width: 100%;
+  }
+
+  .tvs button {
+    border: 0;
+    border-radius: 999px;
+    padding: 8px 16px;
+    font: inherit;
+    font-size: 14px;
+    font-weight: 650;
+    background: none;
+    color: var(--ink-2);
+    cursor: pointer;
+  }
+
+  .tvs button.on {
+    background: var(--surface);
+    color: var(--ink);
+    box-shadow: var(--shadow-lift);
   }
 
   /* A grid track grows to its widest content (the ambiance strip) unless

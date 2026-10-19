@@ -11,4 +11,6 @@
 5. Applis et « ce qui se joue » : Cast marche seul. Pour ouvrir des applis, reprendre
    l'appairage Android TV Remote de HA s'il existe :
    `cat …/.storage/androidtv_remote_cert.pem | docker exec -i moli-os /moli-os secrets set <instance> atv_cert`,
-   idem `androidtv_remote_key.pem` → `atv_key`, puis redémarrer.
+   idem `androidtv_remote_key.pem` → `atv_key`, puis redémarrer. Sans HA : dans le tableau de
+   bord (Système, carte « Appairer une télé »), « Afficher le code », puis taper les 6
+   caractères que la télé affiche (voir `integrations/androidtv/onboarding.md`).

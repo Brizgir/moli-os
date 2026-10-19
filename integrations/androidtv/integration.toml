@@ -1,0 +1,35 @@
+[integration]
+id = "androidtv"
+name = "Télé Android TV / Google TV"
+# Any TV running Android TV or Google TV (TCL, Sony, Hisense Android,
+# Xiaomi, Chromecast with Google TV, Nvidia Shield…), with no maker API used.
+brands = ["Google", "TCL", "Sony", "Xiaomi", "Nvidia"]
+models = ["Google TV", "Android TV"]
+transport = "tcp"
+driver = "androidtv"
+crate = "moli-androidtv"
+
+[discovery]
+# Android TV Remote announces _androidtvremote2._tcp; Cast, _googlecast._tcp.
+# The instance gives the address.
+mdns = ["_androidtvremote2._tcp", "_googlecast._tcp"]
+ssdp = []
+# 6466 Android TV Remote (keys, power, volume, app on screen, opening apps);
+# 6467 its pairing (the code the TV shows); 8009 Google Cast (what plays).
+ports = [6466, 6467, 8009]
+
+[needs]
+# Written by the driver itself: `atv_cert` / `atv_key` (the pairing's client
+# certificate, PEM, made by Moli or reused from Home Assistant), `atv_pin`
+# and `cast_pin` (the TV's certificates, pinned on first contact).
+secrets = []
+vars = []
+options = ["host"]
+
+[origin]
+reused = "Protocol facts (polo.proto, remotemessage.proto, the pairing secret, the key codes) from androidtvremote2 (tronikos, Apache-2.0); no code copied"
+author = "agent"
+
+# Replayed by the crate's tests (crates/moli-androidtv/src/pairing.rs).
+[[fixture]]
+file = "fixtures/pairing.txt"

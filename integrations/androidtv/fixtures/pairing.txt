@@ -1,0 +1,12 @@
+# Android TV pairing (polo, TLS 6467), one message per line, without its varint length.
+# Encoded by hand from polo.proto (androidtvremote2, Apache-2.0); the TV's name is fictitious.
+# moli: what Moli sends; tv: what the TV answers.
+moli: 080210c80152110a0961747672656d6f746512044d6f6c69
+tv: 080210c8015a0b0a09476f6f676c65205456
+moli: 080210c801a201080a04080310061801
+tv: 080210c801a201080a04080310061801
+moli: 080210c801f201080a04080310061001
+tv: 080210c801fa0100
+# The secret (32 bytes) goes, the TV acknowledges it with the same bytes; a wrong one: status 402.
+tv: 080210c801ca02220a200000000000000000000000000000000000000000000000000000000000000000
+tv: 0802109203

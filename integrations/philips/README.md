@@ -6,12 +6,14 @@
   n'appaire pas) ; `pilotes.md` : « à vérifier, probablement repris de HA ».
 - Pas de fixture : aucune réponse de la télé gardée dans les tests.
 - ⚠️ Identité = l'adresse `host` : un changement d'IP créerait un nouvel appareil.
-- **Côté Android** (`moli-androidtv`, module `android.rs`) :
+- **Côté Android** (`moli-androidtv`, module `link.rs`, partagé avec le pilote `androidtv`) :
   - Android TV Remote v2 (TLS 6466, certificat client) : appli au premier plan (point `app`,
     que JointSpace ne connaît pas sur une Google TV) et ouverture d'une appli (écrire `app` :
     paquet Android → `market://launch?id=…`, ou un lien). Appairage **repris de HA**
     (`androidtv_remote_cert.pem` / `_key.pem`, secrets `atv_cert` / `atv_key`) : la télé fait
-    confiance à ce certificat, rien à ressaisir.
+    confiance à ce certificat, rien à ressaisir. Ou **fait par Moli** (module `pairer.rs`) :
+    `pairing` = `code` demande un code à la télé, `pairing_code` (secret) reçoit les 6
+    caractères affichés ; Moli garde alors son propre certificat sous les mêmes noms.
   - Google Cast (TLS 8009, rien à appairer) : `media_app`, `media_state`, `media_title`,
     `media_subtitle`, `media_image`, `media_duration`, `media_position` ; `media_control`
     (play, pause, stop).

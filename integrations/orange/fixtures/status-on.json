@@ -1,0 +1,21 @@
+{
+    "result":
+    {
+        "responseCode": "0",
+        "message": "ok",
+        "data":
+        {"osdContext": "LIVE",
+"playedMediaType": "LIVE",
+"playedMediaState": "PLAY",
+"playedMediaId": "192",
+"playedMediaContextId": "1",
+"playedMediaPosition": "NA",
+"timeShiftingState": "0",
+"macAddress": "02:00:00:00:00:01",
+"wolSupport": "0",
+"friendlyName": "Decodeur TV Orange",
+"activeStandbyState": "0",
+"npvrSupport": "1"
+}
+    }
+}
