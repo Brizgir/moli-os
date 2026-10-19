@@ -8,7 +8,7 @@ import { openMic, RATE } from './capture.js';
 import { toWav } from './pcm.js';
 import { Vad } from './vad.js';
 import * as player from './player.js';
-import { sentences, isGoodbye, mentionsApproval, fetchSpeech } from './speech.js';
+import { sentences, isGoodbye, mentionsApproval, waitsForPerson, fetchSpeech } from './speech.js';
 
 const PREROLL = 15; // 300 ms kept before the start of speech
 const MAX_FRAMES = 50 * 20; // 20 s
@@ -129,7 +129,7 @@ async function finish() {
   if (talk.state !== 'thinking') return;
   if (!answer) return stopTalk();
   let reply = answer.reply;
-  if (answer.actions.some((a) => a.status === 'held') && !mentionsApproval(reply, i18n.language)) reply += ` ${t('moli.voix.valider_ecran')}`;
+  if (waitsForPerson(answer) && !mentionsApproval(reply, i18n.language)) reply += ` ${t('moli.voix.valider_ecran')}`;
   // Asked to stop, in any words: the last answer (if any), then hang up.
   if (answer.end) {
     if (reply) await say(reply);

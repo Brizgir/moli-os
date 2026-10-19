@@ -10,6 +10,7 @@
 mod check;
 mod engine;
 mod model;
+mod proposal;
 mod run;
 mod store;
 pub mod sun;
@@ -32,6 +33,7 @@ pub use model::{
     Author, Automation, Channel, DayNight, Edge, Graph, Mode, Node, Op, Rule, Step, SunEvent,
     Version, minutes_of,
 };
+pub use proposal::{Confirmed, Intent, PROPOSAL_TTL, Proposal};
 pub use run::{Live, Run, RunStatus, StepLog, StepStatus};
 
 /// `[automations]` in moli.toml.
@@ -143,6 +145,8 @@ struct Inner {
     /// write lock; approving and running always hash afresh.
     fingerprints: Mutex<HashMap<String, String>>,
     runs: Mutex<VecDeque<Run>>,
+    /// Changes Moli proposed, waiting for a person (`proposal.rs`).
+    proposals: Mutex<Vec<Proposal>>,
     next_run: AtomicU64,
     live: broadcast::Sender<Live>,
     /// The run in progress per automation (restart / single).
@@ -243,6 +247,7 @@ impl Automations {
             list: RwLock::new(list),
             fingerprints: Mutex::default(),
             runs: Mutex::new(runs),
+            proposals: Mutex::default(),
             next_run: AtomicU64::new(next),
             live,
             active: Mutex::default(),
@@ -447,6 +452,9 @@ impl Automations {
         } else {
             AutomationChange::Created
         };
+        if changed_logic {
+            self.drop_proposals(&saved.id);
+        }
         self.journal(&saved, change, by);
         if !by.human && before.is_some_and(|(_, approved)| approved) && changed_logic {
             self.tell(
@@ -580,6 +588,7 @@ impl Automations {
         self.stop(id);
         self.persist().await?;
         self.changed(id);
+        self.drop_proposals(id);
         self.journal(&a, AutomationChange::Restored, by);
         Ok(a)
     }
@@ -601,6 +610,7 @@ impl Automations {
         self.stop(id);
         self.persist().await?;
         self.changed(id);
+        self.drop_proposals(id);
         self.journal(&gone, AutomationChange::Deleted, by);
         Ok(())
     }
@@ -792,7 +802,7 @@ const MAX_TEXT: usize = 2_000;
 
 /// `entree-la-nuit`, `entree-la-nuit-2`…
 /// Fixed routes under `/api/automations/` would shadow these ids.
-const RESERVED: [&str; 5] = ["check", "draft", "import", "runs", "live"];
+const RESERVED: [&str; 6] = ["check", "draft", "import", "runs", "live", "proposals"];
 
 fn new_id(name: &str, list: &[Automation]) -> String {
     let mut slug = String::new();

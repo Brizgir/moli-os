@@ -394,6 +394,9 @@ Limites de `Turn` : 14 derniers messages renvoyés au modèle, 2 000 caractères
 | POST | `/api/automations/check` | libre | `{graph}` | `Check` : `{summary (phrase française), problems:[{node?, level:"error"\|"warning", message}], protected:[pièces protégées touchées]}` | `422` ; `503` |
 | POST | `/api/automations/draft` | libre | `{request, current?: Automation}` (`request` coupée à 2 000 caractères ; `current` borné comme à l'enregistrement) | `{name, mode, graph, check, note}` ; **rien n'est enregistré** | `400` (dont `current` > 60 nœuds ou > 120 liens) ; `429` ; `502` ; `503` Moli non configuré |
 | POST | `/api/automations/import` | **humain** (vérifié avant le corps) | `{automations:[{alias, description?, mode?, yaml, entities?, ha_id?}]}` (150 au plus) | **`202 {started:<n>}`** : traduction en tâche de fond, chaque traduction par le sas de Moli, brouillons d'auteur `import` dont la note cite l'automatisation HA (`ha_id`) à désactiver ; déjà importés (par nom enregistré ou SHA-256 du YAML) ignorés | `403` sans session ; `400` > 150, ou existants + à traduire > 400 ; `429` import déjà en cours ; `503` |
+| GET | `/api/automations/proposals` | libre | aucune | `{proposals:[Proposition]}` (voir `proposal` dans la vue), plus ancienne d’abord ; une proposition vit 10 minutes | `503` |
+| POST | `/api/automations/proposals/{id}/confirm` | **humain** (comme valider : le code si besoin) | aucune | ce que la proposition faisait, au nom de la personne : `update` et `resume` → `Vue` (validée et allumée) ; `pause` → `Vue` (coupée) ; `run` → `{run}` ; `delete` → `{deleted:true}` | `403` (Moli, un agent, l’API sans session) ; `404` inconnue, expirée, ou devenue caduque (l’automatisme a changé entre-temps) ; `409` ; `422` |
+| POST | `/api/automations/proposals/{id}/dismiss` | libre (dire non ne change rien) | aucune | `{ok:true}` | `404` |
 | GET | `/api/automations/runs` | libre | `?automation=<id>&limit=` (défaut 50, max 500) | `[Run]`, plus récente d'abord | `503` |
 | GET | `/api/automations/live` | libre | aucune | flux SSE (§ 3.2) | `503` (dont trop de flux ouverts, § 3.1) |
 
@@ -520,6 +523,7 @@ live?:{point, max, warn, unit?, value?, ts?}, today, yesterday, month, last_mont
 | `live` | `enabled` **et** `approved` : tournera au prochain déclenchement |
 | `fingerprint` | SHA-256 (hex complet) du mode, des nœuds (id + étape) et des liens ; ni le nom ni la position sur le canevas n'en font partie |
 | `can_restore` | une version validée existe et diffère de l'actuelle |
+| `proposal` | ce que Moli propose pour cet automatisme et qui attend une personne, ou `null` : `{id, automation, name, kind:"update"\|"pause"\|"resume"\|"delete"\|"run", summary, protected, version?:{mode, graph}, proposed_by, created, expires}` |
 | `last_run` | `{id, status, started, why, dry}` ou `null` |
 
 Nœuds du graphe (`type` + paramètres, `x`/`y` pour le canevas) : déclencheurs `when_state`

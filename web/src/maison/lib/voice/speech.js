@@ -22,10 +22,16 @@ const GOODBYE = {
 export const isGoodbye = (text, language = 'fr') => (GOODBYE[language] ?? GOODBYE.fr).test(text.trim());
 
 // An answer that already tells the person to approve on the screen.
-const APPROVAL = { fr: /valid/i, en: /approv|confirm|valid/i };
+const APPROVAL = { fr: /valid|confirm/i, en: /approv|confirm|valid/i };
 
 /** Does `reply` already ask for an approval? */
 export const mentionsApproval = (reply, language = 'fr') => (APPROVAL[language] ?? APPROVAL.fr).test(reply);
+
+/** Does the answer leave something for a person to approve on the screen: an
+ *  order the guard held, or an automation Moli drafted or proposed to change
+ *  (its card)? A spoken « yes » never approves it. */
+export const waitsForPerson = (answer) =>
+  (answer?.actions ?? []).some((a) => a.status === 'held') || (answer?.cards ?? []).some((c) => c.kind === 'automation');
 
 /** One sentence as the server says it (`player.playSpeech` plays it): the
  *  cloud voice streamed while it is made (PCM), else MP3 or WAV whole;

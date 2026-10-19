@@ -1166,6 +1166,11 @@ impl Assistant {
             if self.searches(brain) {
                 list.push(search_tool());
             }
+            // Existing automations: found, then changed only on a person's word.
+            if self.automations().is_some() {
+                list.push(auto::automations_tool());
+                list.push(auto::change_automation_tool());
+            }
         }
         offered
     }
@@ -1469,6 +1474,8 @@ impl Assistant {
             "forecast" => self.forecast(args).await,
             "web_search" => self.web_search(args, run).await,
             "automation" => self.automation_tool(args, run).await,
+            "automations" => self.automations_list(),
+            "change_automation" => self.change_automation(args, run).await,
             other => json!({ "error": format!("unknown tool {other}") }),
         }
     }

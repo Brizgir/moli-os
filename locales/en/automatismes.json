@@ -356,5 +356,25 @@
   "automatismes.routines.titre": "Routines",
   "automatismes.routines.tous": "All automations",
   "automatismes.routines.lancee": "“{nom}” started",
-  "automatismes.routines.erreur": "{nom}: {message}"
+  "automatismes.routines.erreur": "{nom}: {message}",
+
+  "automatismes.proposition.titre_update": "Moli suggests changing it",
+  "automatismes.proposition.titre_pause": "Moli suggests switching it off",
+  "automatismes.proposition.titre_resume": "Moli suggests switching it back on",
+  "automatismes.proposition.titre_delete": "Moli suggests deleting it",
+  "automatismes.proposition.titre_run": "Moli suggests running it now",
+  "automatismes.proposition.avant": "Before: {texte}",
+  "automatismes.proposition.apres": "After: {texte}",
+  "automatismes.proposition.confirmer_update": "Apply and turn on",
+  "automatismes.proposition.confirmer_pause": "Switch off",
+  "automatismes.proposition.confirmer_resume": "Switch back on",
+  "automatismes.proposition.confirmer_delete": "Delete",
+  "automatismes.proposition.confirmer_run": "Run",
+  "automatismes.proposition.label": "{action} “{nom}”",
+  "automatismes.proposition.refuser": "No thanks",
+  "automatismes.proposition.refusee": "Suggestion dismissed: nothing changed.",
+  "automatismes.proposition.faite": "Done.",
+  "automatismes.proposition.expiree": "This suggestion is no longer valid: ask Moli again.",
+  "automatismes.proposition.rien_avant": "Nothing changes until you confirm.",
+  "automatismes.proposition.en_attente": "Moli’s suggestion"
 }

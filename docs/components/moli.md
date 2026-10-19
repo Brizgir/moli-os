@@ -137,6 +137,11 @@ compte (`Reply.model`).
      l'avoir lu est interdit ; un mouvement n'est jamais un coup de sonnette).
    - `automation(request)` : crée un **brouillon** d'automatisme et montre une carte
      « Valider ».
+   - `automations` (liste : id, nom, état, phrase du vérificateur, pièces protégées) et
+     `change_automation(automation, action, request)` : **propose** de modifier, couper,
+     réactiver, supprimer ou lancer un automatisme existant ; rien ne change avant qu'une
+     personne confirme sur la carte (voir plus bas). Offerts seulement quand les
+     automatismes tournent.
 3. Filets de sécurité, tous testés (`lib.rs`) : cartes évidentes ajoutées si le modèle n'en
    montre aucune (conso, météo, caméras) ; **appel d'outil écrit en clair supprimé**
    (`show({…})`, `show [ … ]`) ; réponse répétée dite une fois ; relances (« tu veux… ? ») et
@@ -145,8 +150,8 @@ compte (`Reply.model`).
 4. Limites : 60 tours / 10 min et 2 en même temps (tous clients confondus), 14 messages
    d'historique, 2 000 caractères par message. Les messages des automatismes ne comptent pas
    dans cette limite (ils ont la leur : 20 lancements par minute). Dans un tour, les appels
-   payants sont comptés, quoi que demande le modèle : 2 `web_search` et 1 `automation` au
-   plus ; au-delà, l'outil répond « limite atteinte » et le tour continue. Le coût d'un
+   payants sont comptés, quoi que demande le modèle : 2 `web_search` et 1 brouillon
+   (`automation`, ou `change_automation` avec `update`) au plus ; au-delà, l'outil répond « limite atteinte » et le tour continue. Le coût d'un
    brouillon (modèle `builder_model`) compte dans celui de l'échange.
 
 ## Créer un automatisme (`auto.rs`)
@@ -163,6 +168,33 @@ compte (`Reply.model`).
   consommation » = le compteur général).
 - Modifier un automatisme existant : le graphe actuel est donné, les positions des nœuds
   conservées sont gardées.
+
+## Agir sur les automatismes en parlant (19 oct.)
+
+Exemple : « quand la porte d'entrée s'ouvre la nuit, allume l'entrée à 30 % pendant 5
+minutes ». Moli appelle `automation` ; le constructeur dessine déclencheur (`when_state`
+sur le contact), condition (règle soleil « nuit ») et actions (`set` → `set` → `wait` →
+`set`) ; le vrai vérificateur valide le graphe ; il est enregistré en **brouillon coupé**
+(auteur `assistant`) et la réponse montre sa carte. La phrase que la personne lit sur la
+carte est celle du vérificateur (`describe`, déterministe), pas celle du modèle.
+
+Pour un automatisme qui existe déjà, `change_automation` ne touche à rien : il crée une
+**proposition** (`moli_automation::Intent` : `update`, `pause`, `resume`, `delete`, `run`)
+que le moteur garde 10 minutes, une par automatisme (une nouvelle remplace l'ancienne).
+
+| Étape | Qui | Ce qui se passe |
+|---|---|---|
+| Trouver | Moli | `automations`, puis l'automatisme par son id, son nom (sans accents ni casse) ou le seul dont le nom contient les mots ; deux candidats → Moli demande lequel |
+| Préparer | Moli | `update` : le constructeur retravaille la version actuelle ; la nouvelle version passe les mêmes bornes que l'enregistrement et **aucune erreur** du vérificateur (appareil inconnu, valeur en lecture seule… : refusée) |
+| Montrer | serveur | la carte de l'automatisme porte la proposition : avant / après, pièces protégées, « Rien ne change avant ta confirmation » ; aussi dans la page Automatismes (pastille, bandeau de l'éditeur) |
+| Confirmer | **une personne** | `POST /api/automations/proposals/{id}/confirm`, session humaine (le code si besoin, comme valider) ; exécutée en son nom par les chemins des boutons (`save` + `approve`, `set_enabled`, `delete`, `run_now`), donc journalisée comme elle |
+| Refuser | n'importe qui | `…/dismiss` : rien ne bouge |
+
+Garde-fous : Moli, un agent MCP ou l'API sans session ne peuvent pas confirmer (`403`) ; un
+« oui » dans la conversation ne confirme rien (le prompt le dit, et la voix rappelle de
+confirmer à l'écran) ; si quelqu'un change la logique de l'automatisme, le restaure ou le
+supprime entre-temps, la proposition disparaît (`404` à la confirmation) ; tant qu'elle
+attend, la version validée continue de tourner telle quelle.
 
 ## Importer les automatisations de Home Assistant (`import.rs`)
 

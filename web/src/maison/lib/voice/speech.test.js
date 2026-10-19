@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { sentences, isGoodbye, mentionsApproval } from './speech.js';
+import { sentences, isGoodbye, mentionsApproval, waitsForPerson } from './speech.js';
 
 test('sentences, numbers kept whole', () => {
   assert.deepEqual(sentences('Il fait 22.9 °C dans le salon. Dehors, il pleut ! Bonne soirée.'), [
@@ -27,5 +27,13 @@ test('an answer that already asks for approval is recognised', () => {
   assert.ok(mentionsApproval('Il faut que tu valides.'));
   assert.ok(!mentionsApproval('C’est en attente.'));
   assert.ok(mentionsApproval('Please approve it on screen.', 'en'));
+  assert.ok(mentionsApproval('Confirme à l’écran.'));
   assert.ok(!mentionsApproval('It is waiting.', 'en'));
+});
+
+test('a drafted or proposed automation waits for a person, like a held order', () => {
+  assert.ok(waitsForPerson({ actions: [], cards: [{ kind: 'automation', id: 'entree-la-nuit' }] }));
+  assert.ok(waitsForPerson({ actions: [{ status: 'held' }], cards: [] }));
+  assert.ok(!waitsForPerson({ actions: [{ status: 'done' }], cards: [{ kind: 'device', id: 'x' }] }));
+  assert.ok(!waitsForPerson({}));
 });
