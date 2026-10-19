@@ -72,7 +72,7 @@ Le hub l'appelle quand une surface demande une image : rien n'est récupéré po
 ```toml
 [[driver]]
 id = "enceinte"         # non vide, sans ':' ni '/', unique ; réservés : core, assistant, automations
-kind = "sonos"          # z2m, hue, tuya, reolink, sonos, philips, frigate, bambu, tapo, igd, helpers, profile
+kind = "sonos"          # z2m, hue, tuya, reolink, sonos, philips, frigate, bambu, tapo, igd, helpers, ecowitt, profile
 # enabled = false       # désactive l'instance sans la supprimer
 
 [driver.options]        # s'applique au [[driver]] qui précède ; clés inconnues refusées
@@ -670,6 +670,69 @@ pièces ; il commande ensuite les membres en origine `system` (journal : `lumina
   du vrai matériel ; essai prévu : lecture d'abord, puis une consigne sur une pièce neutre,
   jamais une chambre, la personne présente, remise sur `schedule` ensuite.
 
+## `ecowitt` : station météo Ecowitt (`crates/moli-ecowitt`)
+
+- **Couvre** : les passerelles et consoles Ecowitt qui ont l'envoi « Customized » (GW1100,
+  GW1200, GW2000, GW3000…) et leurs capteurs : extérieur 7-en-1 (WS90, WS69/WH65, WS80, WS85),
+  pluviomètre WH40, intérieur (la passerelle ou un WH25), thermo-hygromètres WH31 (canaux 1
+  à 8). Écrit pour le kit **GW1210** (GW1200 + WS90). **Lecture seule.**
+- **Protocole** : la passerelle **poste** (`POST`, formulaire `application/x-www-form-urlencoded`,
+  unités impériales) toutes les `interval` s (60 par défaut) vers Moli ; Moli ne demande rien,
+  aucun cloud. Le pilote écoute sur **son propre port** (49199 par défaut, celui d'aioecowitt),
+  pas sur celui de l'API : la station ne sait pas s'authentifier, et rien ne doit l'exposer
+  par le tunnel.
+- **La porte** (`src/http.rs`, écrite à la main, bornée partout) : seulement les adresses du
+  réseau de la maison (privées, lien local, la machine elle-même ; une autre est fermée avant
+  de lire un octet), et celles de `allow` si la liste est donnée ; 4 connexions à la fois ; une
+  requête par connexion, en-tête 8 Kio, corps 16 Kio annoncé par `Content-Length` (pas de
+  `chunked`), 10 s en tout ; `POST <path>` seulement (`/` final facultatif ; la query est
+  jetée sans être lue). Un `GET` (protocole Wunderground, qui met identifiant et mot de passe
+  dans l'URL) : 405. Le journal ne cite jamais l'URL ni le corps : l'adresse, le statut, la
+  raison, une fois par minute au plus.
+- **Identité** : la passerelle se reconnaît à son `PASSKEY` (MD5 de sa MAC, pas un secret) :
+  celui de l'option `passkey`, sinon le premier entendu depuis le démarrage (dit au journal,
+  à recopier dans les options) ; un autre est refusé (403). Une instance = une station ; les
+  appareils sont `<instance>:outdoor`, `:indoor`, `:ch1`…`:ch8`, déclarés au premier envoi
+  qui les nomme, et redéclarés quand un nouveau point apparaît.
+- **Configuration** :
+
+```toml
+[[driver]]
+id = "meteo"
+kind = "ecowitt"
+[driver.options]               # tout est facultatif
+# port = 49199
+# listen = "0.0.0.0"
+# path = "/data/report/"
+# passkey = "<32 chiffres hexadécimaux>"
+# allow = ["192.168.1.x"]
+# name = "Station météo"
+```
+
+- **Points** (ceux que la station envoie ; un champ absent n'invente rien, un champ illisible
+  vaut `null`) : extérieur `temperature`, `humidity`, `dew_point` (Magnus), `wind_speed`,
+  `wind_gusts`, `wind_gusts_max` (km/h), `wind_direction`, `wind_direction_avg` (°),
+  `raining`, `rain_rate` (mm/h), `rain_today`, `rain_event`, `rain_hour`, `rain_24h`,
+  `rain_week`, `rain_month`, `rain_year`, `rain_total` (mm), `solar_radiation` (W/m²),
+  `illuminance` (lx, estimée : W/m² ÷ 0,0079 comme aioecowitt), `uv_index`, `battery_low`
+  (WH65), `battery_voltage` (WS90, WS80…), `capacitor_voltage` (supercondensateur du WS90),
+  `rain_battery_voltage` (WH40) ; intérieur `temperature`, `humidity`, `pressure` (relative,
+  hPa), `pressure_abs`, `battery_low` (WH25) ; canaux `temperature`, `humidity`,
+  `battery_low`. Mêmes clés que le profil `open-meteo` pour ce qui veut dire la même chose.
+  Pluie : l'auget (WH40, WH65) d'abord, sinon le piézo du WS90 (`*_piezo`).
+- **Disponibilité** : `waiting` (« en attente de la station … ») jusqu'au premier envoi, puis
+  `running` ; plus rien pendant 3 intervalles (3 min au moins) : appareils hors ligne et
+  `waiting` « plus rien reçu de la station … », jusqu'au suivant.
+- **Pas lus** (dits une fois au journal) : foudre WH57, qualité de l'air, sol, fuites, WN38, `vpd`.
+- **Tests** : `src/tests.rs` sur trois vrais envois (`integrations/ecowitt/fixtures/` :
+  GW1200B des tests d'aioecowitt, GW2000A avec WS90 seul, GW2000A avec WH57 et champs vides ;
+  PASSKEY fictifs) : conversions, piézo contre auget, champs non lus, canaux, valeurs
+  illisibles, croissance des appareils, options ; le pilote complet sur une vraie socket
+  (première passerelle adoptée, une autre refusée, commande refusée). `src/http.rs` : chemin,
+  query jetée, 405, 404, 411, 413, 415, 431, corps tronqué, réseau de la maison seulement.
+- **Non vérifié** : jamais tourné contre une vraie station. Le jour de l'installation :
+  `integrations/ecowitt/onboarding.md`.
+
 ## `profile` : profils déclaratifs (`crates/moli-profile`)
 
 Un seul pilote générique pour tout appareil HTTP décrit en TOML. Voir [profils.md](profils.md).
@@ -717,6 +780,7 @@ ni pièce native). Il ne déplace jamais rien. Sans argument : plan à blanc ; `
 | `presence` | `moli-presence` | UDP + table ARP de l'hôte | non | téléphones sur le Wi-Fi |
 | `phones` | `moli-phones` | rapports HTTP de l'appli (jeton) | `notify` (notification) | iPhone (appli Moli) |
 | `telegram` | `moli-telegram` | HTTPS, API des bots | `notify` (message) | oui (API des bots) |
+| `ecowitt` | `moli-ecowitt` | HTTP local reçu (la passerelle poste, port 49199) | non | pas encore (cible : Ecowitt GW1200 + WS90) |
 | `profile` | `moli-profile` | HTTP/HTTPS GET, Meross signé | oui si le profil déclare `[[write]]` (Daikin) | Daikin BRP069 (lecture), Meross EM06, Open-Meteo, Tempo, iopool EcO (voir [profils.md](profils.md#les-profils-du-catalogue)) |
 | `helpers` | `moli-helpers` | aucun (valeurs gardées par Moli) | oui | sans objet |
 | `lumieres` (interne) | `moli-lights` | aucun (lit et commande d'autres appareils via le hub) | oui | ampoules Hue derrière un relais |
