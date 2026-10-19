@@ -316,6 +316,7 @@ export const icons = {
   sunset: mdiWeatherSunset,
   sunrise: mdiWeatherSunsetUp,
   wind: mdiWeatherWindy,
+  cloud: mdiWeatherCloudy,
   sun: mdiWhiteBalanceSunny,
   palm: mdiPalmTree,
   shutter: mdiWindowShutter,
