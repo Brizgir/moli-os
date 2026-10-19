@@ -954,6 +954,7 @@ const KINDS: &[&str] = &[
     "host",
     "profile",
     "demo",
+    "ecowitt",
 ];
 
 /// Every enabled driver, running. The phones driver and the API share its
@@ -1143,6 +1144,9 @@ fn build_driver(
         "profile" => Arc::new(moli_profile::ProfileDriver::new(
             config.options.clone().try_into().with_context(context)?,
             data_dir.join(moli_profile::TRUST_FILE),
+        )?),
+        "ecowitt" => Arc::new(moli_ecowitt::Ecowitt::new(
+            config.options.clone().try_into().with_context(context)?,
         )?),
         other => bail!("driver kind {other:?} is in KINDS but never built"),
     })

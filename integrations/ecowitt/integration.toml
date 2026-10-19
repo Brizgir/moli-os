@@ -1,0 +1,40 @@
+[integration]
+id = "ecowitt"
+name = "Station météo Ecowitt (envoi local « Customized »)"
+# Any Ecowitt gateway or console that has the « Customized » upload (GW1100,
+# GW1200, GW2000, GW3000, HP2550…), and its sensors. Written for the GW1210
+# kit (GW1200 gateway + WS90 7-in-1), not yet seen live.
+brands = ["Ecowitt"]
+models = ["GW1210", "GW1200", "WS90", "GW2000"]
+transport = "http"
+driver = "ecowitt"
+crate = "moli-ecowitt"
+
+[discovery]
+# Nothing is discovered: the gateway posts to Moli, on the port it was given.
+mdns = []
+ssdp = []
+ports = [49199]
+
+[needs]
+secrets = []
+vars = []
+# Everything has a default (port 49199, path /data/report/); `passkey` and
+# `allow` are advised once the station has been heard.
+options = []
+
+[origin]
+reused = "noms de champs, unités et codes de piles d'après aioecowitt (bibliothèque Ecowitt de Home Assistant, Apache-2.0) : aucun code copié"
+author = "agent"
+
+# Replayed by the crate's tests (crates/moli-ecowitt/src/tests.rs). Real
+# posts, PASSKEYs replaced by made-up ones.
+# GW1200B + WS90 + WH40 + WH57 + WN38: aioecowitt's tests/const.py.
+[[fixture]]
+file = "fixtures/gw1200b-ws90-wh40.form"
+# GW2000A 3.3.2 + WS90 alone, 868 MHz (piezo rain): a public capture.
+[[fixture]]
+file = "fixtures/gw2000a-ws90.form"
+# GW2000A 2.2.3 + WS90 + WH57, empty lightning fields: a public capture.
+[[fixture]]
+file = "fixtures/gw2000a-ws90-wh57.form"

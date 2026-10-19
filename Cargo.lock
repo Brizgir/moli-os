@@ -1304,6 +1304,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "moli-ecowitt"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "moli-core",
+ "moli-i18n",
+ "moli-runtime",
+ "serde",
+ "tokio",
+ "tokio-util",
+ "toml",
+ "tracing",
+]
+
+[[package]]
 name = "moli-energy"
 version = "0.1.0"
 dependencies = [
@@ -1542,6 +1557,7 @@ dependencies = [
  "moli-bambu",
  "moli-core",
  "moli-demo",
+ "moli-ecowitt",
  "moli-energy",
  "moli-esphome",
  "moli-frigate",

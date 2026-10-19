@@ -23,6 +23,8 @@ Ce qui marche aujourd'hui :
   imprimante IPP, l'hôte et les ordinateurs, la présence par Wi-Fi, les aides de la maison,
   **Telegram** (votre bot, sans relais), les **téléphones** (appli Moli), et des profils
   déclaratifs (Daikin, Meross, Open-Meteo, Tempo, iopool) ;
+- prête mais jamais vue en vrai : la **station météo Ecowitt** (GW1200 + WS90, envoi local
+  sans cloud, `integrations/ecowitt/onboarding.md`) ;
 - la garde (pièces protégées, heures calmes), l'historique et l'énergie ;
 - le dashboard « Maison », avec des **filtres par type** et le **plan vivant** : la maison
   redessinée en données, en 2D zoomable à 4 habillages et en **3D** ;
