@@ -12,5 +12,7 @@
 - Écrit pour le kit **GW1210** (passerelle GW1200 + capteur 7-en-1 WS90). Fixtures : vrais
   envois d'une GW1200B et de GW2000A avec WS90 (même famille de firmware). **Jamais vu tourner
   contre une vraie station** : à vérifier le jour de l'installation (`onboarding.md`).
-- Pas encore lus (signalés une fois au journal) : foudre WH57, qualité de l'air, sol, fuites,
-  WN38, `vpd`. Protocole Wunderground refusé (mot de passe dans l'URL).
+- Aussi lus, un appareil chacun : foudre WH57, globe noir WN38 et `vpd` (vus dans les vrais
+  envois des fixtures) ; qualité de l'air WH45, sondes de sol WH51, sondes WN34, fuites
+  WH55, particules WH41, feuilles WN35, CO₂ de la console (d'après les noms de champs
+  d'aioecowitt, **sans capture** : à vérifier quand un de ces capteurs arrive). Protocole Wunderground refusé (mot de passe dans l'URL).

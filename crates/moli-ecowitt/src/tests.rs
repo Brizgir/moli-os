@@ -62,11 +62,16 @@ fn a_gw1200_with_a_bucket_gauge() {
     assert_eq!(out["rain_battery_voltage"], f(1.4));
     assert!(!out.contains_key("raining"), "no piezo: nothing invented");
     assert_eq!(outdoor_model(&form).as_deref(), Some("WS90"));
-    assert_eq!(
-        report::unread(&form),
-        ["bgt", "bgtbatt", "wbgt", "wh57batt"],
-        "the WN38 globe thermometer and the WH57 are left aside"
+    assert!(
+        report::unread(&form).is_empty(),
+        "{:?}",
+        report::unread(&form)
     );
+    let globe = values(&form, Part::Globe);
+    assert_eq!(globe["black_globe"], f(6.2));
+    assert_eq!(globe["wet_bulb_globe"], f(3.3));
+    assert_eq!(globe["battery_voltage"], f(1.54));
+    assert_eq!(values(&form, Part::Lightning)["battery"], f(80.0));
 }
 
 #[test]
@@ -87,7 +92,8 @@ fn a_ws90_alone_rains_on_its_piezo() {
     assert_eq!(out["battery_voltage"], f(3.02));
     assert!(!out.contains_key("rain_total"), "the WS90 sends no total");
     assert_eq!(values(&form, Part::Indoor)["pressure"], f(992.1));
-    assert_eq!(report::unread(&form), ["vpd"]);
+    assert!(report::unread(&form).is_empty());
+    assert_eq!(values(&form, Part::Outdoor)["vpd"], f(45.8));
 }
 
 #[test]
@@ -96,10 +102,14 @@ fn empty_fields_and_a_lightning_sensor() {
     let out = values(&form, Part::Outdoor);
     assert_eq!(out["temperature"], f(23.3));
     assert_eq!(out["dew_point"], f(7.4));
+    assert!(report::unread(&form).is_empty());
+    let lightning = values(&form, Part::Lightning);
     assert_eq!(
-        report::unread(&form),
-        ["lightning", "lightning_num", "lightning_time", "wh57batt"]
+        lightning["lightning_distance"],
+        Value::Null,
+        "no strike yet: no distance, not zero kilometres"
     );
+    assert_eq!(lightning["battery"], f(100.0));
 }
 
 #[test]
@@ -117,6 +127,52 @@ fn extra_channels_and_unreadable_values() {
         "no measure, never a stale one"
     );
     assert_eq!(out["dew_point"], Value::Null);
+}
+
+#[test]
+fn every_sensor_ecowitt_sells_is_a_device_of_its_own() {
+    let form = parse_form(
+        b"PASSKEY=A&co2in=612&tf_co2=68.0&humi_co2=45&co2=830&pm25_co2=4.2&co2_batt=6\
+          &soilmoisture3=41&soilbatt3=1.5&soilad3=120&tf_ch2=50.0&leak_ch1=1&leakbatt1=3\
+          &pm25_ch4=12.3&pm25_avg_24h_ch4=9.8&leafwetness_ch1=14&leaf_batt1=1.78\
+          &lightning=12&lightning_num=3&lightning_time=1707382800",
+    )
+    .unwrap();
+    assert_eq!(values(&form, Part::Indoor)["co2"], f(612.0));
+    let air = values(&form, Part::Air);
+    assert_eq!(air["temperature"], f(20.0));
+    assert_eq!(air["co2"], f(830.0));
+    assert_eq!(air["pm25"], f(4.2));
+    assert_eq!(air["battery"], f(100.0), "on mains");
+    let soil = values(&form, Part::Soil(3));
+    assert_eq!(soil["soil_moisture"], f(41.0));
+    assert_eq!(soil["battery_voltage"], f(1.5));
+    assert_eq!(values(&form, Part::Probe(2))["temperature"], f(10.0));
+    let leak = values(&form, Part::Leak(1));
+    assert_eq!(leak["leak"], Value::Bool(true));
+    assert_eq!(leak["battery"], f(60.0));
+    assert_eq!(values(&form, Part::Pm25(4))["pm25_24h"], f(9.8));
+    assert_eq!(values(&form, Part::Leaf(1))["leaf_wetness"], f(14.0));
+    let lightning = values(&form, Part::Lightning);
+    assert_eq!(lightning["lightning_distance"], f(12.0));
+    assert_eq!(lightning["lightning_count"], f(3.0));
+    assert_eq!(
+        lightning["lightning_last"],
+        Value::Text("2024-02-08T09:00:00Z".into())
+    );
+    // The probes' raw values stay aside, said once in the log.
+    assert_eq!(report::unread(&form), ["soilad3"]);
+    let mut station = Station::new(None);
+    let parts = station.learn(&readings(&form));
+    assert_eq!(parts.len(), 8);
+    for keys in station.declared.values() {
+        for k in keys {
+            assert!(spec(k).is_some(), "{k}");
+        }
+    }
+    assert_eq!(Part::Pm25(4).native(), "pm25_4");
+    assert_eq!(spec("lightning_last").unwrap().kind, Kind::Text);
+    assert_eq!(spec("leak").unwrap().kind, Kind::Binary);
 }
 
 #[test]
