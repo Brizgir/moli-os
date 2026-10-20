@@ -5,12 +5,23 @@
 - SQLite `data/history.db`, enregistrement **au changement** (le hub n'émet que les
   changements), 30 jours (`retention_days`), la dernière valeur de chaque point jamais
   purgée (une valeur stable a toujours une valeur « avant la fenêtre »).
+- **Statistiques long terme** (comme le recorder de HA) : chaque heure où un point numérique
+  (nombre ou booléen) a changé devient une ligne de la table `hourly`, **gardée à vie** :
+  moyenne **pondérée par le temps** (une valeur tenue 50 min pèse 50 fois plus qu'une valeur
+  tenue 1 min ; hors ligne ne compte pas), min et max (valeur tenue à l'ouverture comprise),
+  `last` (tenue à la fermeture : entre deux lignes, le point la garde). Compilées toutes les
+  15 min, un jour à la fois, pour les heures closes depuis 5 min ; au premier démarrage,
+  tout l'historique brut est rattrapé. La purge ne dépasse **jamais** ce qui est compilé, et
+  garde pour chaque point la dernière valeur d'avant la coupure. Pur et testé :
+  `src/hourly.rs`. Ordre de grandeur : une ligne par heure active et par point.
 - Lecture : `series(point, from, to, max_points)` → valeurs brutes, ou seaux (moyenne, min,
-  max, nombre) quand il y en a trop.
+  max, nombre) quand il y en a trop ; **une fenêtre qui remonte avant la purge** est servie
+  par les statistiques horaires (seaux d'heures entières, `hourly: true`), les heures pas
+  encore compilées par les valeurs brutes. Le panneau Historique va jusqu'à 30 jours et 1 an.
 - Surfaces : `/api/history` (courbes du dashboard), outil MCP `history` (statistiques +
   série compacte) et **`history_sql`** pour les agents : une seule requête `SELECT`, `ATTACH`,
-  `PRAGMA`, `BEGIN` interdits, 2 s et 200 lignes maximum, 64 Ko par valeur, sur la vue
-  `history(point, ts, kind, num, txt)`.
+  `PRAGMA`, `BEGIN` interdits, 2 s et 200 lignes maximum, 64 Ko par valeur, sur les vues
+  `history(point, ts, kind, num, txt)` et `history_hourly(point, hour, mean, min, max, last)`.
 - Utilisé par : les courbes, les passages du jour (caméras), « dernier passage » à la porte,
   Moli (questions sur le passé), le nœud d'automatisme… (les automatismes lisent l'état
   courant, pas l'historique).

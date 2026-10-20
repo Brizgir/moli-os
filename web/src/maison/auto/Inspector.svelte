@@ -126,8 +126,10 @@
       <Fields kind="days" value={node.days} onchange={(v) => set({ days: v })} />
     {:else if node.type === 'at_sun'}
       <div class="seg">
+        <button class:on={node.event === 'dawn'} onclick={() => set({ event: 'dawn' })}><Icon name="sunrise" size={16} />{t('automatismes.inspecteur.aube')}</button>
         <button class:on={node.event === 'rise'} onclick={() => set({ event: 'rise' })}><Icon name="sunrise" size={16} />{t('automatismes.inspecteur.lever')}</button>
         <button class:on={node.event === 'set'} onclick={() => set({ event: 'set' })}><Icon name="sunset" size={16} />{t('automatismes.inspecteur.coucher')}</button>
+        <button class:on={node.event === 'dusk'} onclick={() => set({ event: 'dusk' })}><Icon name="sunset" size={16} />{t('automatismes.inspecteur.crepuscule')}</button>
       </div>
       <span class="lbl">{t('automatismes.inspecteur.decalage')} <small>{t('automatismes.inspecteur.decalage_aide')}</small></span>
       <input type="number" value={node.offset_min ?? 0} onchange={(e) => set({ offset_min: Number(e.currentTarget.value) || 0 })} />

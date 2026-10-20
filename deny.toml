@@ -12,7 +12,7 @@ ignore = [
     # it in an error type and never calls it to verify anything. The MQTT over TLS link
     # (moli-bambu) hands rumqttc a rustls 0.23 config built by moli-net, whose verifier
     # checks the certificate pinned on first contact; that rustls uses rustls-webpki
-    # 0.103.15, already fixed. Moli loads no revocation list.
+    # 0.103.16, already fixed. Moli loads no revocation list.
     # To remove once rumqttc moves to rustls-webpki 0.103.
     { id = "RUSTSEC-2026-0049", reason = "revocation list (CRL) distribution point matching: rustls-webpki 0.102 never verifies (rumqttc)" },
     { id = "RUSTSEC-2026-0098", reason = "name constraints on URI names: rustls-webpki 0.102 never verifies (rumqttc)" },
