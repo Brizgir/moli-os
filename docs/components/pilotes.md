@@ -72,7 +72,7 @@ Le hub l'appelle quand une surface demande une image : rien n'est récupéré po
 ```toml
 [[driver]]
 id = "enceinte"         # non vide, sans ':' ni '/', unique ; réservés : core, assistant, automations
-kind = "sonos"          # z2m, hue, tuya, reolink, ring, sonos, philips, frigate, bambu, tapo, igd, helpers, profile
+kind = "sonos"          # z2m, hue, tuya, reolink, sonos, philips, frigate, bambu, tapo, igd, helpers, profile
 # enabled = false       # désactive l'instance sans la supprimer
 
 [driver.options]        # s'applique au [[driver]] qui précède ; clés inconnues refusées
@@ -220,44 +220,6 @@ host = "192.168.1.x"
 - **Identité** : UID de la caméra (stable même si elle change de canal) ; à défaut `ch<N>` (numéro de canal, moins stable).
 - **Pièges** : le certificat est épinglé par une poignée de main nue **avant** tout envoi d'identifiants ; c'est un **X.509 v1**, vérifié à la main par `moli-net`. Une seule session (jeton) est gardée même à travers les redémarrages du pilote : les stations limitent les sessions simultanées. Codes `-6`/`-7` : nouvelle connexion. Le jeton voyage dans l'URL : aucune erreur ne cite l'URL. Une caméra sur batterie peut mettre ~10 s à se réveiller (14 s accordées à l'image). Station injoignable : toutes les détections passent à `null` (jamais de « personne vue » périmée).
 - **Tests** : `src/lib.rs` (événements lus aux deux niveaux `md`/`visitor` et `ai`, erreurs par commande, jeton masqué au débogage) ; `crates/moli-net/src/legacy.rs` sur le certificat public réel du Home Hub (`integrations/reolink/fixtures/home-hub-cert.b64`).
-
-## `ring` : sonnettes, caméras et carillons Ring (`crates/moli-ring`)
-
-- **Couvre** : sonnettes (à soi ou partagées), caméras (Stick Up, Spotlight, Floodlight,
-  Indoor) et carillons d'un compte Ring. Les interphones (`other`) ne sont pas repris.
-- **Protocole** : **cloud** (Ring n'a pas d'API locale), TLS vérifié vers `oauth.ring.com` et
-  `api.ring.com`. Liste des appareils chaque minute (et 3 s après un ordre, pour le confirmer),
-  Wi-Fi toutes les 10 min, historique de chaque caméra en ligne toutes les `history_seconds`.
-- **Configuration** :
-
-```toml
-[[driver]]
-id = "ring"
-kind = "ring"
-# [driver.options]
-# history_seconds = 15   # délai maximal d'un coup de sonnette (10 à 3600)
-# siren_seconds = 30     # durée de la sirène (1 à 120)
-```
-
-- **Secrets** : `email`, `password` posés par l'humain ; Ring envoie alors un code, posé à son
-  tour (`code_2fa`) avant de redémarrer. Le pilote écrit `refresh_token` (que Ring fait tourner :
-  chaque nouveau est rangé) et `hardware_id` (l'appareil « moli-os/ring » vu par le compte), puis
-  **efface `password` et `code_2fa`**. Jeton refusé plus tard : `refresh_token` est effacé et le
-  pilote attend (`waiting`) qu'on repose le mot de passe, comme la réauthentification de HA.
-- **Points** : `doorbell` (sonnettes) et `motion` (caméras), vrais 30 s après un nouvel
-  événement de l'historique, puis faux (chaque événement est diffusé, même deux de suite) ;
-  `battery` (%, modèles sur pile, deux baies additionnées), `rssi` (dBm) ; en écriture
-  `motion_detection` (`config`), `light` (projecteur) et `siren` (`control` : un agent passe par
-  un humain). Images : Ring prend une photo fraîche s'il peut, sinon donne la dernière.
-- **Identité** : l'`id` de l'API (numérique, stable) ; jamais l'adresse MAC.
-- **Pièges** : un événement trouvé plus de 5 min après coup (panne, redémarrage) ne sonne pas ;
-  la première page d'historique n'est que le passé. Une caméra dont l'historique échoue
-  n'empêche pas les autres. Aucune erreur ne cite un jeton.
-- **Reste** : le temps réel par Firebase Cloud Messaging (ce que fait HA) ; ici, un coup de
-  sonnette arrive avec `history_seconds` de retard au plus.
-- **Tests** : `src/model.rs` (familles, batteries, capacités, historique, nouveauté) sur
-  `integrations/ring/fixtures/`, `src/api.rs` (réponses OAuth, code demandé, rotation du jeton,
-  formulaire), `src/lib.rs` (options bornées, points par appareil).
 
 ## `sonos` : enceintes Sonos (`crates/moli-sonos`)
 
@@ -517,7 +479,6 @@ ni pièce native). Il ne déplace jamais rien. Sans argument : plan à blanc ; `
 | `hue` | `moli-hue` | HTTPS CLIP v2 + SSE, local, épinglé | oui : lumières, pièces ; zones non | pont Philips Hue (CLIP v2) |
 | `tuya` | `moli-tuya` | TCP 6668 chiffré 3.3/3.4/3.5, UDP 6666/6667/7000 ; cloud en lecture | oui : DP booléens, entiers, enum (local seulement) | prises Tuya (local, écriture comprise) ; capteurs sur pile et passerelles (cloud) |
 | `reolink` | `moli-reolink` | HTTPS API locale, épinglé (X.509 v1) | non (+ images) | Reolink Home Hub (caméras, sonnette) |
-| `ring` | `moli-ring` | HTTPS cloud de Ring (OAuth, code à deux étapes) | projecteur, sirène (`control`), détection de mouvement (+ images) | pas encore |
 | `sonos` | `moli-sonos` | UPnP/SOAP HTTP 1400 ; annonces en WebSocket TLS 1443 | oui : lecture, volume, sourdine, annonces | Sonos Beam |
 | `philips` | `moli-philips` | JointSpace HTTPS 1926, digest, WoL ; Android TV Remote, Cast | oui : alimentation, volume, sourdine, Ambilight, touches, appli | Philips Google TV (lecture) |
 | `frigate` | `moli-frigate` | MQTT + HTTP interne 5000 | oui : détection, enregistrement, instantanés | Frigate |
