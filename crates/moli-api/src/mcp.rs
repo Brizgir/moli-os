@@ -69,8 +69,8 @@ struct DraftArgs {
     /// (restart|single|queued), "graph": { "nodes": [...], "edges": [...] } }`.
     /// Give an `id` to rework an existing one. Node `type`s: when_state
     /// (point, to, from, for_s), when_threshold (point, above, below, for_s),
-    /// at_time (at "HH:MM", days 1=Monday..7), at_sun (event rise|set,
-    /// offset_min, days), every (minutes), on_start, manual, if (rules, all →
+    /// at_time (at "HH:MM", days 1=Monday..7), at_sun (event
+    /// dawn|rise|set|dusk, offset_min, days), every (minutes), on_start, manual, if (rules, all →
     /// ports yes/no; rules: {kind: state, point, op eq|ne|gt|ge|lt|le, value}
     /// | {kind: time, after, before, days} | {kind: sun, is day|night}), set
     /// (point, value), toggle (point), wait (seconds), wait_for (rule,
@@ -476,7 +476,7 @@ impl MoliMcp {
     }
 
     #[tool(
-        description = "Run ONE read-only SQL query (SQLite) over the recorded history. View: history(point, ts ms, kind b/i/f/t/z, num, txt). Writes, ATTACH and PRAGMA are refused; 2 s and 200 rows max. Use it for questions the other tools cannot answer (counts, durations, comparisons)."
+        description = "Run ONE read-only SQL query (SQLite) over the recorded history. Views: history(point, ts ms, kind b/i/f/t/z, num, txt), the raw changes of the last retention_days; history_hourly(point, hour ms, mean weighted by time, min, max, last), kept for good, one row per hour in which a numeric point changed (in between it held last). Writes, ATTACH and PRAGMA are refused; 2 s and 200 rows max. Use it for questions the other tools cannot answer (counts, durations, comparisons)."
     )]
     async fn history_sql(
         &self,

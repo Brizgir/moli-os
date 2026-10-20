@@ -11,6 +11,7 @@ mod check;
 mod engine;
 mod model;
 mod run;
+pub mod sky;
 mod store;
 pub mod sun;
 

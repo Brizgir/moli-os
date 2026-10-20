@@ -2,11 +2,15 @@
 //!
 //! A recorder subscribes to the hub's bus (which only carries changes) and
 //! hands batches to a writer task, so the bus is always read promptly; the
-//! retention pass runs on its own. Reads come in two shapes: series for
+//! retention pass runs on its own. Before the raw changes go, each hour of
+//! a numeric point is kept for good as statistics (mean weighted by time,
+//! min, max: Home Assistant's long-term statistics), so a year-long chart
+//! still has its curve. Reads come in two shapes: series for
 //! charts (raw, or bucketed when long) and — the agent-native part —
 //! read-only SQL over a simple view, so any agent can ask its own questions
 //! (« combien de fois la porte s'est ouverte cette semaine ? »).
 
+mod hourly;
 mod store;
 
 use std::path::PathBuf;
@@ -26,6 +30,8 @@ const BATCH_EVERY: Duration = Duration::from_secs(2);
 const BATCH_MAX: usize = 1_000;
 const WRITER_QUEUE: usize = 64;
 const RETENTION_EVERY: Duration = Duration::from_secs(6 * 3600);
+/// Closed hours are compiled into statistics this often.
+const COMPILE_EVERY: Duration = Duration::from_secs(15 * 60);
 
 type Row = (PointId, Value, u64);
 
@@ -190,12 +196,38 @@ async fn write_loop(store: Arc<Store>, mut queue: mpsc::Receiver<Batch>) {
 }
 
 async fn prune_loop(store: Arc<Store>, retention_days: u32, cancel: CancellationToken) {
-    let mut tick = tokio::time::interval(RETENTION_EVERY);
+    let mut tick = tokio::time::interval(COMPILE_EVERY);
+    let mut pruned: Option<tokio::time::Instant> = None;
     loop {
         tokio::select! {
             () = cancel.cancelled() => break,
             _ = tick.tick() => {}
         }
+        // The statistics first: pruning never goes past what they hold.
+        loop {
+            let store = Arc::clone(&store);
+            match blocking(move || store.compile(now_ms())).await {
+                Ok((rows, caught_up)) => {
+                    if rows > 0 {
+                        tracing::debug!(rows, "hourly statistics compiled");
+                    }
+                    if caught_up {
+                        break;
+                    }
+                }
+                Err(e) => {
+                    tracing::warn!(error = %e, "hourly statistics not compiled");
+                    break;
+                }
+            }
+            if cancel.is_cancelled() {
+                return;
+            }
+        }
+        if pruned.is_some_and(|at| at.elapsed() < RETENTION_EVERY) {
+            continue;
+        }
+        pruned = Some(tokio::time::Instant::now());
         let cutoff = now_ms().saturating_sub(u64::from(retention_days) * 86_400_000);
         let store = Arc::clone(&store);
         match blocking(move || store.prune(cutoff)).await {

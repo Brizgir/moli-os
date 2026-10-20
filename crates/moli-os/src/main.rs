@@ -882,8 +882,8 @@ const KINDS: &[&str] = &[
 
 /// Every enabled driver, running. The phones driver and the API share its
 /// gateway (pairing, reports): returned along.
-/// The devices Moli runs for the house itself: the light fixtures (D12)
-/// and the « Énergie » figures as points, for automations.
+/// The devices Moli runs for the house itself: the light fixtures (D12),
+/// the « Énergie » figures and the sun as points, for automations.
 fn spawn_house_drivers(
     config: &Config,
     hub: &Hub,
@@ -907,6 +907,14 @@ fn spawn_house_drivers(
             hub,
             InstanceId::from(moli_energy::points::INSTANCE),
             Arc::new(moli_energy::points::Points::new(energy.clone())),
+            cancel.clone(),
+        ));
+    }
+    if let Some(sky) = moli_automation::sky::Sky::new(&config.automations) {
+        tasks.push(spawn_driver(
+            hub,
+            InstanceId::from(moli_automation::sky::INSTANCE),
+            Arc::new(sky),
             cancel.clone(),
         ));
     }

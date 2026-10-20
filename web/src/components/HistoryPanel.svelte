@@ -9,6 +9,8 @@
     { label: 'systeme.historique.plage_6h', hours: 6 },
     { label: 'systeme.historique.plage_24h', hours: 24 },
     { label: 'systeme.historique.plage_7j', hours: 168 },
+    { label: 'systeme.historique.plage_30j', hours: 720 },
+    { label: 'systeme.historique.plage_1an', hours: 8760 },
   ];
   let hours = $state(24);
   let series = $state(null);
@@ -92,7 +94,7 @@
 
   const nf = $derived(new Intl.NumberFormat(locale(), { maximumFractionDigits: 1 }));
   const timeFmt = $derived(
-    new Intl.DateTimeFormat(locale(), hours > 24 ? { weekday: 'short', day: 'numeric' } : { hour: '2-digit', minute: '2-digit' }),
+    new Intl.DateTimeFormat(locale(), hours > 24 * 31 ? { day: 'numeric', month: 'short' } : hours > 24 ? { weekday: 'short', day: 'numeric' } : { hour: '2-digit', minute: '2-digit' }),
   );
   const xTicks = $derived(
     series ? Array.from({ length: 5 }, (_, i) => series.from + ((series.to - series.from) * i) / 4) : [],
@@ -147,7 +149,7 @@
       <path d={line} class="line" />
     </svg>
     <p class="meta num">
-      {t('systeme.historique.changements', { count: series.total })}{#if series.buckets.length} · {t('systeme.historique.moyenne')}{/if}
+      {t('systeme.historique.changements', { count: series.total })}{#if series.hourly} · {t('systeme.historique.horaire')}{:else if series.buckets.length} · {t('systeme.historique.moyenne')}{/if}
       {#if unitOf(spec ?? {})} · {unitOf(spec)}{/if}
     </p>
   {/if}

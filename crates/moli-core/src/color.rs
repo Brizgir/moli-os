@@ -33,6 +33,31 @@ pub fn xy_to_hex(x: f64, y: f64) -> Option<String> {
     Some(format!("#{red:02x}{green:02x}{blue:02x}"))
 }
 
+/// Hue (degrees) and saturation (%) → `#rrggbb`, at full brightness: what
+/// lamps that count in hue and saturation report (Home Assistant's
+/// `color_hs_to_RGB`). `None` for anything out of range.
+#[must_use]
+#[allow(clippy::many_single_char_names)]
+pub fn hs_to_hex(hue: f64, saturation: f64) -> Option<String> {
+    if !(hue.is_finite() && (0.0..=100.0).contains(&saturation)) {
+        return None;
+    }
+    let (h, s) = (hue.rem_euclid(360.0) / 60.0, saturation / 100.0);
+    let f = h.fract();
+    let (p, q, t) = (1.0 - s, 1.0 - s * f, 1.0 - s * (1.0 - f));
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    let [red, green, blue] = match h as u8 {
+        0 => [1.0, t, p],
+        1 => [q, 1.0, p],
+        2 => [p, 1.0, t],
+        3 => [p, q, 1.0],
+        4 => [t, p, 1.0],
+        _ => [1.0, p, q],
+    }
+    .map(byte);
+    Some(format!("#{red:02x}{green:02x}{blue:02x}"))
+}
+
 fn parse_hex(hex: &str) -> Option<[u8; 3]> {
     let digits = hex.strip_prefix('#')?;
     if digits.len() != 6 || !digits.chars().all(|c| c.is_ascii_hexdigit()) {
@@ -88,6 +113,18 @@ mod tests {
                 .unwrap();
             assert!(delta <= 3, "{hex} → ({x}, {y}) → {back}");
         }
+    }
+
+    #[test]
+    fn hue_and_saturation_become_colours() {
+        assert_eq!(hs_to_hex(0.0, 100.0).as_deref(), Some("#ff0000"));
+        assert_eq!(hs_to_hex(120.0, 100.0).as_deref(), Some("#00ff00"));
+        assert_eq!(hs_to_hex(240.0, 100.0).as_deref(), Some("#0000ff"));
+        assert_eq!(hs_to_hex(30.0, 100.0).as_deref(), Some("#ff8000"));
+        assert_eq!(hs_to_hex(360.0, 50.0).as_deref(), Some("#ff8080"));
+        assert_eq!(hs_to_hex(200.0, 0.0).as_deref(), Some("#ffffff"));
+        assert_eq!(hs_to_hex(0.0, 101.0), None);
+        assert_eq!(hs_to_hex(f64::NAN, 50.0), None);
     }
 
     #[test]
