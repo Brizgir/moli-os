@@ -1,5 +1,6 @@
 target
 data
+voix
 .git
 web/node_modules
 web/dist
@@ -7,3 +8,4 @@ docs
 tools
 agent
 mobile/
+fuzz

@@ -160,6 +160,11 @@ masqué raccroche.
 - Le journal `assistant turn` donne les outils appelés dans l'ordre (`tools=get_device,show`) :
   c'est là qu'on voit où un tour lent a passé son temps.
 - `GET /api/assistant` : `listen`, `speak`, `voices: { cloud, local }`.
+- **Voix sans le cloud** : `docker compose --profile voix-locale up -d` lance Piper
+  (port 10200, voix `fr_FR-siwis-medium`) et Whisper (port 10300, modèle `small-int8`) à côté
+  de Moli ; `local_speech` et `local_listen` les désignent, `speech_model = ""` et
+  `transcribe_model = ""` coupent le cloud. Les modèles vivent dans `voix/`, hors de `data/`
+  (pas dans les sauvegardes). Environ 1,5 Go de mémoire : une autre machine qu'un Pi Zero.
 
 | Panne | Comportement |
 |---|---|
