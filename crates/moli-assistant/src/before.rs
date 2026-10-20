@@ -62,7 +62,7 @@ Nœuds (champ `type`) et leurs champs utiles (les autres à null) :\n\
   - when_state : point, to (valeur atteinte, ou null pour tout changement), from (null en général), for_s (maintenu N secondes, 0 sinon)\n\
   - when_threshold : point (nombre), above et/ou below, for_s\n\
   - at_time : at « HH:MM », days ([] = tous les jours ; 1 = lundi … 7 = dimanche)\n\
-  - at_sun : event rise|set, offset_min (négatif = avant), days\n\
+  - at_sun : event dawn|rise|set|dusk (dawn, dusk = aube, crépuscule), offset_min (négatif = avant), days\n\
   - every : minutes\n\
   - on_start ; manual (lancée à la main)\n\
 - Logique : if : rules (liste), all (true = toutes, false = au moins une) → sorties yes / no\n\
