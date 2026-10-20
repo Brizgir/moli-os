@@ -192,6 +192,8 @@
   "systeme.pilotes.tuya.desc": "Tuya switches, plugs and shutters, 100% local (no cloud).",
   "systeme.pilotes.reolink.nom": "Reolink",
   "systeme.pilotes.reolink.desc": "Reolink doorbells and cameras: motion, people, images.",
+  "systeme.pilotes.ring.nom": "Ring",
+  "systeme.pilotes.ring.desc": "Ring doorbells, cameras and chimes, through Ring’s cloud: who rings, motion, images.",
   "systeme.pilotes.sonos.nom": "Sonos",
   "systeme.pilotes.sonos.desc": "Sonos speakers: playback, volume, track, and spoken announcements.",
   "systeme.pilotes.helpers.nom": "House helpers",
