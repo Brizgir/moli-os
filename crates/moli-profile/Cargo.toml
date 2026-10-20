@@ -32,3 +32,7 @@ tokio-util.workspace = true
 
 [lints]
 workspace = true
+
+# md-5 is imported as `md5`.
+[package.metadata.cargo-machete]
+ignored = ["md-5"]

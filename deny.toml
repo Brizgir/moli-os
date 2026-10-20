@@ -1,0 +1,59 @@
+# cargo deny: dependencies checked against the RustSec advisory database, their licenses,
+# and where they come from (.github/workflows/audit.yml, on every change and every week).
+# Run it: cargo deny check
+
+[graph]
+all-features = true
+
+[advisories]
+# An advisory is ignored only when it cannot reach Moli, and the reason is written here.
+ignore = [
+    # rustls-webpki 0.102.8 comes only with rumqttc 0.25.1 (latest release), which names
+    # it in an error type and never calls it to verify anything. The MQTT over TLS link
+    # (moli-bambu) hands rumqttc a rustls 0.23 config built by moli-net, whose verifier
+    # checks the certificate pinned on first contact; that rustls uses rustls-webpki
+    # 0.103.15, already fixed. Moli loads no revocation list.
+    # To remove once rumqttc moves to rustls-webpki 0.103.
+    { id = "RUSTSEC-2026-0049", reason = "revocation list (CRL) distribution point matching: rustls-webpki 0.102 never verifies (rumqttc)" },
+    { id = "RUSTSEC-2026-0098", reason = "name constraints on URI names: rustls-webpki 0.102 never verifies (rumqttc)" },
+    { id = "RUSTSEC-2026-0099", reason = "name constraints on wildcard names: rustls-webpki 0.102 never verifies (rumqttc)" },
+    { id = "RUSTSEC-2026-0104", reason = "panic while parsing a revocation list: Moli loads none" },
+    { id = "RUSTSEC-2026-0382", reason = "distrusted intermediates: rustls-webpki 0.102 never verifies (rumqttc); 0.103.16 used by Moli is fixed" },
+    # rustls-pemfile also comes only with rumqttc, for certificate files Moli never gives it
+    # (the TLS config is built by moli-net). Unmaintained, not vulnerable.
+    { id = "RUSTSEC-2025-0134", reason = "unmaintained: rumqttc only, never called by Moli" },
+]
+
+[licenses]
+# Moli is Apache-2.0: only permissive licenses, plus MPL-2.0 (file-level copyleft, the
+# Symphonia audio decoders, used unmodified).
+allow = [
+    "0BSD",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "BSL-1.0",
+    "CDLA-Permissive-2.0",
+    "ISC",
+    "MIT",
+    "MPL-2.0",
+    "Unicode-3.0",
+    "Unlicense",
+    "Zlib",
+]
+confidence-threshold = 0.9
+
+[licenses.private]
+ignore = true
+
+[bans]
+# Two versions of a crate cost size on a 512 MB board: shown, not blocking.
+multiple-versions = "warn"
+# The crates of this workspace depend on each other by path (no version): allowed.
+wildcards = "allow"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]

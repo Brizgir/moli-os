@@ -1,6 +1,6 @@
-# Dependencies against the RustSec advisory database. Separate from check.yml:
-# a new advisory can appear without any change here, so it also runs every week.
-# Ignored advisories, each with its reason: .cargo/audit.toml.
+# Dependencies: RustSec advisories, licenses, sources (cargo deny, configured in
+# deny.toml). Separate from check.yml: a new advisory can appear without any change
+# here, so it also runs every week.
 name: audit
 
 on:
@@ -15,11 +15,12 @@ permissions:
   contents: read
 
 jobs:
-  cargo-audit:
+  cargo-deny:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: taiki-e/install-action@v2
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
-          tool: cargo-audit
-      - run: cargo audit
+          persist-credentials: false
+      - uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2.1.1
+        with:
+          command: check advisories bans licenses sources

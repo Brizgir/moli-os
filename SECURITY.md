@@ -46,8 +46,9 @@ Moli runs a home: knowing its trust model helps you install it safely and find w
   and opens only a house that never had a code. Whoever reads the machine's logs can install
   it: finish the installation right after the first start.
 - **Dependencies** are checked against the RustSec advisory database on every change and every
-  week (`cargo audit`). An advisory is ignored only when it cannot reach Moli, with the reason
-  written in `.cargo/audit.toml`.
+  week (`cargo deny`: advisories, licenses, sources). An advisory is ignored only when it
+  cannot reach Moli, with the reason written in `deny.toml`. Dependabot proposes updates
+  each week, for releases at least 7 days old; the workflows pin their actions by commit.
 
 Out of scope: a compromised host machine, a malicious device on a network you declared trusted,
 physical access to the data folder together with its master key.

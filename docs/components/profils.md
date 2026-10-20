@@ -337,9 +337,10 @@ transport = "http"            # http | https | mqtt | upnp | tcp | native
 driver = "profile"            # profile | un kind natif (z2m, hue…)
 # crate = "moli-hue"          # pilote natif : obligatoire, moli-<kind>
 
-[discovery]                   # ce que le code fait réellement
-mdns = []                     # services, ex. "_hue._tcp"
-ssdp = []                     # cibles de recherche, ex. "upnp:rootdevice"
+[discovery]                   # ce que le code fait réellement (pilote et `moli-os discover`)
+mdns = []                     # services annoncés, ex. "_hue._tcp" (découverte)
+ssdp = []                     # cibles de recherche, ex. "upnp:rootdevice" ; une cible
+                              # précise (urn:…) sert aussi à la découverte
 ports = [80]                  # ports parlés sur le LAN (vide : API web)
 
 [needs]
