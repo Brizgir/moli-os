@@ -1,0 +1,42 @@
+# Fuzzing of the parsers that read what devices of the network send
+# (cargo-fuzz, libFuzzer; targets in fuzz/). Weekly: slow, and nothing
+# a pull request waits for.
+name: fuzz
+
+on:
+  schedule:
+    - cron: "43 3 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fuzz:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - upnp_announcement
+          - upnp_description
+          - lan_arp
+          - proto_fields
+          - tuya_frame
+          - tuya_broadcast
+          - mdns_answer
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@2c76c034f9e32a5d6e2c104dc4df23a22476db04 # nightly
+      - uses: taiki-e/install-action@8cca0918f8471c33515202b73f56ab27f2bed283 # v2.87.29
+        with:
+          tool: cargo-fuzz
+      # The binary embeds web/dist; the fuzz targets do not need it built.
+      - run: mkdir -p web/dist
+      - name: Fuzz ${{ matrix.target }} for 5 minutes
+        working-directory: fuzz
+        env:
+          TARGET: ${{ matrix.target }}
+        run: cargo +nightly fuzz run "$TARGET" -- -max_total_time=300

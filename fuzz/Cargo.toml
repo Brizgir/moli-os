@@ -1,0 +1,65 @@
+[package]
+name = "moli-os-fuzz"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+moli-net = { path = "../crates/moli-net" }
+moli-tuya = { path = "../crates/moli-tuya" }
+
+# Kept out of the main workspace: it builds with nightly and sanitizers.
+[workspace]
+
+[[bin]]
+name = "upnp_announcement"
+path = "fuzz_targets/upnp_announcement.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "upnp_description"
+path = "fuzz_targets/upnp_description.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "lan_arp"
+path = "fuzz_targets/lan_arp.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "proto_fields"
+path = "fuzz_targets/proto_fields.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "tuya_frame"
+path = "fuzz_targets/tuya_frame.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "tuya_broadcast"
+path = "fuzz_targets/tuya_broadcast.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "mdns_answer"
+path = "fuzz_targets/mdns_answer.rs"
+test = false
+doc = false
+bench = false
