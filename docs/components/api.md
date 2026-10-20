@@ -648,6 +648,9 @@ dashboard.
 
 Vue interrogeable : `history(point TEXT, ts INTEGER /* ms */, kind TEXT /* b i f t z */,
 num REAL /* booléen 0/1, entier, flottant */, txt TEXT)`.
+Statistiques long terme, gardées à vie : `history_hourly(point TEXT, hour INTEGER /* ms,
+début de l'heure */, mean REAL /* pondérée par le temps */, min REAL, max REAL, last REAL)`,
+une ligne par heure où un point numérique a changé (entre deux, il garde `last`).
 
 - Connexion SQLite dédiée, ouverte en **lecture seule** + `PRAGMA query_only`.
 - Une seule instruction ; elle doit être en lecture seule (`stmt.readonly()`), sinon
