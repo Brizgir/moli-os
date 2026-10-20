@@ -195,6 +195,8 @@
   "systeme.pilotes.tuya.desc": "Interrupteurs, prises et volets Tuya, 100 % en local (sans le cloud).",
   "systeme.pilotes.reolink.nom": "Reolink",
   "systeme.pilotes.reolink.desc": "Sonnettes et caméras Reolink : mouvements, personnes, images.",
+  "systeme.pilotes.ring.nom": "Ring",
+  "systeme.pilotes.ring.desc": "Sonnettes, caméras et carillons Ring, par le cloud de Ring : qui sonne, mouvements, images.",
   "systeme.pilotes.sonos.nom": "Sonos",
   "systeme.pilotes.sonos.desc": "Les enceintes Sonos : lecture, volume, titre, et les annonces à voix haute.",
   "systeme.pilotes.helpers.nom": "Aides de la maison",
