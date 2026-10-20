@@ -598,13 +598,27 @@ fn change_words(key: &str, spec: Option<&PointSpec>, to: Option<&Json>) -> Strin
 
 /// The sun trigger in words: "at sunrise", "10 min before sunset"…
 fn sun_words(event: SunEvent, offset_min: i32, days: &[u8]) -> String {
-    let what = tr!(if event == SunEvent::Rise {
-        "moteur.decrit.soleil_lever"
-    } else {
-        "moteur.decrit.soleil_coucher"
-    });
+    let (what, at) = match event {
+        SunEvent::Dawn => (
+            "moteur.decrit.soleil_aube",
+            "moteur.decrit.soleil_aube_pile",
+        ),
+        SunEvent::Rise => (
+            "moteur.decrit.soleil_lever",
+            "moteur.decrit.soleil_lever_pile",
+        ),
+        SunEvent::Set => (
+            "moteur.decrit.soleil_coucher",
+            "moteur.decrit.soleil_coucher_pile",
+        ),
+        SunEvent::Dusk => (
+            "moteur.decrit.soleil_crepuscule",
+            "moteur.decrit.soleil_crepuscule_pile",
+        ),
+    };
+    let what = tr!(what);
     let when = match offset_min {
-        0 => tr!("moteur.decrit.soleil_pile", evenement = what),
+        0 => tr!(at),
         m if m < 0 => tr!(
             "moteur.decrit.soleil_avant",
             duree = duration(u64::from(m.unsigned_abs()) * 60),

@@ -47,7 +47,7 @@ Une automatisation = un **graphe** de nœuds reliés (comme n8n), stocké dans
 | Déclencheurs | `when_state` | `point`, `to?`, `from?`, `for_s` (maintenu N s) |
 | | `when_threshold` | `point`, `above?`, `below?`, `for_s` (franchissement) |
 | | `at_time` | `at` « HH:MM », `days` (1 = lundi … 7) |
-| | `at_sun` | `event` rise/set, `offset_min`, `days` |
+| | `at_sun` | `event` dawn/rise/set/dusk (aube et crépuscule civils), `offset_min`, `days` |
 | | `every` | `minutes` |
 | | `on_start`, `manual` | — |
 | Logique | `if` | `rules[]` (état / plage horaire / jour-nuit), `all` (ET) ou OU |

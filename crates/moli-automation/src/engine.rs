@@ -287,8 +287,10 @@ fn sun_minute(
 ) -> Option<u32> {
     let (lat, lon) = (autos.0.config.latitude?, autos.0.config.longitude?);
     let what = match event {
+        SunEvent::Dawn => crate::sun::Event::Dawn,
         SunEvent::Rise => crate::sun::Event::Rise,
         SunEvent::Set => crate::sun::Event::Set,
+        SunEvent::Dusk => crate::sun::Event::Dusk,
     };
     let at = crate::sun::event(now.date(), lat, lon, &autos.0.tz, what)?;
     let local = at.to_zoned(autos.0.tz.clone());
