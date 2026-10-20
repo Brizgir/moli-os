@@ -547,6 +547,14 @@ pub(crate) async fn bench(Extension(BenchFile(path)): Extension<BenchFile>) -> R
 #[derive(Clone)]
 pub(crate) struct InfraFile(pub(crate) Option<std::path::PathBuf>);
 
+/// What the home network announces (moli-discover): never for a guest.
+pub(crate) async fn discover() -> Response {
+    match moli_discover::scan().await {
+        Ok(scan) => Json(scan).into_response(),
+        Err(e) => error(StatusCode::BAD_GATEWAY, &format!("discovery failed: {e}")),
+    }
+}
+
 pub(crate) async fn infra(Extension(InfraFile(path)): Extension<InfraFile>) -> Response {
     match read_bench(path.as_deref()).await {
         Some(infra) => Json(infra).into_response(),

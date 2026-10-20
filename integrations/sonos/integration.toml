@@ -9,9 +9,10 @@ driver = "sonos"
 crate = "moli-sonos"
 
 [discovery]
-# No SSDP search: the instance gives the player's address.
-mdns = []
-ssdp = []
+# Players announce `_sonos._tcp` and answer the ZonePlayer search: `moli-os
+# discover` finds them; the instance gives the player's address.
+mdns = ["_sonos._tcp"]
+ssdp = ["urn:schemas-upnp-org:device:ZonePlayer:1"]
 # UPnP/SOAP over HTTP; 1443: the local WebSocket API (TLS) for announcements.
 ports = [1400, 1443]
 

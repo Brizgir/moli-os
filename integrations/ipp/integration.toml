@@ -10,7 +10,8 @@ driver = "ipp"
 crate = "moli-ipp"
 
 [discovery]
-# They announce themselves as `_ipp._tcp`; the instance gives the address.
+# They announce themselves as `_ipp._tcp`: `moli-os discover` finds them; the
+# instance gives the address.
 mdns = ["_ipp._tcp"]
 ssdp = []
 ports = [631]

@@ -8,8 +8,9 @@ driver = "hue"
 crate = "moli-hue"
 
 [discovery]
-# No discovery: the instance gives the bridge's address.
-mdns = []
+# Bridges announce `_hue._tcp`: `moli-os discover` finds them; the instance gives
+# the bridge's address.
+mdns = ["_hue._tcp"]
 ssdp = []
 ports = [443]
 

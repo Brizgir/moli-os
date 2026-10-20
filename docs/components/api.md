@@ -283,6 +283,7 @@ Légende « Accès » : **libre** = aucune condition au-delà de la garde `Host`
 | GET | `/api/devices/{id}/snapshot` | libre ; **humain** si la caméra est dans une pièce protégée | aucune | image brute, `content-type` de la caméra, `cache-control: no-store` | `403` pièce protégée ; `404` appareil inconnu / pas une caméra ; `502` pas d'image en 20 s ou échec |
 | GET | `/api/home` | libre | aucune | contenu de `data/home.json` (disposition du dashboard famille), `{}` si absent | `500` JSON invalide |
 | GET | `/api/system` | libre | aucune | `{version, stats, drivers, bricks, surfaces, perf, coverage}` (carte du système, § 2.3) | aucune |
+| GET | `/api/discover` | libre ; **jamais un invité** | aucune | `{age_s, found:[Found]}` : ce que le réseau de la maison annonce (mDNS, SSDP), avec le paquet du catalogue qui le pilote (`integration`) ou sa famille quand aucun ne le fait encore (`family` : Matter, HomeKit…). Adresses IPv4 privées seulement, chacune celle de l'appareil qui répond ; le réseau est interrogé au plus une fois par minute (3 s), les autres appelants reçoivent cette réponse (`age_s`). Aussi en ligne de commande : `moli-os discover` | `502` discovery failed |
 | GET | `/api/bench` | libre | aucune | `data/bench.json` tel quel (comparaison avec Home Assistant, écrite par un script côté hôte, hors de ce dépôt) | `404` no comparison available yet |
 
 **Commandes, étiquettes, approbations, journal**
@@ -621,7 +622,7 @@ exception : `camera_snapshot` renvoie un bloc image (base64 + type MIME).
 Brancher un client : `claude mcp add --transport http moli http://<hôte>:8790/mcp`
 (Claude Code), ou l'équivalent « serveur MCP HTTP » de tout autre agent.
 
-### 4.2 Les 14 outils
+### 4.2 Les 15 outils
 
 | Outil | Paramètres | Renvoie | Notes |
 |---|---|---|---|
@@ -635,6 +636,7 @@ Brancher un client : `claude mcp add --transport http moli http://<hôte>:8790/m
 | `history` | `point`, `hours?` (défaut 24, borné 1 min → 366 j) | `{point, from, to, changes, value_before_window, stats:{min, max, avg}\|null, first, last, series (≤ 60 points, brut ou seaux), truncated}` | moyenne pondérée (seaux pesés par leur nombre d'échantillons, valeur d'avant la fenêtre incluse) ; `history is disabled on this instance` |
 | `energy` | `step?` (`hour`/`day`/`month`), `count?` (défaut 24 / 30 / 12) | sans `step` : `Summary` ; avec : `Report` | jours et mois en heure locale ; `no energy meters are configured on this instance` |
 | `history_sql` | `sql` : **une** requête SQLite en lecture seule | `{columns, rows, truncated}` | voir 4.3 |
+| `discover_devices` | aucun | `{age_s, found:[{via:"mdns"\|"ssdp", service, integration\|null, family\|null, name, address, port\|null, txt}]}` | ce que le réseau annonce (§ 2.1, `/api/discover`) ; une suggestion : une personne confirme l'adresse avant toute configuration |
 | `list_automations` | aucun | `{automations:[{id, name, summary, enabled, approved, live, author}]}` | `live` = allumé **et** validé par une personne |
 | `get_automation` | `id` | `{automation, check, runs (5 dernières, étape par étape)}` | `unknown automation` |
 | `save_automation_draft` | `automation` : objet comme `get_automation` le renvoie (`name`, `mode`, `graph` ; `id` pour retravailler un existant ; `id` et `enabled` complétés par défaut) | `{id, status:"draft: a person must approve it in the dashboard", check}` | toujours un **brouillon** d'auteur `agent` ; modifier la logique d'un automatisme validé lui fait perdre sa validation ; ne peut pas allumer |

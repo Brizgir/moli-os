@@ -100,7 +100,7 @@ l'exige).
 
 ## Briques réseau partagées : `moli-net`
 
-`crates/moli-net/src/lib.rs`, `upnp.rs`, `legacy.rs`.
+`crates/moli-net/src/lib.rs`, `upnp.rs`, `mdns.rs`, `legacy.rs`.
 
 | Brique | Usage |
 |---|---|
@@ -111,6 +111,7 @@ l'exige).
 | `plain()` / `plain_with_headers()` | HTTP en clair, une connexion par requête (UPnP, API JSON locales), corps borné à 4 Mio |
 | `web(host, port, tls, req, limit, max_body)` + `WebUrl::parse` | une requête vers une API web, délai global et taille de réponse bornés ; `WebUrl` n'accepte que `http(s)://` et refuse `user@host`. Utilisé par l'assistant et les webhooks des automatismes. |
 | `upnp` | `discover` (SSDP `M-SEARCH` vers 239.255.255.250:1900), `fetch` (description), `soap` (action), `control_url`, lecture XML minimale par nom de balise |
+| `mdns` | `browse(types, attente)` : **une** question PTR (DNS-SD) au groupe mDNS depuis un port ordinaire, réponses en unicast (RFC 6762 § 6.7) : rien n'écoute sur 5353, rien ne reste ouvert. Un service n'est gardé que d'une adresse IPv4 privée, et seulement si son adresse (enregistrement A) est celle qui a répondu. Noms et TXT filtrés et bornés (64 caractères, 16 entrées) ; pointeurs de compression seulement vers l'arrière, 16 au plus. |
 
 En cas d'empreinte différente, l'erreur contient `PIN_MISMATCH` : les pilotes passent alors
 en `waiting` avec la commande `moli-os secrets forget <instance> cert` (ou `cert_sha256`).

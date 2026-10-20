@@ -67,6 +67,9 @@ enum Command {
         #[arg(long)]
         force: bool,
     },
+    /// What the home network announces (mDNS, SSDP), with the integration
+    /// that drives each thing, as JSON. Needs no configuration.
+    Discover,
     /// Exit 0 if the local instance answers `/api/health` (container
     /// healthcheck: the image has no curl).
     Health,
@@ -152,16 +155,16 @@ fn main() -> anyhow::Result<()> {
         .init();
 
     let cli = Cli::parse();
-    if let Some(Command::Health) = &cli.command {
-        return health();
-    }
     // Profile tools need no configuration (any agent can check a profile
     // anywhere), except approving one: that is for this installation.
-    if let Some(Command::Profile(command)) = &cli.command {
-        return profile_command(command, &cli.config);
-    }
-    if let Some(Command::Catalogue(CatalogueCommand::Check { dir })) = &cli.command {
-        return catalogue::run(dir, KINDS);
+    match &cli.command {
+        Some(Command::Health) => return health(),
+        Some(Command::Discover) => return discover(),
+        Some(Command::Profile(command)) => return profile_command(command, &cli.config),
+        Some(Command::Catalogue(CatalogueCommand::Check { dir })) => {
+            return catalogue::run(dir, KINDS);
+        }
+        _ => {}
     }
     // A new house starts without a configuration: `serve` writes a minimal
     // one; every other command needs the real thing.
@@ -172,7 +175,7 @@ fn main() -> anyhow::Result<()> {
         Config::load(&cli.config)?
     };
     match cli.command.unwrap_or(Command::Serve) {
-        Command::Profile(_) | Command::Catalogue(_) | Command::Health => {
+        Command::Profile(_) | Command::Catalogue(_) | Command::Health | Command::Discover => {
             unreachable!("handled above")
         }
         Command::Backup { dir } => backup::backup(&config.server.data_dir, &dir),
@@ -1091,6 +1094,15 @@ fn health() -> anyhow::Result<()> {
     if !status.is_success() {
         bail!("health: {status}");
     }
+    Ok(())
+}
+
+fn discover() -> anyhow::Result<()> {
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()?;
+    let found = runtime.block_on(moli_discover::ask(moli_discover::WAIT))?;
+    println!("{}", serde_json::to_string_pretty(&found)?);
     Ok(())
 }
 

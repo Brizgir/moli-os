@@ -1112,6 +1112,7 @@ dependencies = [
  "moli-assistant",
  "moli-automation",
  "moli-core",
+ "moli-discover",
  "moli-energy",
  "moli-history",
  "moli-host",
@@ -1225,7 +1226,18 @@ dependencies = [
  "serde_json",
  "tokio",
  "tokio-util",
- "tracing",
+]
+
+[[package]]
+name = "moli-discover"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "futures",
+ "moli-net",
+ "serde",
+ "tokio",
+ "toml",
 ]
 
 [[package]]
@@ -1293,7 +1305,6 @@ dependencies = [
  "tokio",
  "tokio-util",
  "toml",
- "tracing",
 ]
 
 [[package]]
@@ -1449,6 +1460,7 @@ dependencies = [
  "moli-bambu",
  "moli-core",
  "moli-demo",
+ "moli-discover",
  "moli-energy",
  "moli-esphome",
  "moli-frigate",
@@ -1529,7 +1541,6 @@ dependencies = [
  "moli-runtime",
  "serde",
  "tokio",
- "tracing",
 ]
 
 [[package]]

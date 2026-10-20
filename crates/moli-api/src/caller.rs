@@ -481,6 +481,7 @@ mod tests {
             "/api/energy/series",
             "/api/bench",
             "/api/system",
+            "/api/discover",
             "/api/automations",
             "/api/mobile/phones",
             "/mcp",

@@ -7,6 +7,7 @@
 
 pub mod lan;
 mod legacy;
+pub mod mdns;
 pub mod proto;
 pub mod upnp;
 pub mod wol;

@@ -10,8 +10,8 @@ driver = "esphome"
 crate = "moli-esphome"
 
 [discovery]
-# ESPHome devices announce `_esphomelib._tcp` over mDNS; the instance gives
-# the address for now.
+# ESPHome devices announce `_esphomelib._tcp` over mDNS: `moli-os discover`
+# finds them; the instance gives the address.
 mdns = ["_esphomelib._tcp"]
 ssdp = []
 ports = [6053]

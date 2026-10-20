@@ -374,6 +374,16 @@ impl MoliMcp {
     }
 
     #[tool(
+        description = "What the home network announces (mDNS, SSDP): address, port, name, TXT entries, and the catalogue integration that drives each thing (or its family when none does yet: Matter, HomeKit…). Read-only; the network is asked at most once a minute. A suggestion for onboarding: a person confirms the address before anything is configured."
+    )]
+    async fn discover_devices(&self) -> Result<CallToolResult, McpError> {
+        match moli_discover::scan().await {
+            Ok(scan) => ok(&serde_json::to_value(scan).unwrap_or_default()),
+            Err(e) => Ok(fail(&format!("discovery failed: {e}"))),
+        }
+    }
+
+    #[tool(
         description = "Automations of the house (graphs of triggers, conditions, actions): id, name, what it does in French, whether it is live (switched on AND approved by a person)."
     )]
     async fn list_automations(&self) -> Result<CallToolResult, McpError> {

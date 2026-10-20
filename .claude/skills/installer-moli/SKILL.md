@@ -35,7 +35,7 @@ Then, right away: **they keep a copy of `data/master.key` somewhere safe** (a pa
 
 ## 3. Bring the devices in, one integration at a time
 
-1. Ask what they have (brands, models, bridges: Zigbee dongle with Zigbee2MQTT, Hue bridge, Sonos, Tuya plugs, cameras…). The catalogue is `integrations/`: one folder per integration, each with `integration.toml` (what it covers, how it is found on the network) and `onboarding.md` (exactly what to ask and do).
+1. Look first: `docker exec moli-os /moli-os discover` (or the MCP tool `discover_devices`) lists what the network announces (Hue bridges, ESPHome, Sonos, printers, Moonraker; Matter, HomeKit, Cast are named but not driven yet) with the integration that drives each one. Then ask what they have (brands, models, bridges: Zigbee dongle with Zigbee2MQTT, Hue bridge, Sonos, Tuya plugs, cameras…); read each address back to them before using it. The catalogue is `integrations/`: one folder per integration, each with `integration.toml` (what it covers, how it is found on the network) and `onboarding.md` (exactly what to ask and do).
 2. For one integration: follow its `onboarding.md`, add its `[[driver]]` block to `data/moli.toml` (model: `moli.example.toml`), secrets through the pipe above, then `docker compose restart moli-os`.
 3. Check: `docker compose logs moli-os` (the driver starts or says what it waits for), the dashboard (devices appear in their rooms), `curl -s http://127.0.0.1:8790/api/health` (each driver's state).
 4. Only then the next one.
