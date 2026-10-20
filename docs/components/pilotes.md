@@ -228,7 +228,8 @@ host = "192.168.1.x"
 
 - **Couvre** : les sonnettes, caméras (`stickup_cams`) et carillons d'un compte Ring : événements,
   santé, la dernière image de chaque caméra à la demande, et le mode du lieu (« Modes » de
-  l'appli : `disarmed`, `home`, `away`), la seule chose que Moli écrit. Interface **non
+  l'appli : `disarmed`, `home`, `away`), que Moli écrit, comme le projecteur, la sirène et la
+  détection de mouvement d'une caméra. Interface **non
   officielle** (celle de l'appli Android), le seul chemin : un appareil Ring n'ouvre aucun port
   sur le réseau local.
 - **Connexion** (Système, carte Ring, `web/src/maison/ui/RingAccount.svelte`) : Ring n'offre
@@ -307,7 +308,17 @@ host = "192.168.1.x"
   chaque ordre ; l'ordre est en erreur si Ring ne montre pas le mode demandé. `readOnly` (alarme
   Ring) : lu, refus d'écrire. `disabled`/`unset` : l'appareil est indisponible, sans mode.
 - **Configuration** : `kind = "ring"`, options `poll` (10 s par défaut, 5 au moins ; 30 au moins
-  quand le push marche) et `push` (vrai par défaut ; faux pour un réseau qui bloque le port 5228).
+  quand le push marche), `push` (vrai par défaut ; faux pour un réseau qui bloque le port 5228) et
+  `siren_seconds` (30 s par défaut, 1 à 120).
+- **Commandes d'une caméra** (`lib.rs::switch_received`, repris du pilote écrit à part le 20 oct.
+  d'après HA et python-ring-doorbell) : `light` (`PUT …/doorbots/<id>/floodlight_light_on|off`),
+  `siren` (`PUT …/siren_on?duration=<siren_seconds>`, `…/siren_off` ; **`Semantic::Control`**,
+  un agent demande), `motion_detection` (`PATCH /devices/v1/devices/<id>/settings`,
+  `{"motion_settings": {"motion_detection_enabled": …}}`, `Semantic::Config`). Corps `null` sur
+  chaque PUT (Ring l'exige depuis octobre 2024). Capacités : listes de modèles de
+  python-ring-doorbell (projecteur, sirène), `settings.motion_detection_enabled` présent ;
+  batterie : deux baies additionnées, plafonnée à 100. Valeur montrée dès que Ring accepte, puis
+  confirmée par la lecture suivante de `ring_devices` (`led_status`, `siren_status`).
 - **Points** : sonnette `doorbell` (impulsion, vrai 10 s), `motion` (vrai 60 s après le dernier),
   `battery` (%), `wifi_signal` (dBm), `image_at` ; caméra : les mêmes sans `doorbell` ; carillon :
   `volume` (0 à 11), `wifi_signal` ; Surveillance Ring : `mode` (écrivable), `mode_since`. En
@@ -792,7 +803,7 @@ ni pièce native). Il ne déplace jamais rien. Sans argument : plan à blanc ; `
 | `hue` | `moli-hue` | HTTPS CLIP v2 + SSE, local, épinglé | oui : lumières, pièces ; zones non | pont Philips Hue (CLIP v2) |
 | `tuya` | `moli-tuya` | TCP 6668 chiffré 3.3/3.4/3.5, UDP 6666/6667/7000 ; cloud en lecture | oui : DP booléens, entiers, enum (local seulement) | prises Tuya (local, écriture comprise) ; capteurs sur pile et passerelles (cloud) |
 | `reolink` | `moli-reolink` | HTTPS API locale, épinglé (X.509 v1) | non (+ images) | Reolink Home Hub (caméras, sonnette) |
-| `ring` | `moli-ring` | HTTPS, API cloud de l'appli Ring (non officielle), notifications push (FCM) | non | en service (sonnette et caméras sur batterie, un seul lieu) ; images, modes et notifications push rejoués, à vérifier chez la personne |
+| `ring` | `moli-ring` | HTTPS, API cloud de l'appli Ring (non officielle), notifications push (FCM) | mode du lieu, projecteur, sirène (`control`), détection de mouvement | en service (sonnette et caméras sur batterie, un seul lieu) ; images, modes et notifications push rejoués, à vérifier chez la personne |
 | `sonos` | `moli-sonos` | UPnP/SOAP HTTP 1400 ; annonces en WebSocket TLS 1443 | oui : lecture, volume, sourdine, annonces | Sonos Beam |
 | `alexa` | `moli-alexa` | HTTPS, interface de l'appli Alexa (non officielle) | oui : lecture, volume, musique, phrases, annonces, commandes | Echo Dot, Spot, Show 5 et groupes (lecture partielle, en cours) |
 | `philips` | `moli-philips` | JointSpace HTTPS 1926, digest, WoL ; Android TV Remote, Cast | oui : alimentation, volume, sourdine, Ambilight, touches, appli | Philips Google TV (lecture) |

@@ -37,6 +37,7 @@ use std::time::Duration;
 use moli_core::{Access, Device, DeviceId, Kind, PointSpec, Semantic, Value};
 use moli_runtime::{BoxFuture, CommandRequest, Driver, DriverCtx, SecretKeeper};
 use serde::Deserialize;
+use serde_json::Value as Json;
 use tokio::sync::{Mutex, mpsc};
 use tokio::time::{Instant, MissedTickBehavior};
 
@@ -84,6 +85,10 @@ fn yes() -> bool {
     true
 }
 
+fn default_siren() -> u64 {
+    30
+}
+
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
@@ -95,11 +100,18 @@ pub struct Config {
     /// that blocks Google's push server (TCP 5228).
     #[serde(default = "yes")]
     pub push: bool,
+    /// How long a camera's siren sounds when switched on (1 to 120 s).
+    #[serde(default = "default_siren")]
+    pub siren_seconds: u64,
 }
 
 impl Config {
     fn poll(&self) -> Duration {
         Duration::from_secs(self.poll.max(5))
+    }
+
+    fn siren(&self) -> u64 {
+        self.siren_seconds.clamp(1, 120)
     }
 
     /// The poll's pace, with the push working or not.
@@ -552,7 +564,7 @@ async fn watch(
             },
             command = ctx.next_command() => {
                 let Some(command) = command else { return Ok(()) };
-                command_received(ctx, account, session, command).await?;
+                command_received(config, ctx, account, session, command).await?;
             }
             Some((id, at)) = taken.recv() => {
                 set_text(ctx, &id, "image_at", &model::rfc3339(at));
@@ -596,6 +608,7 @@ async fn watch(
 /// business (`Semantic::Control`): here, every order carries a person's
 /// intent.
 async fn command_received(
+    config: &Config,
     ctx: &DriverCtx,
     account: &DeviceId,
     session: &mut Session,
@@ -604,6 +617,10 @@ async fn command_received(
     if command.device.id == *account {
         command.reply(Err(moli_i18n::tr!("pilotes.ring.deja_connecte")));
         return Ok(());
+    }
+    if let Some(tracked) = session.tracked.get(&command.device.id) {
+        let id = tracked.device.id;
+        return switch_received(config, ctx, session, id, command).await;
     }
     let location = session
         .locations
@@ -671,6 +688,80 @@ async fn command_received(
     }
 }
 
+/// A camera's switch: its light, its siren, its motion detection. The new
+/// value shows at once; the device list read next confirms it.
+async fn switch_received(
+    config: &Config,
+    ctx: &DriverCtx,
+    session: &mut Session,
+    id: u64,
+    command: CommandRequest,
+) -> Result<(), Failure> {
+    let Value::Bool(on) = command.value else {
+        command.reply(Err(moli_i18n::tr!("pilotes.ring.lecture_seule")));
+        return Ok(());
+    };
+    let switch = if on { "on" } else { "off" };
+    let (path, body, setting) = match &*command.key {
+        "light" => (
+            format!("/clients_api/doorbots/{id}/floodlight_light_{switch}"),
+            Json::Null,
+            false,
+        ),
+        "siren" if on => (
+            format!(
+                "/clients_api/doorbots/{id}/siren_on?duration={}",
+                config.siren()
+            ),
+            Json::Null,
+            false,
+        ),
+        "siren" => (
+            format!("/clients_api/doorbots/{id}/siren_off"),
+            Json::Null,
+            false,
+        ),
+        "motion_detection" => (
+            format!("/devices/v1/devices/{id}/settings"),
+            serde_json::json!({ "motion_settings": { "motion_detection_enabled": on } }),
+            true,
+        ),
+        _ => {
+            command.reply(Err(moli_i18n::tr!("pilotes.ring.lecture_seule")));
+            return Ok(());
+        }
+    };
+    if command.abandoned() {
+        command.reply(Err("expired".into()));
+        return Ok(());
+    }
+    let mut client = session.client.lock().await;
+    let done = if setting {
+        client.patch(&*session.vault, &path, &body).await
+    } else {
+        // Ring wants a JSON body, `null` at least, on every PUT.
+        client.put(&*session.vault, &path, &body).await
+    };
+    drop(client);
+    match done {
+        Ok(_) => {
+            ctx.set_state(&command.device.id, &command.key, command.value.clone());
+            tracing::info!(key = %command.key, on, "ring switch set");
+            command.reply(Ok(()));
+            Ok(())
+        }
+        Err(Failure::Other(e)) => {
+            tracing::warn!(error = %format!("{e:#}"), key = %command.key, "ring switch refused");
+            command.reply(Err(moli_i18n::tr!("pilotes.ring.ordre_refuse")));
+            Ok(())
+        }
+        Err(e) => {
+            command.reply(Err(e.to_string()));
+            Err(e)
+        }
+    }
+}
+
 /// One location's mode; `None` when Ring will not say (no modes there).
 async fn read_mode(
     client: &Shared,
@@ -714,6 +805,20 @@ async fn read_modes(ctx: &DriverCtx, session: &mut Session) -> Result<(), Failur
         }
     }
     Ok(())
+}
+
+/// A camera's switches, as the device list says them.
+fn show_switches(ctx: &DriverCtx, id: &DeviceId, d: &RingDevice) {
+    let switches = [
+        ("light", d.light),
+        ("siren", d.siren),
+        ("motion_detection", d.motion_detection),
+    ];
+    for (key, on) in switches {
+        if let Some(on) = on {
+            ctx.set_state(id, key, Value::Bool(on));
+        }
+    }
 }
 
 /// The account's devices, shown in the house; each doorbell and camera
@@ -762,6 +867,7 @@ async fn discover(ctx: &DriverCtx, session: &mut Session) -> Result<(), Failure>
         if let Some(v) = d.volume {
             ctx.set_state(&id, "volume", Value::Float(v));
         }
+        show_switches(ctx, &id, d);
         let entry = session.tracked.entry(id).or_insert_with(|| Tracked {
             device: d.clone(),
             watch: Watch::new(session.since),
@@ -1278,6 +1384,92 @@ mod tests {
         assert_eq!(
             text(&hub, &format!("{watch}/mode_since")).as_deref(),
             Some("1970-01-01T00:00:07Z")
+        );
+
+        cancel.cancel();
+        let _ = std::fs::remove_file(&vault);
+    }
+
+    /// A floodlight camera of the account, its light on.
+    const FLOODLIGHT: &str = r#"{ "doorbots": [], "chimes": [], "stickup_cams": [{
+        "id": 10000003, "description": "Garage", "kind": "hp_cam_v1",
+        "location_id": "00000000-0000-4000-8000-000000000001",
+        "alerts": { "connection": "online" }, "battery_life": null,
+        "led_status": "on", "siren_status": { "seconds_remaining": 0 },
+        "settings": { "motion_detection_enabled": true } }] }"#;
+
+    #[tokio::test(start_paused = true)]
+    async fn a_camera_s_light_siren_and_motion_detection_are_switched() {
+        let net = replay();
+        net.always("/clients_api/ring_devices", 200, FLOODLIGHT);
+        net.always("/clients_api/doorbots/10000003/health", 200, HEALTH);
+        let (hub, _instance, cancel, vault) = start("switches", Arc::clone(&net)).await;
+        let cam = "ring:10000003";
+        let point = |key: &str| moli_core::PointId::from(format!("{cam}/{key}"));
+        assert_eq!(flag(&hub, &format!("{cam}/light")), Some(true));
+        assert_eq!(flag(&hub, &format!("{cam}/siren")), Some(false));
+        assert_eq!(flag(&hub, &format!("{cam}/motion_detection")), Some(true));
+        let sent = |net: &Replay, method: &str, start: &str| {
+            net.calls()
+                .iter()
+                .position(|(m, p)| m == method && p.starts_with(start))
+        };
+
+        // A siren asked by an agent waits for a person: nothing goes to Ring.
+        let held = hub
+            .command(&point("siren"), Value::Bool(true), Origin::Assistant, None)
+            .await;
+        assert!(
+            matches!(held, Err(CommandError::NeedsApproval { .. })),
+            "{held:?}"
+        );
+        assert!(sent(&net, "PUT", "/clients_api/doorbots/10000003/siren").is_none());
+
+        net.push(
+            "PUT /clients_api/doorbots/10000003/floodlight_light_off",
+            200,
+            b"",
+        );
+        hub.command(&point("light"), Value::Bool(false), Origin::Ui, None)
+            .await
+            .unwrap();
+        let at = sent(
+            &net,
+            "PUT",
+            "/clients_api/doorbots/10000003/floodlight_light_off",
+        )
+        .expect("the light order went to Ring");
+        assert_eq!(net.asked(at).2, serde_json::Value::Null, "a null body");
+        settle().await;
+        assert_eq!(
+            flag(&hub, &format!("{cam}/light")),
+            Some(false),
+            "shown at once"
+        );
+
+        net.push("PUT /clients_api/doorbots/10000003/siren_on", 200, b"");
+        hub.command(&point("siren"), Value::Bool(true), Origin::Ui, None)
+            .await
+            .unwrap();
+        let at = sent(&net, "PUT", "/clients_api/doorbots/10000003/siren_on").unwrap();
+        assert_eq!(
+            net.asked(at).0,
+            "/clients_api/doorbots/10000003/siren_on?duration=30"
+        );
+
+        net.push("PATCH /devices/v1/devices/10000003/settings", 200, b"");
+        hub.command(
+            &point("motion_detection"),
+            Value::Bool(false),
+            Origin::Ui,
+            None,
+        )
+        .await
+        .unwrap();
+        let at = sent(&net, "PATCH", "/devices/v1/devices/10000003/settings").unwrap();
+        assert_eq!(
+            net.asked(at).2,
+            serde_json::json!({ "motion_settings": { "motion_detection_enabled": false } })
         );
 
         cancel.cancel();

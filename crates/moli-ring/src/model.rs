@@ -36,6 +36,12 @@ pub(crate) struct RingDevice {
     pub battery: Option<f64>,
     /// A chime's volume, 0 to 11.
     pub volume: Option<f64>,
+    /// The floodlight or spotlight is on (`None`: the camera has none).
+    pub light: Option<bool>,
+    /// The siren sounds (`None`: the camera has none).
+    pub siren: Option<bool>,
+    /// Motion detection is on (`None`: Ring does not say).
+    pub motion_detection: Option<bool>,
 }
 
 impl RingDevice {
@@ -130,6 +136,61 @@ pub(crate) fn rfc3339(ms: i64) -> String {
         .unwrap_or_default()
 }
 
+/// Cameras with a floodlight or a spotlight (python-ring-doorbell's lists).
+const LIGHT_CAMS: &[&str] = &[
+    "hp_cam_v1",
+    "floodlight_v2",
+    "floodlight_pro",
+    "cocoa_floodlight",
+    "stickup_cam_v4",
+    "hp_cam_v2",
+    "spotlightw_v2",
+    "cocoa_spotlight",
+    "stickup_cam_longfin",
+];
+
+/// Cameras with a siren.
+const SIREN_CAMS: &[&str] = &[
+    "hp_cam_v1",
+    "floodlight_v2",
+    "floodlight_pro",
+    "cocoa_floodlight",
+    "stickup_cam_mini",
+    "stickup_cam_mini_v2",
+    "stickup_cam_mini_ptz_v1",
+    "stickup_cam_v4",
+    "hp_cam_v2",
+    "spotlightw_v2",
+    "cocoa_spotlight",
+    "stickup_cam_longfin",
+    "stickup_cam_lunar",
+    "stickup_cam_elite",
+    "stickup_cam_wired",
+    "cocoa_camera",
+];
+
+/// A camera's switches: its light and its siren, when it has them.
+fn switches(d: &Json, family: Family) -> (Option<bool>, Option<bool>) {
+    let kind = d["kind"].as_str().unwrap_or_default();
+    if family != Family::Camera {
+        return (None, None);
+    }
+    let light = (LIGHT_CAMS.contains(&kind) || d["ring_cam_light_installed"] == "true")
+        .then(|| d["led_status"] == "on");
+    let siren = SIREN_CAMS
+        .contains(&kind)
+        .then(|| d["siren_status"]["seconds_remaining"].as_i64().unwrap_or(0) > 0);
+    (light, siren)
+}
+
+/// A device's battery: two bays add up (Spotlight, Stick Up), never past 100.
+fn battery(d: &Json) -> Option<f64> {
+    match (percent(&d["battery_life"]), percent(&d["battery_life_2"])) {
+        (None, None) => None,
+        (a, b) => Some((a.unwrap_or(0.0) + b.unwrap_or(0.0)).min(100.0)),
+    }
+}
+
 /// `"87"`, `87`, `null`: a battery level, when there is one.
 fn percent(v: &Json) -> Option<f64> {
     let n = match v {
@@ -160,6 +221,7 @@ pub(crate) fn devices(answer: &Json) -> Vec<RingDevice> {
         })
         .filter_map(|(d, family)| {
             let id = d["id"].as_u64()?;
+            let (light, siren) = switches(d, family);
             seen.insert(id).then(|| RingDevice {
                 id,
                 family,
@@ -170,8 +232,13 @@ pub(crate) fn devices(answer: &Json) -> Vec<RingDevice> {
                 model: d["kind"].as_str().unwrap_or_default().to_owned(),
                 location: d["location_id"].as_str().unwrap_or_default().to_owned(),
                 online: d["alerts"]["connection"].as_str() != Some("offline"),
-                battery: percent(&d["battery_life"]),
+                battery: battery(d),
                 volume: d["settings"]["volume"].as_f64(),
+                light,
+                siren,
+                motion_detection: (family != Family::Chime)
+                    .then(|| d["settings"]["motion_detection_enabled"].as_bool())
+                    .flatten(),
             })
         })
         .collect()
@@ -370,7 +437,18 @@ fn numeric(min: f64, max: f64) -> Kind {
     }
 }
 
-/// How a Ring device shows in the house (read only).
+/// A switch Moli can turn (light, siren, motion detection).
+fn switch(key: &str, label: &str, semantic: Semantic) -> PointSpec {
+    PointSpec {
+        access: Access {
+            read: true,
+            write: true,
+        },
+        ..point(key, label, Kind::Binary, None, semantic)
+    }
+}
+
+/// How a Ring device shows in the house: read, but for a camera's switches.
 pub(crate) fn device(ctx: &DriverCtx, id: &DeviceId, d: &RingDevice) -> Device {
     let signal = point(
         "wifi_signal",
@@ -401,7 +479,7 @@ pub(crate) fn device(ctx: &DriverCtx, id: &DeviceId, d: &RingDevice) -> Device {
         None,
         Semantic::Other,
     );
-    let points = match d.family {
+    let mut points = match d.family {
         Family::Doorbell => vec![
             point(
                 "doorbell",
@@ -427,6 +505,28 @@ pub(crate) fn device(ctx: &DriverCtx, id: &DeviceId, d: &RingDevice) -> Device {
             signal,
         ],
     };
+    if d.motion_detection.is_some() {
+        points.push(switch(
+            "motion_detection",
+            &moli_i18n::tr!("pilotes.ring.detection"),
+            Semantic::Config,
+        ));
+    }
+    if d.light.is_some() {
+        points.push(switch(
+            "light",
+            &moli_i18n::tr!("pilotes.ring.lumiere"),
+            Semantic::OnOff,
+        ));
+    }
+    if d.siren.is_some() {
+        // An agent sounding a siren: a person approves first.
+        points.push(switch(
+            "siren",
+            &moli_i18n::tr!("pilotes.ring.sirene"),
+            Semantic::Control,
+        ));
+    }
     Device {
         id: id.clone(),
         instance: ctx.instance().clone(),
@@ -692,5 +792,41 @@ mod tests {
         // Seen for the first time but long after (Ring was out of reach).
         let late = [event("4", Happened::Press, now), next[0].clone()];
         assert!(watch.news(&late, now + 200_000).is_empty());
+    }
+
+    #[test]
+    fn a_camera_s_light_siren_and_bays() {
+        let all = devices(&serde_json::json!({
+            "stickup_cams": [
+                { "id": 3, "kind": "hp_cam_v1", "battery_life": null, "led_status": "on",
+                  "siren_status": { "seconds_remaining": 12 },
+                  "settings": { "motion_detection_enabled": false } },
+                { "id": 4, "kind": "stickup_cam_v4", "battery_life": 40, "battery_life_2": "75",
+                  "led_status": "off", "siren_status": { "seconds_remaining": 0 } },
+                { "id": 5, "kind": "stickup_cam_mini_v2" }
+            ],
+            "doorbots": [
+                { "id": 6, "kind": "lpd_v1", "battery_life": 4081,
+                  "settings": { "motion_detection_enabled": true } }
+            ]
+        }));
+        let flood = &all[1];
+        assert_eq!((flood.light, flood.siren), (Some(true), Some(true)));
+        assert_eq!(flood.motion_detection, Some(false));
+        assert_eq!(flood.battery, None);
+        let spot = &all[2];
+        assert_eq!((spot.light, spot.siren), (Some(false), Some(false)));
+        assert_eq!(spot.battery, Some(100.0), "two bays, capped");
+        assert_eq!(spot.motion_detection, None);
+        let indoor = &all[3];
+        assert_eq!((indoor.light, indoor.siren), (None, Some(false)));
+        let bell = &all[0];
+        assert_eq!(
+            (bell.light, bell.siren),
+            (None, None),
+            "a doorbell has neither"
+        );
+        assert_eq!(bell.battery, None, "a wired doorbell's 4081 is no battery");
+        assert_eq!(bell.motion_detection, Some(true));
     }
 }
