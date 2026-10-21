@@ -79,7 +79,9 @@ pub fn start(
                     let _ = tokio::task::spawn_blocking(move || prune_old(&root, days, now_ms())).await;
                 }
                 event = events.recv() => match event {
-                    Ok(Event::State { point, value, ts }) => {
+                    Ok(Event::State {
+                        point, value, ts, ..
+                    }) => {
                         let Some((device, key)) = point.split() else { continue };
                         if !KEYS.contains(&key) {
                             continue;

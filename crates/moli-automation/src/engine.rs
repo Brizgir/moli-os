@@ -33,7 +33,9 @@ pub(crate) async fn run(autos: Automations) {
         tokio::select! {
             () = cancel.cancelled() => break,
             event = events.recv() => match event {
-                Ok(Event::State { point, value, .. }) => on_state(&autos, &point, &value),
+                Ok(Event::State {
+                    point, value, pulse, ..
+                }) => on_state(&autos, &point, &value, pulse),
                 Ok(_) => {}
                 Err(RecvError::Lagged(missed)) => {
                     tracing::warn!(missed, "automations lagged behind the hub: some changes were not seen");
@@ -102,10 +104,13 @@ fn remember_all(autos: &Automations) {
     }
 }
 
-fn on_state(autos: &Automations, point: &PointId, value: &Value) {
+fn on_state(autos: &Automations, point: &PointId, value: &Value, pulse: bool) {
     let key = point.to_string();
     let prev = lock(&autos.0.last).insert(key.clone(), value.clone());
-    if prev.as_ref() == Some(value) {
+    // The same value again is no change, unless it is a new occurrence (a
+    // second press, a camera seeing motion again while still « motion »).
+    let again = prev.as_ref() == Some(value);
+    if again && !pulse {
         return;
     }
     for a in live(autos).iter() {
@@ -117,6 +122,11 @@ fn on_state(autos: &Automations, point: &PointId, value: &Value) {
                     from,
                     for_s,
                 } if *p == key => {
+                    // A repeated occurrence fires an instant trigger; one
+                    // held « for » a while keeps its running wait.
+                    if again && *for_s > 0 {
+                        continue;
+                    }
                     let to_ok = to.as_ref().is_none_or(|to| same(value, to));
                     let from_ok = from
                         .as_ref()
