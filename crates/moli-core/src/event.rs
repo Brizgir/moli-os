@@ -19,6 +19,10 @@ pub enum Event {
         point: PointId,
         value: Value,
         ts: u64,
+        /// An occurrence (a press, a motion a camera saw): the same value
+        /// twice is two events, and an automation on it fires each time.
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        pulse: bool,
     },
     Availability {
         device: DeviceId,

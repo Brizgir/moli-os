@@ -50,6 +50,23 @@ impl Driver for Fake {
                 });
                 ctx.set_state(&id, "on", Value::Bool(false));
             }
+            // A camera's motion: an occurrence, told again while still on.
+            let sensor = ctx.device_id("sensor");
+            ctx.upsert_device(Device {
+                id: sensor.clone(),
+                instance: ctx.instance().clone(),
+                native_name: "sensor".into(),
+                manufacturer: None,
+                model: None,
+                description: None,
+                native_room: None,
+                members: Vec::new(),
+                points: vec![PointSpec {
+                    semantic: Semantic::Occupancy,
+                    ..onoff("motion")
+                }],
+            });
+            ctx.set_state(&sensor, "motion", Value::Bool(false));
             // A speaker that can announce (write-only words).
             ctx.upsert_device(Device {
                 id: ctx.device_id("speaker"),
@@ -74,7 +91,11 @@ impl Driver for Fake {
             });
             ctx.ready();
             while let Some(cmd) = ctx.next_command().await {
-                ctx.set_state(&cmd.device.id, &cmd.key, cmd.value.clone());
+                if &*cmd.key == "motion" {
+                    ctx.pulse_state(&cmd.device.id, &cmd.key, cmd.value.clone());
+                } else {
+                    ctx.set_state(&cmd.device.id, &cmd.key, cmd.value.clone());
+                }
                 cmd.reply(Ok(()));
             }
             Ok(())
@@ -392,6 +413,54 @@ async fn a_dry_run_reads_but_never_acts() {
     assert!(run.dry);
     assert_eq!(run.steps.len(), 1);
     assert!(!lamp_turns(&hub, true).await);
+}
+
+async fn motion_seen(hub: &Hub) {
+    hub.command(
+        &PointId::from("fake:sensor/motion"),
+        Value::Bool(true),
+        Origin::Api,
+        None,
+    )
+    .await
+    .unwrap();
+}
+
+#[tokio::test]
+async fn a_motion_seen_again_while_still_on_fires_again() {
+    let (hub, autos, _c) = setup().await;
+    let a = approved(
+        &autos,
+        serde_json::json!({
+            "nodes": [
+                { "id": "t", "type": "when_state", "point": "fake:sensor/motion", "to": true },
+                { "id": "s", "type": "set", "point": "fake:lamp/on", "value": true }
+            ],
+            "edges": [{ "from": "t", "to": "s" }]
+        }),
+    )
+    .await;
+
+    motion_seen(&hub).await;
+    assert!(
+        lamp_turns(&hub, true).await,
+        "the first motion lights the lamp"
+    );
+    hub.command(
+        &PointId::from("fake:lamp/on"),
+        Value::Bool(false),
+        Origin::Api,
+        None,
+    )
+    .await
+    .unwrap();
+    assert!(lamp_turns(&hub, false).await);
+
+    // Still « motion », a new one seen: the automation runs again.
+    motion_seen(&hub).await;
+    assert!(lamp_turns(&hub, true).await, "a new motion lights it again");
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    assert_eq!(autos.runs(Some(&a.id), 10).len(), 2);
 }
 
 #[tokio::test]

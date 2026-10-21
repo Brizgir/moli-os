@@ -44,7 +44,7 @@ Une automatisation = un **graphe** de nœuds reliés (comme n8n), stocké dans
 
 | Famille | Nœud (`type`) | Paramètres |
 |---|---|---|
-| Déclencheurs | `when_state` | `point`, `to?`, `from?`, `for_s` (maintenu N s) |
+| Déclencheurs | `when_state` | `point`, `to?`, `from?`, `for_s` (maintenu N s) ; un point d'occurrence (appui, mouvement d'une caméra : `pulse` sur le bus) redéclenche à chaque événement, même déjà vrai (sauf avec `for_s`) |
 | | `when_threshold` | `point`, `above?`, `below?`, `for_s` (franchissement) |
 | | `at_time` | `at` « HH:MM », `days` (1 = lundi … 7) |
 | | `at_sun` | `event` rise/set, `offset_min`, `days` |

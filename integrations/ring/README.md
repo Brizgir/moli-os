@@ -41,6 +41,7 @@ kind = "ring"
 # poll = 10   # secondes entre deux lectures des derniers événements (5 au moins ;
 #             # 30 au moins tant que les alertes instantanées marchent)
 # push = true # alertes instantanées (notifications de Ring) ; false si le réseau bloque le port 5228
+# siren_seconds = 30  # durée de la sirène d'une caméra (1 à 120 s)
 ```
 
 ## Ce que Moli voit
@@ -53,6 +54,9 @@ kind = "ring"
 | sonnette, caméra | `image_at` | quand l'image montrée a été prise (Ring peut redonner une ancienne) |
 | tous | `wifi_signal` | dBm |
 | carillon | `volume` | 0 à 11, en lecture |
+| sonnette, caméra | `motion_detection` | détection de mouvement ; **écrivable** |
+| caméra à projecteur | `light` | projecteur (Floodlight, Spotlight) ; **écrivable** |
+| caméra à sirène | `siren` | sirène, `siren_seconds` ; **écrivable par une personne** (un agent demande) |
 | Surveillance Ring (le lieu) | `mode` | `disarmed`, `home`, `away` ; **écrivable**, par une personne |
 | Surveillance Ring | `mode_since` | quand le mode a changé pour la dernière fois |
 
@@ -71,7 +75,10 @@ filet : toutes les 30 s tant que les alertes marchent, à son rythme normal (`po
 qu'elles tombent. Un même événement n'est jamais annoncé deux fois (reçu puis lu, ou l'inverse).
 
 Ring n'envoie que ce que l'appli est réglée pour notifier : si les alertes de mouvement d'un
-appareil sont coupées dans l'appli Ring, ses mouvements ne viennent que par le sondage.
+appareil sont coupées dans l'appli Ring, ses mouvements ne viennent que par le sondage. Dès
+que le sondage trouve un événement que le push n'a pas apporté, il reprend son propre rythme
+(`poll`, 10 s par défaut, 5 au moins) pendant un quart d'heure au lieu de 30 s : activer les
+alertes de mouvement de la caméra dans l'appli reste le plus rapide.
 
 ## Images
 
@@ -109,8 +116,10 @@ et `motion` retombent à faux.
   démarrage de Moli : jamais de « on sonne » périmé.
 - Les notifications push ont été écrites d'après ring-client-api (enregistrement Firebase, forme
   des messages) et rejouées sur des messages reconstitués : à vérifier chez la personne.
-- Hors le mode de surveillance, rien n'est commandé (volume du carillon, sirène, lumière : une
-  suite).
+- Commandés : le mode de surveillance, le projecteur, la sirène et la détection de mouvement
+  d'une caméra (repris du pilote Ring écrit à part le 20 octobre, fondu ici). La valeur s'affiche
+  dès que Ring accepte l'ordre ; la liste des appareils la confirme ensuite. Pas encore : le
+  volume du carillon et de la sonnette.
 - Pas de vidéo en direct : une image à la demande, pas plus d'une par minute sur batterie.
 - Un changement de mot de passe Ring, ou Moli retiré du Centre de contrôle, oblige à refaire
   un jeton.
