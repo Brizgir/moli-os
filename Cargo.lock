@@ -1525,6 +1525,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "moli-hisense"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "md-5",
+ "moli-core",
+ "moli-i18n",
+ "moli-net",
+ "moli-runtime",
+ "ring",
+ "rumqttc",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "moli-history"
 version = "0.1.0"
 dependencies = [
@@ -1717,6 +1735,7 @@ dependencies = [
  "moli-esphome",
  "moli-frigate",
  "moli-helpers",
+ "moli-hisense",
  "moli-history",
  "moli-host",
  "moli-hue",

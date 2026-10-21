@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- The TV's UPnP description (port 38400): only transport_protocol is read.
+     Names and identifiers are made up. -->
+<root xmlns="urn:schemas-upnp-org:device-1-0">
+  <specVersion><major>1</major><minor>0</minor></specVersion>
+  <device>
+    <deviceType>urn:schemas-upnp-org:device:MediaRenderer:1</deviceType>
+    <friendlyName>Hisense TV</friendlyName>
+    <manufacturer>Hisense</manufacturer>
+    <modelName>VIDAA TV</modelName>
+    <modelDescription>transport_protocol=3290</modelDescription>
+    <transport_protocol>3290</transport_protocol>
+    <UDN>uuid:00000000-0000-0000-0000-000000000001</UDN>
+  </device>
+</root>

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { roomTvs, hasRemote, chosen } from './tvs.js';
+import { roomTvs, hasRemote, chosen, codeShape, codeReady } from './tvs.js';
 
 const remote = { key: 'key', access: { read: false, write: true } };
 const tv = (id, room, name) => ({ id, native_name: name, native_room: room, points: [remote, { key: 'power', access: { read: true, write: true } }] });
@@ -45,4 +45,17 @@ test('the picked TV stays while it is there', () => {
   assert.equal(chosen(['a', 'b'], 'b'), 'b');
   assert.equal(chosen(['a', 'b'], 'c'), 'a');
   assert.equal(chosen([], 'c'), null);
+});
+
+test('the pairing code is as long as the TV says', () => {
+  const hisense = [{ key: 'pairing_code', kind: { type: 'numeric', min: 0, max: 9999, step: 1 } }];
+  const android = [{ key: 'pairing_code', kind: { type: 'text' } }];
+  assert.deepEqual(codeShape(hisense), { digits: 4 });
+  assert.deepEqual(codeShape(android), { hex: 6 });
+  assert.deepEqual(codeShape([]), { hex: 6 });
+  assert.equal(codeReady({ digits: 4 }, '0123'), true);
+  assert.equal(codeReady({ digits: 4 }, '123'), false);
+  assert.equal(codeReady({ digits: 4 }, 'A1B2'), false);
+  assert.equal(codeReady({ hex: 6 }, 'a1b2c3'), true);
+  assert.equal(codeReady({ hex: 6 }, '1234'), false);
 });

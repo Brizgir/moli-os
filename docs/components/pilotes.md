@@ -72,7 +72,7 @@ Le hub l'appelle quand une surface demande une image : rien n'est récupéré po
 ```toml
 [[driver]]
 id = "enceinte"         # non vide, sans ':' ni '/', unique ; réservés : core, assistant, automations
-kind = "sonos"          # z2m, hue, tuya, reolink, sonos, philips, androidtv, orange, frigate, bambu, tapo, igd, helpers, ecowitt, profile
+kind = "sonos"          # z2m, hue, tuya, reolink, sonos, philips, androidtv, hisense, orange, frigate, bambu, tapo, igd, helpers, ecowitt, profile
 # enabled = false       # désactive l'instance sans la supprimer
 
 [driver.options]        # s'applique au [[driver]] qui précède ; clés inconnues refusées
@@ -471,6 +471,31 @@ name = "Télé de la chambre" # facultatif
 - **Tests** : l'échange d'appairage rejoué octet par octet (`integrations/androidtv/fixtures/pairing.txt`, encodé indépendamment d'après `polo.proto`), un appairage complet contre une fausse télé en TLS (certificats RSA générés), le calcul du secret, les touches, le volume par appuis.
 - **À vérifier sur la vraie télé** : voir `integrations/androidtv/README.md`.
 
+## `hisense` : télé Hisense VIDAA (`crates/moli-hisense`)
+
+- **Couvre** : une télé Hisense sous VIDAA (pas Android TV : celles-là prennent `androidtv`), par le protocole de la télécommande de l'appli VIDAA, **MQTT sur TLS servi par la télé** (port **36669**) : marche/veille, volume absolu, sourdine, entrée, appli au premier plan et ouverture d'une appli, touches, ce qui est à l'écran. Rien dans le cloud.
+- **Protocole** (`protocol.rs`) : sujets `/remoteapp/tv/<service>/<client_id>/actions/<action>` en envoi, `/remoteapp/mobile/<client_id>/#` et `/remoteapp/mobile/broadcast/#` en réception (les sujets exacts aussi : certains firmwares refusent les jokers ; une double livraison est sans effet, chaque lecture est idempotente). Charges JSON, nombres parfois en chaînes, lus avec tolérance. Certificat de la télé épinglé au premier contact (`PinnedTls`, secret `pin`) ; certificat client de l'appli VIDAA présenté s'il est fourni (`PinnedTls::with_client_cert`, secrets `client_cert` / `client_key`, PEM) : exigé par les télés récentes, **jamais embarqué** (il est à Hisense ; `integrations/hisense/onboarding.md` dit où le prendre).
+- **Identifiants** (`credentials.rs`) : anciens firmwares `hisenseservice` / `multimqttservice` (`static`, le client id autorisé après le code) ; récents : `client_id`, `username`, `password` calculés d'une MAC cliente (Moli s'en invente une, locale, secret `client_mac`), de l'heure en secondes et de constantes (MD5 ; algorithme de l'appli relu par pyvidaa, vecteur vérifié rejoué en test sur une MAC fictive). Schéma selon `transport_protocol` lu dans `http://<télé>:38400/MediaServer/rendererdevicedesc.xml` (repli 18400) : ≥ 3290 `modern`, 3000 à 3285 `middle`, sinon `static` (puis `legacy`) ; un refus (CONNACK 4 ou 5) fait essayer le suivant ; option `auth` pour forcer.
+- **Configuration** :
+
+```toml
+[[driver]]
+id = "tele-salon"
+kind = "hisense"
+[driver.options]
+host = "192.168.1.x"
+mac = "aa:bb:cc:dd:ee:ff"   # facultatif : Wake-on-LAN depuis la veille profonde
+name = "Télé du salon"      # facultatif
+auth = "auto"               # facultatif : static, legacy, middle, modern
+```
+
+- **Appairage** : non appairé, le pilote attend (`wait_for`, la marche à suivre) et demande un code par lui-même (`vidaa_app_connect`, ou `gettvstate` sur l'ancien firmware, toutes les 30 s tant que la télé n'a rien montré) ; ensuite sur demande (`pairing` = `code`). La télé affiche **4 chiffres**, tapés dans le tableau de bord (`pairing_code`, sémantique `Secret`, numérique 0 à 9999 : la carte en déduit la longueur), envoyés `{"authNum": N}` ; `{"result":1}` ou `{"result":100,"info":"Wrong authNum!!"}`. Puis `gettoken` donne `accesstoken`, `refreshtoken` et leurs durées en jours (lues ; 2 et 30 par défaut si absentes). Le secret `session` (JSON) garde le schéma, le `client_id` et le `username` que la télé a liés aux jetons : les connexions suivantes les **gardent tels quels**, jeton d'accès en mot de passe, puis jeton de rafraîchissement et `gettoken` à l'approche du terme. Une session refusée (la télé l'a oubliée, veille profonde sur certains firmwares) est effacée et l'appairage redemandé. Anciens firmwares : pas de jetons, le code seul autorise le client id (la session garde le mot de passe pris).
+- **Points** : `power`, `volume` (0 à 100, `changevolume` ; broadcast `volumechange`, `volume_type` 0 = niveau, 2 = sourdine), `mute`, `source` (énumération de `sourcelist`, les noms affichés ; `changesource`), `app` (`applist` ; les paquets Android du Salon sont reconnus : `com.netflix.ninja` → Netflix ; `launchapp`), `screen` (`sourceswitch` : l'entrée, `livetv` : chaîne et programme, `app` : l'appli, sinon le `statetype`), `key` (38 touches, mêmes noms que les autres télés ; `Back` → `KEY_RETURNS`, `KEY_BACK` rembobine), `pairing` (`paired`, `code`, `needed`, `waiting`), `pairing_code`.
+- **Pièges** : `KEY_POWER` est une bascule : appuyée seulement si l'état connu diffère. `statetype` `fake_sleep_0` ou `poweroff` = éteinte, le courtier répond encore (`fake_sleep_1` = elle se rallume). Veille profonde = courtier injoignable = hors ligne, `power = false` ; `power = true` envoie un Wake-on-LAN sur `mac`, puis `KEY_POWER` si la télé revient en veille. `gettvstate` toutes les 30 s (certains firmwares ne disent que les changements).
+- **Identité** : l'adresse `host`, comme Philips et Android TV.
+- **Tests** : les messages documentés par ces projets rejoués depuis `integrations/hisense/fixtures/` (état `sourceswitch`, `livetv`, `app`, veille ; `sourcelist`, `applist`, `getvolume`, sourdine ; réponses au code ; `tokenissuance`), le vecteur d'identifiants des trois schémas, la description UPnP, la session (quel mot de passe, quand renouveler), les touches, la résolution des applis.
+- **Sources** (MIT, aucun code repris) : newAM/hisensetv, sehaas/ha_hisense_tv, stevene1919/hisense_vidaa, warrenrees/pyvidaa. **À vérifier sur la vraie télé** : `integrations/hisense/README.md`.
+
 ## `orange` : décodeur TV Orange (`crates/moli-orange`)
 
 - **Couvre** : la télécommande locale du décodeur (Sagem WHD95…) : marche/veille, ce qui est à l'écran, touches. HTTP en clair, port 8080, sans appairage (`/remoteControl/cmd?operation=10` : l'état ; `operation=01&key=<code>&mode=0` : une touche, codes d'entrée Linux). Marche = touche bascule, appuyée seulement si elle change quelque chose. Points `power`, `screen`, `key` (mêmes noms que les autres télés). Détails : `integrations/orange/README.md`.
@@ -813,6 +838,7 @@ ni pièce native). Il ne déplace jamais rien. Sans argument : plan à blanc ; `
 | `alexa` | `moli-alexa` | HTTPS, interface de l'appli Alexa (non officielle) | oui : lecture, volume, musique, phrases, annonces, commandes | Echo Dot, Spot, Show 5 et groupes (lecture partielle, en cours) |
 | `philips` | `moli-philips` | JointSpace HTTPS 1926, digest, WoL ; Android TV Remote, Cast | oui : alimentation, volume, sourdine, Ambilight, touches, appli | Philips Google TV (lecture) |
 | `androidtv` | `moli-androidtv` | Android TV Remote TLS 6466, appairage polo TLS 6467, Cast TLS 8009, WoL | oui : alimentation, volume (par appuis), sourdine, touches, appli, texte, lecture | pas encore (cible : TCL Google TV) |
+| `hisense` | `moli-hisense` | MQTT TLS 36669 (la télé), épinglé, certificat client ; UPnP 38400 ; WoL | oui : alimentation, volume, sourdine, source, appli, touches | pas encore (cible : Hisense VIDAA du salon) |
 | `orange` | `moli-orange` | HTTP local 8080 | oui : alimentation, touches | décodeur Sagem WHD95 (lecture) |
 | `frigate` | `moli-frigate` | MQTT + HTTP interne 5000 | oui : détection, enregistrement, instantanés | Frigate |
 | `bambu` | `moli-bambu` | MQTT TLS 8883, épinglé | lumière, `control` (humain pour un agent) | pas encore (cible : Bambu Lab A1) |

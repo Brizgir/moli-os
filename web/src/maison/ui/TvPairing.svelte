@@ -1,21 +1,24 @@
 <script>
-  import { act, value, nameOf, home } from '../lib/home.svelte.js';
+  import { act, value, nameOf, home, hub } from '../lib/home.svelte.js';
+  import { codeShape, codeReady } from '../lib/tvs.js';
   import { t } from '../../lib/i18n.svelte.js';
   import Icon from './Icon.svelte';
 
   /** Pairing a TV that shows a code (Android TV / Google TV: 6 characters,
-   *  0-9 and A-F). The TV's `pairing` point says where it is; writing it
-   *  `code` asks the TV for a code; the code typed goes to `pairing_code`, a
-   *  « secret » point: a person's, at the dashboard, never journaled nor
-   *  kept. Nothing shows once the TV is paired. `named`: the TV's name in
-   *  the title (several TVs on one page). */
+   *  0-9 and A-F; Hisense: 4 digits, the `pairing_code` point says which,
+   *  see `codeShape`). The TV's `pairing` point says where it is; writing
+   *  it `code` asks the TV for a code; the code typed goes to
+   *  `pairing_code`, a « secret » point: a person's, at the dashboard,
+   *  never journaled nor kept. Nothing shows once the TV is paired.
+   *  `named`: the TV's name in the title (several TVs on one page). */
   let { tv, named = false } = $props();
 
   const state = $derived(value(tv, 'pairing'));
+  const shape = $derived(codeShape(hub.devices[tv]?.points));
   let code = $state('');
   let busy = $state(false);
   let error = $state('');
-  const ready = $derived(/^[0-9a-f]{6}$/i.test(code.trim()));
+  const ready = $derived(codeReady(shape, code.trim()));
 
   function ask() {
     error = '';
@@ -29,7 +32,8 @@
       const res = await fetch('/api/command', {
         method: 'POST',
         headers: { 'content-type': 'application/json', 'x-moli-origin': 'ui' },
-        body: JSON.stringify({ point: `${tv}/pairing_code`, value: code.trim() }),
+        // A numeric point takes a number (its leading zeros are the TV's to drop too).
+        body: JSON.stringify({ point: `${tv}/pairing_code`, value: shape.digits ? Number(code.trim()) : code.trim() }),
       });
       if (res.status === 403) {
         // A person's code first; the same step goes again after it.
@@ -57,16 +61,16 @@
       <b>{named ? t('salon.appairage.titre_nom', { name: nameOf(tv) }) : t('salon.appairage.titre')}</b>
     </div>
     {#if state === 'code'}
-      <p class="muted">{t('salon.appairage.taper')}</p>
+      <p class="muted">{shape.digits ? t('salon.appairage.taper_chiffres', { n: shape.digits }) : t('salon.appairage.taper')}</p>
       <form onsubmit={(e) => (e.preventDefault(), ready && send())} autocomplete="off">
         <input
           bind:value={code}
-          maxlength="6"
-          inputmode="text"
+          maxlength={shape.digits ?? 6}
+          inputmode={shape.digits ? 'numeric' : 'text'}
           autocapitalize="characters"
           spellcheck="false"
           aria-label={t('salon.appairage.code')}
-          placeholder="A1B2C3" />
+          placeholder={shape.digits ? '1234' : 'A1B2C3'} />
         <button class="btn primary" disabled={busy || !ready}>{busy ? '…' : t('salon.appairage.appairer')}</button>
       </form>
       <button class="link" onclick={ask}>{t('salon.appairage.nouveau')}</button>

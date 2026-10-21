@@ -1,0 +1,6 @@
+[
+  {"appId":"1","name":"Netflix","url":"netflix","urlType":0,"isunInstalled":0,"storeType":0,"appIcon":""},
+  {"appId":"3","name":"YouTube","url":"youtube","urlType":0,"isunInstalled":0,"storeType":0,"appIcon":""},
+  {"appId":"2","name":"Prime Video","url":"amazon","urlType":0,"isunInstalled":0,"storeType":0,"appIcon":""},
+  {"appId":"295","name":"Disney+","url":"https://example.com/disney","urlType":1,"isunInstalled":0,"storeType":0,"appIcon":""}
+]
