@@ -60,6 +60,10 @@ const PUSH_POLL: Duration = Duration::from_secs(30);
 /// Events the poll told while the push said it was up, before the push
 /// registers again.
 const MISSED: u32 = 3;
+/// After the poll told an event the push did not bring (a camera whose
+/// alerts are off in the Ring app, a push gone quiet), the poll keeps its
+/// own pace this long, even while the push says it is up.
+const WARY: Duration = Duration::from_secs(15 * 60);
 /// The account's devices (one added, renamed, offline…).
 const DEVICES: Duration = Duration::from_secs(5 * 60);
 /// Wi-Fi and battery.
@@ -114,9 +118,10 @@ impl Config {
         self.siren_seconds.clamp(1, 120)
     }
 
-    /// The poll's pace, with the push working or not.
-    fn pace(&self, push_up: bool) -> Duration {
-        if push_up {
+    /// The poll's pace, with the push working or not; `wary` when the push
+    /// lately missed an event the poll found.
+    fn pace(&self, push_up: bool, wary: bool) -> Duration {
+        if push_up && !wary {
             self.poll().max(PUSH_POLL)
         } else {
             self.poll()
@@ -522,7 +527,7 @@ async fn watch(
     mut taken: mpsc::UnboundedReceiver<(DeviceId, i64)>,
     mut pushing: Option<Pushing>,
 ) -> Result<(), Failure> {
-    let mut poll = tokio::time::interval(config.pace(false));
+    let mut poll = tokio::time::interval(config.pace(false, false));
     let mut devices = tokio::time::interval(DEVICES);
     let mut healths = tokio::time::interval(HEALTH);
     let mut modes = tokio::time::interval(MODES);
@@ -536,6 +541,8 @@ async fn watch(
     let mut push_up = false;
     // Events the poll told while the push was up.
     let mut missed = 0;
+    // Until when the poll keeps its own pace (the push missed an event).
+    let mut wary: Option<Instant> = None;
     loop {
         let next_reset = resets.values().min().copied();
         tokio::select! {
@@ -551,7 +558,7 @@ async fn watch(
                     set_text(ctx, account, "push", if push_up { "active" } else { "fallback" });
                     tracing::info!(instance = %ctx.instance(), active = push_up, "ring instant alerts");
                     // The new pace from now on; at once when the push fell.
-                    let pace = config.pace(push_up);
+                    let pace = config.pace(push_up, wary.is_some());
                     let first = if push_up { Instant::now() + pace } else { Instant::now() };
                     poll = tokio::time::interval_at(first, pace);
                     poll.set_missed_tick_behavior(MissedTickBehavior::Delay);
@@ -571,7 +578,16 @@ async fn watch(
             }
             _ = poll.tick() => {
                 let told = events(ctx, session, &mut resets).await?;
+                let now = Instant::now();
                 if push_up && told > 0 {
+                    // The push did not bring these: read at our own pace a
+                    // while, a motion is then seen in `poll` s, not 30.
+                    if wary.is_none() {
+                        tracing::info!(instance = %ctx.instance(), "ring push missed an event: polling faster");
+                        poll = tokio::time::interval_at(now + config.poll(), config.poll());
+                        poll.set_missed_tick_behavior(MissedTickBehavior::Delay);
+                    }
+                    wary = Some(now + WARY);
                     missed += told;
                     if missed >= MISSED {
                         missed = 0;
@@ -579,6 +595,11 @@ async fn watch(
                             let _ = p.asks.send(Ask::Renew);
                         }
                     }
+                } else if wary.is_some_and(|until| until <= now) {
+                    wary = None;
+                    let pace = config.pace(push_up, false);
+                    poll = tokio::time::interval_at(now + pace, pace);
+                    poll.set_missed_tick_behavior(MissedTickBehavior::Delay);
                 }
             }
             _ = devices.tick() => discover(ctx, session).await?,
@@ -1716,8 +1737,17 @@ mod tests {
         let parsed: Config = serde_json::from_value(serde_json::json!({})).unwrap();
         assert_eq!(parsed.poll(), Duration::from_secs(10));
         assert!(parsed.push, "instant alerts unless told otherwise");
-        assert_eq!(parsed.pace(true), PUSH_POLL, "slower while the push works");
-        assert_eq!(parsed.pace(false), Duration::from_secs(10));
+        assert_eq!(
+            parsed.pace(true, false),
+            PUSH_POLL,
+            "slower while the push works"
+        );
+        assert_eq!(parsed.pace(false, false), Duration::from_secs(10));
+        assert_eq!(
+            parsed.pace(true, true),
+            Duration::from_secs(10),
+            "its own pace while the push lately missed an event"
+        );
         let fast: Config = serde_json::from_value(serde_json::json!({ "poll": 1 })).unwrap();
         assert_eq!(fast.poll(), Duration::from_secs(5));
         assert!(

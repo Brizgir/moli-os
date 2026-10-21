@@ -281,7 +281,10 @@ host = "192.168.1.x"
   dédoublonnage (identifiant de l'événement, `Watch::heard`) : jamais un événement de plus de
   90 s, jamais un d'avant le démarrage, jamais deux fois (poussé puis lu, ou l'inverse). Push
   tombé : `push = fallback`, le sondage reprend son rythme (`poll`) aussitôt, reconnexion avec
-  recul exponentiel (2 s à 5 min) ; push actif : sondage toutes les 30 s au moins (filet). Trois
+  recul exponentiel (2 s à 5 min) ; push actif : sondage toutes les 30 s au moins (filet), sauf
+  pendant 15 min après un événement que le sondage a trouvé et que le push n'a pas apporté
+  (alertes de mouvement coupées dans l'appli pour cet appareil, push devenu muet) : le sondage
+  garde alors son propre rythme (`poll`), un mouvement est vu en `poll` s et non en 30. Trois
   événements lus par le sondage alors que le push se disait actif : nouvel enregistrement (une
   fois par jour au plus). Appareil refusé au login MCS : nouvel enregistrement. ECDH avec une
   clé qui dure : `p256` (pur Rust ; `ring` n'a que des clés à usage unique), HKDF et AES-GCM par

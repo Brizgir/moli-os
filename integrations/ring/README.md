@@ -75,7 +75,10 @@ filet : toutes les 30 s tant que les alertes marchent, à son rythme normal (`po
 qu'elles tombent. Un même événement n'est jamais annoncé deux fois (reçu puis lu, ou l'inverse).
 
 Ring n'envoie que ce que l'appli est réglée pour notifier : si les alertes de mouvement d'un
-appareil sont coupées dans l'appli Ring, ses mouvements ne viennent que par le sondage.
+appareil sont coupées dans l'appli Ring, ses mouvements ne viennent que par le sondage. Dès
+que le sondage trouve un événement que le push n'a pas apporté, il reprend son propre rythme
+(`poll`, 10 s par défaut, 5 au moins) pendant un quart d'heure au lieu de 30 s : activer les
+alertes de mouvement de la caméra dans l'appli reste le plus rapide.
 
 ## Images
 
