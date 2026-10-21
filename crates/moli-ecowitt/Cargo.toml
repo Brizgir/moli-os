@@ -1,0 +1,23 @@
+[package]
+name = "moli-ecowitt"
+description = "Moli OS driver for Ecowitt weather stations and their sensors: the station posts its readings to Moli on the local network (« Customized » upload, Ecowitt protocol)."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+moli-i18n.workspace = true
+anyhow.workspace = true
+jiff.workspace = true
+moli-core.workspace = true
+moli-runtime.workspace = true
+serde.workspace = true
+tokio = { workspace = true, features = ["io-util"] }
+tracing.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["test-util", "io-util"] }
+
+[lints]
+workspace = true

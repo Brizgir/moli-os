@@ -1,0 +1,28 @@
+[integration]
+id = "ecowitt"
+name = "Station météo Ecowitt"
+# Fine Offset makes them under several names; any station or gateway with
+# the « Customized » upload in the Ecowitt protocol.
+brands = ["Ecowitt", "Ambient Weather", "Froggit", "Sainlogic", "Misol"]
+models = ["GW1000", "GW1100", "GW1200", "GW2000", "GW3000", "HP2551", "HP2560", "WS2910", "WS3900", "WS90", "WN31", "WH51", "WH55", "WH57", "WH45"]
+transport = "http"
+driver = "ecowitt"
+crate = "moli-ecowitt"
+
+[discovery]
+mdns = []
+ssdp = []
+# The station posts to Moli: nothing to find, the port is Moli's.
+ports = [49199]
+
+[needs]
+secrets = []
+vars = []
+options = []
+
+[origin]
+reused = "Home Assistant's ecowitt integration and aioecowitt (Apache-2.0): field names and meanings, re-written in Rust, no code copied"
+author = "agent"
+
+[[fixture]]
+file = "fixtures/gw2000a.kv"

@@ -72,7 +72,7 @@ Le hub l'appelle quand une surface demande une image : rien n'est récupéré po
 ```toml
 [[driver]]
 id = "enceinte"         # non vide, sans ':' ni '/', unique ; réservés : core, assistant, automations
-kind = "sonos"          # z2m, hue, tuya, reolink, sonos, philips, frigate, bambu, tapo, igd, helpers, profile
+kind = "sonos"          # z2m, hue, tuya, reolink, sonos, philips, frigate, bambu, tapo, igd, ecowitt, helpers, profile
 # enabled = false       # désactive l'instance sans la supprimer
 
 [driver.options]        # s'applique au [[driver]] qui précède ; clés inconnues refusées
@@ -362,6 +362,30 @@ location = "http://<box>:<port>/<chemin>/gatedesc.xml"   # optionnel : saute la 
 - **Retrouvée ailleurs** : une ligne au journal (« retrouvé à une nouvelle adresse », ancienne → nouvelle description) ; `location` n'est jamais réécrite.
 - **Pièges** : la Livebox ne répond aux recherches SSDP que pour un autre de ses services (`WFADevice`, port 1990), jamais pour sa passerelle (port 60000, chemin tiré au redémarrage) : elle n'est connue que par ses annonces, peu fréquentes hors redémarrage. Fixer `location` accélère le premier démarrage.
 - **Tests** : conversion en Mbit/s, identité (numéro de série, UDN, adresse), annonces retenues ; parsing UPnP et annonces dans `crates/moli-net/src/upnp.rs`.
+## `ecowitt` : stations météo Ecowitt (`crates/moli-ecowitt`)
+
+- **Couvre** : stations et passerelles Ecowitt (et les mêmes sous d'autres marques Fine Offset : Ambient Weather, Froggit, Sainlogic…) avec l'envoi « Customized », et leurs capteurs : extérieur, vent, pluie (à auget et piézo), soleil, UV, éclairs, pression, console intérieure, thermo-hygromètres WN31 (8), sondes de sol WH51/WH52 (16), sondes WN34 (8), fuites WH55, particules WH41, feuilles WN35, hauteur WH54, air WH45. **Lecture seule.**
+- **Protocole** : la station **pousse**. Moli écoute sur son propre port (`port`, 49199 comme `aioecowitt`, réseau `host`), la station y envoie `POST` un formulaire (`application/x-www-form-urlencoded`) toutes les 16 s à 10 min ; Moli répond `OK`. Seules les adresses du réseau local (privées, lien local, la machine) sont écoutées ; tête 8 Kio, corps 32 Kio, 10 s par requête, 8 connexions à la fois, longueur obligatoire (pas de `chunked`).
+- **Configuration** (tout a une valeur par défaut) :
+
+```toml
+[[driver]]
+id = "meteo"
+kind = "ecowitt"
+# [driver.options]
+# port = 49199
+# path = "/data/report/"     # défaut : n'importe quel chemin
+# stations = ["<PASSKEY>"]   # défaut : toute station du réseau local, 4 au plus
+```
+
+- **Secrets** : aucun.
+- **Appareils** : la station (`<passkey>`), la console (`<passkey>_indoor`), et un appareil par capteur en plus (`_ch<n>`, `_soil<n>`, `_soilec<n>`, `_tf<n>`, `_leak<n>`, `_pm25_<n>`, `_leaf<n>`, `_lds<n>`, `_wh45`) : chacun va dans sa pièce. Un appareil est publié au premier envoi qui le cite, complété quand un champ nouveau arrive.
+- **Points** : unités de la maison (la station envoie en °F, inHg, pouces, mph) : `temperature`, `humidity`, `pressure` (niveau de la mer), `pressure_absolute`, `wind_speed`, `wind_gust`, `wind_direction`, `solar_radiation`, `uv`, `rain_rate`, `rain_day`… (`piezo_rain_…` pour un pluviomètre piézo, `raining`), `lightning_distance`, `lightning_count`, `lightning_last`, `co2`, `pm25`…, `soil_moisture`, `leak` (sémantique fuite d'eau), piles (`battery` en %, `battery_low`, `battery_voltage`, suffixées du capteur sur la station : `battery_voltage_wh90`). Calculés comme `aioecowitt` : `dew_point`, `feels_like`, `wind_chill` (vide hors du froid venteux), `illuminance` (estimée). Seule la température de l'air ou du sol a la sémantique `Temperature` (un point de rosée n'est pas la chaleur d'une pièce). Valeurs brutes des sondes (`soilad…`) ignorées, comme dans HA.
+- **Identité** : la `PASSKEY` de la station (MD5 de son adresse matérielle, 32 chiffres hexadécimaux).
+- **Disponibilité** : hors ligne après 3 intervalles sans nouvelles d'un appareil (5 min au moins, comme HA). Statut `waiting` (« en attente d'un envoi… ») jusqu'au premier envoi.
+- **Pièges** : un pare-feu sur la machine bloque tout (rien n'arrive, aucune erreur côté Moli) ; le port pris par un autre logiciel fait échouer le pilote (relancé par le superviseur). Champs inconnus : dits une fois dans le journal, ignorés.
+- **Tests** : `src/model.rs` sur `integrations/ecowitt/fixtures/gw2000a.kv` (construite d'après le format documenté, pas une capture) : conversions, points de rosée et ressenti identiques aux vecteurs de test d'`aioecowitt`, un appareil par capteur ; `src/http.rs` : lecture bornée, refus ; `src/lib.rs` : réseau local seulement.
+
 ## `ipp` : imprimante réseau (`crates/moli-ipp`)
 
 - **Couvre** : toute imprimante IPP Everywhere / AirPrint (Canon, Epson, HP, Brother depuis ~2013) : état en mots, niveau de chaque cartouche, file, dernière impression ; **imprimer depuis Moli** (photo, pages d'un PDF rendues par le tableau de bord), « Faire clignoter », « Annuler ».
@@ -483,6 +507,7 @@ ni pièce native). Il ne déplace jamais rien. Sans argument : plan à blanc ; `
 | `bambu` | `moli-bambu` | MQTT TLS 8883, épinglé | lumière, `control` (humain pour un agent) | pas encore (cible : Bambu Lab A1) |
 | `moonraker` | `moli-moonraker` | HTTP local 7125 | lumière, `control` (humain pour un agent) | Snapmaker U1 |
 | `tapo` | `moli-tapo` | HTTP 80 + KLAP v2 | oui : tout | pas encore (cible : Tapo L530) |
+| `ecowitt` | `moli-ecowitt` | HTTP poussé par la station (port 49199, réseau local) | non | pas encore (cible : passerelle GW2000) |
 | `igd` | `moli-igd` | UPnP IGD (SSDP + SOAP) | non | Livebox |
 | `ipp` | `moli-ipp` | IPP 2.0 HTTP 631 | identifier, annuler, imprimer (tableau de bord) | Canon MG3600 |
 | `host` | `moli-host` | /proc, /sys ; WoL ; agent HTTP sortant | allumer, éteindre, veille, Claude et Codex pour le téléphone (PIN) | hôte Linux ; PC Windows avec l'agent |
