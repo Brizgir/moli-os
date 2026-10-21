@@ -6,3 +6,8 @@ This product includes data derived from Powercalc
 the light power profiles in crates/moli-energy/src/estimate.rs.
 Copyright (c) 2021 Bram Gerritsen. Licensed under the MIT License;
 see licenses/powercalc-MIT.txt.
+
+This product includes code ported from astral
+(https://github.com/sffjunkie/astral), the library behind Home Assistant's
+`sun` integration: the solar calculator in crates/moli-automation/src/sun.rs.
+Copyright Simon Kennedy. Licensed under the Apache License, Version 2.0.

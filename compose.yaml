@@ -16,3 +16,26 @@ services:
       # Configuration, coffre chiffré, historique : tout ce que Moli sait.
       - ./data:/data
     mem_limit: 128m
+
+  # La voix sans le cloud (facultatif) : Piper parle, Whisper écoute.
+  #   docker compose --profile voix-locale up -d
+  # Puis dans data/moli.toml, [assistant] : local_speech = "127.0.0.1:10200",
+  # local_listen = "127.0.0.1:10300" (et speech_model = "", transcribe_model = ""
+  # pour ne jamais passer par le cloud). Environ 1,5 Go de mémoire : pas pour un Pi Zero.
+  piper:
+    image: rhasspy/wyoming-piper:2.5.2
+    profiles: [voix-locale]
+    restart: unless-stopped
+    network_mode: host
+    command: --voice fr_FR-siwis-medium
+    volumes:
+      - ./voix/piper:/data   # les voix téléchargées, hors de data/ (pas dans les sauvegardes)
+
+  whisper:
+    image: rhasspy/wyoming-whisper:3.8.1
+    profiles: [voix-locale]
+    restart: unless-stopped
+    network_mode: host
+    command: --model small-int8 --language fr
+    volumes:
+      - ./voix/whisper:/data

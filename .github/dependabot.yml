@@ -1,0 +1,60 @@
+# Weekly updates, a release at least 7 days old (time for a hijacked one to be pulled),
+# grouped so that one pull request carries one ecosystem.
+# Each one goes through check.yml and audit.yml like any change.
+version: 2
+updates:
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      cargo:
+        patterns: ["*"]
+        update-types: [minor, patch]
+
+  - package-ecosystem: npm
+    directory: /web
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      web:
+        patterns: ["*"]
+        update-types: [minor, patch]
+
+  # Expo pins its own versions (npx expo install --fix): only security updates here.
+  - package-ecosystem: npm
+    directory: /mobile
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 0
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      actions:
+        patterns: ["*"]
+
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+
+  # The local voice images (compose.yaml, profile voix-locale).
+  - package-ecosystem: docker-compose
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7

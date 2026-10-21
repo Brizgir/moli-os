@@ -9,7 +9,9 @@ driver = "moonraker"
 crate = "moli-moonraker"
 
 [discovery]
-mdns = []
+# Moonraker announces `_moonraker._tcp` when its [zeroconf] section is on:
+# `moli-os discover` finds it; the instance gives the address.
+mdns = ["_moonraker._tcp"]
 ssdp = []
 ports = [7125]
 

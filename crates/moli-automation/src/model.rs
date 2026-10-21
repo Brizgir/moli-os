@@ -186,7 +186,7 @@ pub enum Step {
         #[serde(default)]
         days: Vec<u8>,
     },
-    /// At sunrise or sunset, give or take some minutes.
+    /// At dawn, sunrise, sunset or dusk, give or take some minutes.
     AtSun {
         event: SunEvent,
         #[serde(default)]
@@ -295,8 +295,12 @@ impl Step {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SunEvent {
+    /// Civil dawn: the sun 6° below the horizon, enough light outside.
+    Dawn,
     Rise,
     Set,
+    /// Civil dusk: the sun 6° below the horizon, lamps needed outside.
+    Dusk,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]

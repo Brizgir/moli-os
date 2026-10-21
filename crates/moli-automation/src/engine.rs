@@ -296,8 +296,13 @@ fn sun_minute(
     offset_min: i32,
 ) -> Option<u32> {
     let (lat, lon) = (autos.0.config.latitude?, autos.0.config.longitude?);
-    let (rise, set) = crate::sun::times(now.date(), lat, lon)?;
-    let at = if event == SunEvent::Rise { rise } else { set };
+    let what = match event {
+        SunEvent::Dawn => crate::sun::Event::Dawn,
+        SunEvent::Rise => crate::sun::Event::Rise,
+        SunEvent::Set => crate::sun::Event::Set,
+        SunEvent::Dusk => crate::sun::Event::Dusk,
+    };
+    let at = crate::sun::event(now.date(), lat, lon, &autos.0.tz, what)?;
     let local = at.to_zoned(autos.0.tz.clone());
     let m = i32::from(local.hour()) * 60 + i32::from(local.minute()) + offset_min;
     u32::try_from(m.rem_euclid(24 * 60)).ok()

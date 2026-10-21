@@ -27,6 +27,18 @@ struct Codec {
     /// Enum whose values are numbers on the wire (`[0, 1, 2]`): exposed as
     /// text like every enum, converted back to numbers for the device.
     numeric_enum: bool,
+    /// A lamp's colour as one `#rrggbb` (the composite's whole), read from
+    /// these axes, written as `{"hex": …}` (Z2M fits it to the lamp).
+    color: Option<Axes>,
+}
+
+/// How a colour lamp counts its colour.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Axes {
+    /// CIE `x`, `y`.
+    Xy,
+    /// `hue` (degrees), `saturation` (%).
+    Hs,
 }
 
 /// One Z2M device with everything needed to decode its messages.
@@ -148,6 +160,9 @@ impl Entry {
             .filter_map(|point| {
                 let json = lookup(payload, &point.key)?;
                 let codec = self.codecs.get(&point.key);
+                if let Some(axes) = codec.and_then(|c| c.color) {
+                    return Some((point.key.clone(), Value::from(hex_of(json, axes)?.as_str())));
+                }
                 let value = match codec.and_then(|c| c.binary.as_ref()) {
                     Some((on, _)) if json == on => Value::Bool(true),
                     Some((_, off)) if json == off => Value::Bool(false),
@@ -166,6 +181,9 @@ impl Entry {
     pub fn encode(&self, key: &str, value: &Value) -> Json {
         let codec = self.codecs.get(key);
         let wire = match (codec.and_then(|c| c.binary.as_ref()), value) {
+            (_, Value::Text(t)) if codec.is_some_and(|c| c.color.is_some()) => {
+                serde_json::json!({ "hex": &**t })
+            }
             (Some((on, _)), Value::Bool(true)) => on.clone(),
             (Some((_, off)), Value::Bool(false)) => off.clone(),
             (_, Value::Text(t)) if codec.is_some_and(|c| c.numeric_enum) => {
@@ -191,6 +209,18 @@ impl Entry {
     }
 }
 
+/// A colour state (`{"x", "y"}` or `{"hue", "saturation"}`) as `#rrggbb`.
+/// Xy lamps often report their hue too: the axes they are driven by win.
+fn hex_of(json: &Json, axes: Axes) -> Option<String> {
+    let number = |name: &str| json.get(name).and_then(Json::as_f64);
+    let from_xy = || moli_core::color::xy_to_hex(number("x")?, number("y")?);
+    let from_hue = || moli_core::color::hs_to_hex(number("hue")?, number("saturation")?);
+    match axes {
+        Axes::Xy => from_xy().or_else(from_hue),
+        Axes::Hs => from_hue().or_else(from_xy),
+    }
+}
+
 fn lookup<'a>(payload: &'a Map<String, Json>, key: &str) -> Option<&'a Json> {
     let mut parts = key.split('.');
     let mut current = payload.get(parts.next()?)?;
@@ -209,13 +239,14 @@ fn flatten(
     if !expose.features.is_empty() {
         // Composite values nest under their property; specific types
         // (light, switch, climate…) are plain groups.
-        let prefix = match (&*expose.kind, &expose.property) {
+        let inner = match (&*expose.kind, &expose.property) {
             ("composite", Some(p)) => format!("{prefix}{p}."),
             _ => prefix.to_owned(),
         };
         for feature in &expose.features {
-            flatten(feature, &prefix, points, codecs);
+            flatten(feature, &inner, points, codecs);
         }
+        colour(expose, prefix, points, codecs);
         return;
     }
     let Some(property) = &expose.property else {
@@ -258,6 +289,7 @@ fn flatten(
         binary,
         gettable: expose.access & ACCESS_GET != 0,
         numeric_enum: !expose.values.is_empty() && expose.values.iter().all(Json::is_number),
+        color: None,
     };
     let unit = expose.unit.as_deref().and_then(Unit::parse);
     // A calibration offset in °C is configuration, not a temperature reading.
@@ -282,6 +314,59 @@ fn flatten(
         key: key.clone(),
     });
     codecs.insert(key, codec);
+}
+
+/// A colour composite (`color_xy`, `color_hs`) also becomes one writable
+/// `#rrggbb` point, what ambiances, fixtures and people pick: its members
+/// alone cannot be written (Z2M wants the whole).
+fn colour(
+    expose: &RawExpose,
+    prefix: &str,
+    points: &mut Vec<PointSpec>,
+    codecs: &mut HashMap<Arc<str>, Codec>,
+) {
+    let ("composite", Some(property)) = (&*expose.kind, &expose.property) else {
+        return;
+    };
+    let has = |name: &str| {
+        expose
+            .features
+            .iter()
+            .any(|f| f.property.as_deref() == Some(name))
+    };
+    let axes = if has("x") && has("y") {
+        Axes::Xy
+    } else if has("hue") && has("saturation") {
+        Axes::Hs
+    } else {
+        return;
+    };
+    let key: Arc<str> = format!("{prefix}{property}").into();
+    if points.iter().any(|p| p.key == key) {
+        return;
+    }
+    // Some bridges leave the composite's own access out: its members say it.
+    let access = expose.access | expose.features.iter().fold(0, |a, f| a | f.access);
+    points.push(PointSpec {
+        key: key.clone(),
+        label: expose.label.as_deref().unwrap_or(property).into(),
+        kind: Kind::Text,
+        access: Access {
+            read: access & ACCESS_STATE != 0,
+            write: access & ACCESS_SET != 0,
+        },
+        unit: None,
+        semantic: Semantic::Color,
+    });
+    codecs.insert(
+        key,
+        Codec {
+            binary: None,
+            gettable: access & ACCESS_GET != 0,
+            numeric_enum: false,
+            color: Some(axes),
+        },
+    );
 }
 
 #[derive(Debug, Deserialize)]
@@ -542,7 +627,7 @@ mod tests {
         let mut codecs = HashMap::new();
         flatten(&expose, "", &mut points, &mut codecs);
         let keys: Vec<_> = points.iter().map(|p| &*p.key).collect();
-        assert_eq!(keys, ["state", "color.x", "color.y"]);
+        assert_eq!(keys, ["state", "color.x", "color.y", "color"]);
         assert!(points[0].access.write);
         assert!(
             !points[1].access.write,
@@ -577,5 +662,53 @@ mod tests {
             .collect();
         assert_eq!(decoded["state"], Value::Bool(false));
         assert_eq!(decoded["color.y"], Value::Float(0.32));
+        assert_eq!(decoded["color"], Value::from("#f0f6ff"));
+        // The whole colour is writable, as Z2M takes it.
+        let colour = entry.device.point("color").unwrap();
+        assert!(colour.access.write);
+        assert_eq!(colour.semantic, Semantic::Color);
+        assert_eq!(
+            entry.encode("color", &Value::from("#ff0000")),
+            json!({"color": {"hex": "#ff0000"}})
+        );
+    }
+
+    #[test]
+    fn hue_and_saturation_lamps_get_a_colour_too() {
+        let expose: RawExpose = serde_json::from_value(json!({
+            "type": "light",
+            "features": [
+                {"type": "composite", "property": "color", "name": "color_hs", "access": 7, "features": [
+                    {"type": "numeric", "property": "hue", "access": 7},
+                    {"type": "numeric", "property": "saturation", "access": 7}
+                ]},
+                {"type": "composite", "property": "level_config", "access": 7, "features": [
+                    {"type": "numeric", "property": "on_level", "access": 7}
+                ]}
+            ]
+        }))
+        .unwrap();
+        let mut points = Vec::new();
+        let mut codecs = HashMap::new();
+        flatten(&expose, "", &mut points, &mut codecs);
+        let keys: Vec<_> = points.iter().map(|p| &*p.key).collect();
+        assert_eq!(
+            keys,
+            [
+                "color.hue",
+                "color.saturation",
+                "color",
+                "level_config.on_level"
+            ],
+            "only colour composites get a whole point"
+        );
+        let payload = json!({"color": {"hue": 120, "saturation": 100}});
+        let colour = &codecs["color"];
+        assert_eq!(colour.color, Some(Axes::Hs));
+        assert_eq!(
+            hex_of(&payload["color"], Axes::Hs).as_deref(),
+            Some("#00ff00")
+        );
+        assert_eq!(hex_of(&json!({"hue": 1}), Axes::Hs), None);
     }
 }

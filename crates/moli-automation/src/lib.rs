@@ -12,6 +12,7 @@ mod engine;
 mod model;
 mod proposal;
 mod run;
+pub mod sky;
 mod store;
 pub mod sun;
 

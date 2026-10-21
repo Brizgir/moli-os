@@ -47,7 +47,7 @@ Une automatisation = un **graphe** de nœuds reliés (comme n8n), stocké dans
 | Déclencheurs | `when_state` | `point`, `to?`, `from?`, `for_s` (maintenu N s) ; un point d'occurrence (appui, mouvement d'une caméra : `pulse` sur le bus) redéclenche à chaque événement, même déjà vrai (sauf avec `for_s`) |
 | | `when_threshold` | `point`, `above?`, `below?`, `for_s` (franchissement) |
 | | `at_time` | `at` « HH:MM », `days` (1 = lundi … 7) |
-| | `at_sun` | `event` rise/set, `offset_min`, `days` |
+| | `at_sun` | `event` dawn/rise/set/dusk (aube et crépuscule civils), `offset_min`, `days` |
 | | `every` | `minutes` |
 | | `on_start`, `manual` | — |
 | Logique | `if` | `rules[]` (état / plage horaire / jour-nuit), `all` (ET) ou OU |
@@ -82,8 +82,20 @@ lui fait perdre sa validation, la maison est prévenue (notice dans le dashboard
   déclencheur horaire retient la dernière minute où il a tiré (jamais deux fois, y compris
   après un redémarrage dans la même minute). L'heure sautée au passage à l'heure d'été ne
   tire pas (comme HA).
-- Soleil : calcul astronomique local (NOAA, ±1 min, vérifié contre un almanach) depuis
-  `[automations] latitude/longitude` ; à défaut, le point `daylight` de la météo.
+- Soleil : calcul astronomique local depuis `[automations] latitude/longitude`, porté
+  d'**astral** (la bibliothèque de l'intégration `sun` de HA, Apache-2.0) : calculateur
+  solaire complet de la NOAA, réfraction de l'air, rayon apparent du soleil. À 2 s d'astral
+  (tests sur Paris, Auckland, Kiritimati, Tromsø) ; l'ancienne formule courte dérivait de 2 à
+  10 min et se trompait de jour à 14 h de l'UTC. Jour / nuit (`sun`, règle `is day|night`)
+  = le soleil au-dessus de l'horizon : un jour polaire est un jour. À défaut de position, le
+  point `daylight` de la météo.
+- **Appareil « Soleil »** (`soleil:maison`, `sky.rs`) : Moli le fait tourner tout seul dès
+  que la maison est placée (l'id de pilote `soleil` est réservé), comme `sun.sun` de HA.
+  Points en lecture seule, recalculés chaque minute : `elevation` (°, au degré : au-dessus
+  de l'horizon > 0, crépuscule civil sous -6), `azimuth` (°, 0 nord, 90 est), `up`, et les
+  heures du jour `dawn`, `sunrise`, `sunset`, `dusk` (« HH:MM », vides quand l'événement
+  n'a pas lieu). « Fermer les volets quand le soleil passe sous 10° » = `when_threshold`
+  sur `soleil:maison/elevation`.
 - Exécution : parcours du graphe depuis le déclencheur, **branches dans l'ordre des liens**
   (qui fait partie de ce qu'on valide ; la position à l'écran n'y est pour rien), 100 étapes
   maximum. Chaque run a un jeton enfant de celui de l'automatisme : l'éteindre annule tout,

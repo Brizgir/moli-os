@@ -111,7 +111,7 @@ fn schema() -> Json {
                     "below": nullable("number"),
                     "at": nullable("string"),
                     "days": { "type": ["array", "null"], "items": { "type": "integer" } },
-                    "event": { "type": ["string", "null"], "enum": ["rise", "set", null] },
+                    "event": { "type": ["string", "null"], "enum": ["dawn", "rise", "set", "dusk", null] },
                     "offset_min": nullable("integer"),
                     "minutes": nullable("integer"),
                     "seconds": nullable("integer"),

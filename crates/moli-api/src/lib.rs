@@ -185,6 +185,7 @@ fn house_routes(humans: &Arc<session::Sessions>, options: &Options) -> Router<Hu
     Router::new()
         .merge(weather::routes(options.weather.clone()))
         .route("/api/infra", get(rest::infra))
+        .route("/api/discover", get(rest::discover))
         .layer(Extension(rest::InfraFile(infra)))
         .route("/api/plan", get(plan::get).put(plan::put))
         .route("/api/home/rooms", post(home::create))

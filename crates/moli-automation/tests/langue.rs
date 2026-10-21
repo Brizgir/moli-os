@@ -157,6 +157,13 @@ async fn the_engine_speaks_the_language_of_the_house() {
         json!({ "type": "at_sun", "event": "set", "offset_min": -30, "days": [1, 3, 5] }),
         lamp_on(),
     );
+    let at_dusk = |offset: i32| {
+        simple(
+            json!({ "type": "at_sun", "event": "dusk", "offset_min": offset }),
+            lamp_on(),
+        )
+    };
+    let at_dawn = simple(json!({ "type": "at_sun", "event": "dawn" }), lamp_on());
     let weekday_mornings = simple(
         json!({ "type": "at_time", "at": "07:30", "days": [1, 2, 3, 4, 5] }),
         json!({ "type": "set", "point": "fake:dial/level", "value": 50.5 }),
@@ -190,6 +197,8 @@ async fn the_engine_speaks_the_language_of_the_house() {
         say(at_sunset),
         "30 min before sunset on Monday, Wednesday and Friday, turn on lamp."
     );
+    assert_eq!(say(at_dawn.clone()), "At dawn, turn on lamp.");
+    assert_eq!(say(at_dusk(15)), "15 min after dusk, turn on lamp.");
     assert_eq!(
         say(weekday_mornings),
         "On weekdays at 07:30, set the level of dial to 50.5 %."
@@ -301,6 +310,12 @@ async fn the_engine_speaks_the_language_of_the_house() {
         "Quand door s'ouvre, si lamp est éteint et on est entre 22:00 et 06:00 : \
          allumer lamp, puis attendre 1 h 30 ; sinon : prévenir la maison : « No »."
     );
+    assert_eq!(say(at_dawn), "À l'aube, allumer lamp.");
+    assert_eq!(
+        say(at_dusk(-10)),
+        "10 min avant le crépuscule, allumer lamp."
+    );
+    assert_eq!(say(at_dusk(0)), "Au crépuscule, allumer lamp.");
     assert_eq!(who(true, Author::Human), "une personne (code)");
     cancel.cancel();
 }

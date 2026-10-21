@@ -341,12 +341,13 @@ impl Config {
                 );
             }
             // `assistant` holds the assistant's key in the secret store;
-            // `energie` is the « Énergie » device Moli runs itself.
+            // `energie` and `soleil` are devices Moli runs itself.
             if [
                 moli_runtime::CORE_NAMESPACE,
                 "assistant",
                 "automations",
                 moli_energy::points::INSTANCE,
+                moli_automation::sky::INSTANCE,
                 moli_lights::INSTANCE,
                 moli_api::PEOPLE_INSTANCE,
             ]
