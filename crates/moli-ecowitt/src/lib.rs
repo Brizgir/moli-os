@@ -12,8 +12,11 @@
 //!
 //! Devices: `outdoor` (the outdoor array: temperature, humidity, wind,
 //! rain, light, UV, its batteries), `indoor` (the gateway: temperature,
-//! humidity, pressure) and `ch1`…`ch8` (extra thermo-hygrometers), each
-//! declared when its first reading arrives. Nothing is written: read-only.
+//! humidity, pressure, CO₂), `ch1`…`ch8` (extra thermo-hygrometers), and
+//! the other sensors Ecowitt sells: `lightning` (WH57), `air` (WH45),
+//! `globe` (WN38), `soil<n>` (WH51), `probe<n>` (WN34), `leak<n>` (WH55),
+//! `pm25_<n>` (WH41), `leaf<n>` (WN35). Each is declared when its first
+//! reading arrives. Nothing is written: read-only.
 
 mod http;
 mod report;
@@ -397,6 +400,14 @@ impl Station {
                 Some("WH31".into()),
                 moli_i18n::tr!("pilotes.ecowitt.description_canal", n = n),
             ),
+            Part::Lightning => sensor(moli_i18n::tr!("pilotes.ecowitt.foudre"), "WH57"),
+            Part::Air => sensor(moli_i18n::tr!("pilotes.ecowitt.air"), "WH45"),
+            Part::Globe => sensor(moli_i18n::tr!("pilotes.ecowitt.globe"), "WN38"),
+            Part::Soil(n) => sensor(moli_i18n::tr!("pilotes.ecowitt.sol", n = n), "WH51"),
+            Part::Probe(n) => sensor(moli_i18n::tr!("pilotes.ecowitt.sonde", n = n), "WN34"),
+            Part::Leak(n) => sensor(moli_i18n::tr!("pilotes.ecowitt.fuite", n = n), "WH55"),
+            Part::Pm25(n) => sensor(moli_i18n::tr!("pilotes.ecowitt.particules", n = n), "WH41"),
+            Part::Leaf(n) => sensor(moli_i18n::tr!("pilotes.ecowitt.feuilles", n = n), "WN35"),
         };
         let keys = self.declared.get(&part).map_or(&[][..], Vec::as_slice);
         Device {
@@ -414,6 +425,11 @@ impl Station {
 }
 
 /// The outdoor sensor, from the battery field only it sends.
+/// A sensor of the station: its name and model, no description.
+fn sensor(name: String, model: &str) -> (String, Option<String>, String) {
+    (name, Some(model.to_owned()), String::new())
+}
+
 fn outdoor_model(form: &Form) -> Option<String> {
     [
         ("wh90batt", "WS90"),
@@ -433,6 +449,8 @@ fn spec(key: &str) -> Option<PointSpec> {
         label: moli_i18n::tr(&format!("pilotes.ecowitt.point.{key}")).into(),
         kind: if point.binary {
             Kind::Binary
+        } else if point.text {
+            Kind::Text
         } else {
             Kind::Numeric {
                 min: None,

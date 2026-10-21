@@ -87,6 +87,22 @@ pub enum Part {
     Indoor,
     /// An extra thermo-hygrometer on channel 1 to 8 (WH31, WN31).
     Channel(u8),
+    /// The lightning sensor (WH57).
+    Lightning,
+    /// The air quality monitor (WH45, WH46: CO₂ and particles).
+    Air,
+    /// The black globe thermometer (WN38).
+    Globe,
+    /// A soil moisture probe, 1 to 16 (WH51).
+    Soil(u8),
+    /// A probe thermometer (soil, water), 1 to 8 (WN34).
+    Probe(u8),
+    /// A leak detector, 1 to 4 (WH55).
+    Leak(u8),
+    /// A particle sensor, 1 to 4 (WH41, WH43).
+    Pm25(u8),
+    /// A leaf wetness sensor, 1 to 8 (WN35).
+    Leaf(u8),
 }
 
 impl Part {
@@ -96,6 +112,14 @@ impl Part {
             Self::Outdoor => "outdoor".into(),
             Self::Indoor => "indoor".into(),
             Self::Channel(n) => format!("ch{n}"),
+            Self::Lightning => "lightning".into(),
+            Self::Air => "air".into(),
+            Self::Globe => "globe".into(),
+            Self::Soil(n) => format!("soil{n}"),
+            Self::Probe(n) => format!("probe{n}"),
+            Self::Leak(n) => format!("leak{n}"),
+            Self::Pm25(n) => format!("pm25_{n}"),
+            Self::Leaf(n) => format!("leaf{n}"),
         }
     }
 }
@@ -113,8 +137,12 @@ enum Conv {
     Inch,
     /// As sent, rounded to that many decimals.
     Same(u8),
-    /// A flag: 0 no, 1 yes (battery low, raining).
+    /// A flag: 0 no, 1 yes (battery low, raining, a leak).
     Flag,
+    /// A battery level 0 to 5 (6: on mains) → %.
+    Level,
+    /// Seconds since 1970 → the instant, as text (`2024-02-08T09:00:00Z`).
+    Instant,
 }
 
 /// One point a station may have: its key, unit, meaning, and whether it is
@@ -125,6 +153,8 @@ pub struct Point {
     pub unit: Option<&'static str>,
     pub semantic: Semantic,
     pub binary: bool,
+    /// Text rather than a number (an instant).
+    pub text: bool,
 }
 
 const fn num(key: &'static str, unit: &'static str, semantic: Semantic) -> Point {
@@ -133,6 +163,28 @@ const fn num(key: &'static str, unit: &'static str, semantic: Semantic) -> Point
         unit: Some(unit),
         semantic,
         binary: false,
+        text: false,
+    }
+}
+
+const fn flag(key: &'static str, semantic: Semantic) -> Point {
+    Point {
+        key,
+        unit: None,
+        semantic,
+        binary: true,
+        text: false,
+    }
+}
+
+/// A number without a unit (a count).
+const fn count(key: &'static str) -> Point {
+    Point {
+        key,
+        unit: None,
+        semantic: Semantic::Other,
+        binary: false,
+        text: false,
     }
 }
 
@@ -151,12 +203,7 @@ pub const POINTS: &[Point] = &[
     num("wind_gusts_max", "km/h", Semantic::Other),
     num("wind_direction", "°", Semantic::Other),
     num("wind_direction_avg", "°", Semantic::Other),
-    Point {
-        key: "raining",
-        unit: None,
-        semantic: Semantic::Other,
-        binary: true,
-    },
+    flag("raining", Semantic::Other),
     num("rain_rate", "mm/h", Semantic::Other),
     num("rain_today", "mm", Semantic::Other),
     num("rain_event", "mm", Semantic::Other),
@@ -169,15 +216,36 @@ pub const POINTS: &[Point] = &[
     num("solar_radiation", "W/m²", Semantic::Other),
     num("illuminance", "lx", Semantic::Illuminance),
     num("uv_index", "UV", Semantic::Other),
-    Point {
-        key: "battery_low",
-        unit: None,
-        semantic: Semantic::BatteryLow,
-        binary: true,
-    },
+    flag("battery_low", Semantic::BatteryLow),
     num("battery_voltage", "V", Semantic::Voltage),
     num("capacitor_voltage", "V", Semantic::Voltage),
     num("rain_battery_voltage", "V", Semantic::Voltage),
+    num("vpd", "hPa", Semantic::Other),
+    num("black_globe", "°C", Semantic::Other),
+    num("wet_bulb_globe", "°C", Semantic::Other),
+    num("lightning_distance", "km", Semantic::Other),
+    count("lightning_count"),
+    Point {
+        key: "lightning_last",
+        unit: None,
+        semantic: Semantic::Other,
+        binary: false,
+        text: true,
+    },
+    num("co2", "ppm", Semantic::Other),
+    num("co2_24h", "ppm", Semantic::Other),
+    num("pm1", "µg/m³", Semantic::Other),
+    num("pm1_24h", "µg/m³", Semantic::Other),
+    num("pm25", "µg/m³", Semantic::Other),
+    num("pm25_24h", "µg/m³", Semantic::Other),
+    num("pm4", "µg/m³", Semantic::Other),
+    num("pm4_24h", "µg/m³", Semantic::Other),
+    num("pm10", "µg/m³", Semantic::Other),
+    num("pm10_24h", "µg/m³", Semantic::Other),
+    num("soil_moisture", "%", Semantic::Other),
+    num("leaf_wetness", "%", Semantic::Other),
+    flag("leak", Semantic::WaterLeak),
+    num("battery", "%", Semantic::Battery),
 ];
 
 /// The point of a key.
@@ -258,6 +326,78 @@ const FIELDS: &[(&str, Part, &str, Conv)] = &[
     ),
     // The WS90's piezo says whether it rains now (0 dry, 1 rain).
     ("srain_piezo", Part::Outdoor, "raining", Conv::Flag),
+    ("vpd", Part::Outdoor, "vpd", Conv::InHg),
+    // The console's own CO₂ sensor (HP2560, GW3000).
+    ("co2in", Part::Indoor, "co2", Conv::Same(0)),
+    ("co2in_24h", Part::Indoor, "co2_24h", Conv::Same(0)),
+    // The lightning sensor: distance in km already, empty before a strike.
+    (
+        "lightning",
+        Part::Lightning,
+        "lightning_distance",
+        Conv::Same(0),
+    ),
+    (
+        "lightning_num",
+        Part::Lightning,
+        "lightning_count",
+        Conv::Same(0),
+    ),
+    (
+        "lightning_time",
+        Part::Lightning,
+        "lightning_last",
+        Conv::Instant,
+    ),
+    ("wh57batt", Part::Lightning, "battery", Conv::Level),
+    // The air quality monitor.
+    ("tf_co2", Part::Air, "temperature", Conv::Fahrenheit),
+    ("humi_co2", Part::Air, "humidity", Conv::Same(0)),
+    ("co2", Part::Air, "co2", Conv::Same(0)),
+    ("co2_24h", Part::Air, "co2_24h", Conv::Same(0)),
+    ("pm1_co2", Part::Air, "pm1", Conv::Same(1)),
+    ("pm1_24h_co2", Part::Air, "pm1_24h", Conv::Same(1)),
+    ("pm25_co2", Part::Air, "pm25", Conv::Same(1)),
+    ("pm25_24h_co2", Part::Air, "pm25_24h", Conv::Same(1)),
+    ("pm4_co2", Part::Air, "pm4", Conv::Same(1)),
+    ("pm4_24h_co2", Part::Air, "pm4_24h", Conv::Same(1)),
+    ("pm10_co2", Part::Air, "pm10", Conv::Same(1)),
+    ("pm10_24h_co2", Part::Air, "pm10_24h", Conv::Same(1)),
+    ("co2_batt", Part::Air, "battery", Conv::Level),
+    // The black globe thermometer (heat stress).
+    ("bgt", Part::Globe, "black_globe", Conv::Fahrenheit),
+    ("wbgt", Part::Globe, "wet_bulb_globe", Conv::Fahrenheit),
+    ("bgtbatt", Part::Globe, "battery_voltage", Conv::Same(2)),
+];
+
+/// A numbered sensor's field: `<prefix><n>`, `n` from 1 to the highest;
+/// device, key, conversion.
+type Numbered = (&'static str, u8, fn(u8) -> Part, &'static str, Conv);
+
+const NUMBERED: &[Numbered] = &[
+    (
+        "soilmoisture",
+        16,
+        Part::Soil,
+        "soil_moisture",
+        Conv::Same(0),
+    ),
+    ("soilbatt", 16, Part::Soil, "battery_voltage", Conv::Same(1)),
+    ("tf_ch", 8, Part::Probe, "temperature", Conv::Fahrenheit),
+    ("tf_batt", 8, Part::Probe, "battery_voltage", Conv::Same(2)),
+    ("leak_ch", 4, Part::Leak, "leak", Conv::Flag),
+    ("leakbatt", 4, Part::Leak, "battery", Conv::Level),
+    ("pm25_ch", 4, Part::Pm25, "pm25", Conv::Same(1)),
+    ("pm25_avg_24h_ch", 4, Part::Pm25, "pm25_24h", Conv::Same(1)),
+    ("pm25batt", 4, Part::Pm25, "battery", Conv::Level),
+    (
+        "leafwetness_ch",
+        8,
+        Part::Leaf,
+        "leaf_wetness",
+        Conv::Same(0),
+    ),
+    ("leaf_batt", 8, Part::Leaf, "battery_voltage", Conv::Same(2)),
 ];
 
 /// Rain, from a tipping bucket (WH65, WS69, WH40) or a piezo (WS90, WS85:
@@ -334,6 +474,17 @@ fn convert(raw: &str, conv: Conv) -> Value {
         Conv::Inch => Value::Float(round(n * 25.4, 1)),
         Conv::Same(d) => Value::Float(round(n, d)),
         Conv::Flag => Value::Bool(n >= 1.0),
+        Conv::Level => Value::Float((n.clamp(0.0, 5.0) * 20.0).round()),
+        Conv::Instant => {
+            // Whole seconds since 1970: exact in an f64 for any real date.
+            #[allow(clippy::cast_possible_truncation)]
+            let seconds = n.round() as i64;
+            if seconds <= 0 {
+                return Value::Null;
+            }
+            jiff::Timestamp::from_second(seconds)
+                .map_or(Value::Null, |t| Value::Text(t.to_string().into()))
+        }
     }
 }
 
@@ -383,6 +534,13 @@ pub fn readings(form: &Form) -> Vec<Reading> {
             push(part, "battery_low", convert(raw, Conv::Flag));
         }
     }
+    for (prefix, max, part, key, conv) in NUMBERED {
+        for n in 1..=*max {
+            if let Some(raw) = form.get(&format!("{prefix}{n}")) {
+                push(part(n), *key, convert(raw, *conv));
+            }
+        }
+    }
     // Derived, like Ecowitt's apps and aioecowitt: dew point and light.
     let get = |part: Part, key: &str| {
         out.iter()
@@ -411,9 +569,9 @@ pub fn readings(form: &Form) -> Vec<Reading> {
     out
 }
 
-/// Names of the fields this driver leaves aside (the lightning sensor,
-/// air quality, soil, leaks, `vpd`…), for one log line, so a new sensor is
-/// noticed. With both rain gauges, the piezo's fields are read but unused.
+/// Names of the fields this driver leaves aside (the soil probes' raw
+/// values, the piezo's with a bucket gauge, a sensor Ecowitt sells next…),
+/// for one log line, so a new sensor is noticed. With both rain gauges, the piezo's fields are read but unused.
 pub fn unread(form: &Form) -> Vec<&str> {
     let known = |name: &str| {
         META.contains(&name)
@@ -424,6 +582,9 @@ pub fn unread(form: &Form) -> Vec<&str> {
                     || name == format!("humidity{n}")
                     || name == format!("batt{n}")
             })
+            || NUMBERED
+                .iter()
+                .any(|(prefix, max, ..)| (1..=*max).any(|n| name == format!("{prefix}{n}")))
     };
     form.keys()
         .map(String::as_str)
@@ -467,6 +628,13 @@ mod tests {
         assert_eq!(convert("NaN", Conv::Same(1)), Value::Null);
         assert_eq!(dew_point(20.0, 50.0), Some(9.3));
         assert_eq!(dew_point(20.0, 0.0), None);
+        assert_eq!(convert("4", Conv::Level), Value::Float(80.0));
+        assert_eq!(convert("6", Conv::Level), Value::Float(100.0), "on mains");
+        assert_eq!(
+            convert("1707382800", Conv::Instant),
+            Value::Text("2024-02-08T09:00:00Z".into())
+        );
+        assert_eq!(convert("0", Conv::Instant), Value::Null);
     }
 
     #[test]
@@ -475,11 +643,15 @@ mod tests {
             .iter()
             .map(|(_, _, k, _)| *k)
             .chain(RAIN.iter().map(|(_, _, k)| *k))
+            .chain(NUMBERED.iter().map(|(_, _, _, k, _)| *k))
             .chain(["temperature", "humidity", "battery_low"])
             .chain(["dew_point", "illuminance"]);
         for key in keys {
             let p = point(key).unwrap_or_else(|| panic!("{key}: no point"));
-            assert!(p.binary || unit(p).is_some(), "{key}: no unit");
+            assert!(
+                p.binary || p.text || unit(p).is_some() || key == "lightning_count",
+                "{key}: no unit"
+            );
         }
     }
 }

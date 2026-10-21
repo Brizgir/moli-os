@@ -786,12 +786,25 @@ kind = "ecowitt"
   (WH65), `battery_voltage` (WS90, WS80…), `capacitor_voltage` (supercondensateur du WS90),
   `rain_battery_voltage` (WH40) ; intérieur `temperature`, `humidity`, `pressure` (relative,
   hPa), `pressure_abs`, `battery_low` (WH25) ; canaux `temperature`, `humidity`,
-  `battery_low`. Mêmes clés que le profil `open-meteo` pour ce qui veut dire la même chose.
+  `battery_low` ; `vpd` (hPa) sur l'extérieur, `co2`, `co2_24h` (ppm) sur la console qui en a
+  un. **Les autres capteurs Ecowitt**, chacun son appareil : `lightning` (WH57 :
+  `lightning_distance` km, `lightning_count`, `lightning_last` instant en texte, `battery` %),
+  `air` (WH45/WH46 : `temperature`, `humidity`, `co2`, `pm1`, `pm25`, `pm4`, `pm10` et leurs
+  moyennes `_24h`, `battery`), `globe` (WN38 : `black_globe`, `wet_bulb_globe`,
+  `battery_voltage`), `soil<n>` (WH51, 1-16 : `soil_moisture`, `battery_voltage`),
+  `probe<n>` (WN34, 1-8 : `temperature`, `battery_voltage`), `leak<n>` (WH55, 1-4 : `leak`
+  sémantique fuite d'eau, `battery`), `pm25_<n>` (WH41, 1-4 : `pm25`, `pm25_24h`,
+  `battery`), `leaf<n>` (WN35, 1-8 : `leaf_wetness`, `battery_voltage`). Niveau de pile 0-5
+  → % (6 = sur secteur : 100 %). Mêmes clés que le profil `open-meteo` pour ce qui veut dire
+  la même chose.
   Pluie : l'auget (WH40, WH65) d'abord, sinon le piézo du WS90 (`*_piezo`).
 - **Disponibilité** : `waiting` (« en attente de la station … ») jusqu'au premier envoi, puis
   `running` ; plus rien pendant 3 intervalles (3 min au moins) : appareils hors ligne et
   `waiting` « plus rien reçu de la station … », jusqu'au suivant.
-- **Pas lus** (dits une fois au journal) : foudre WH57, qualité de l'air, sol, fuites, WN38, `vpd`.
+- **Pas lus** (dits une fois au journal) : valeurs brutes des sondes de sol (`soilad<n>`, cachées
+  aussi par HA), le piézo quand un auget est là, et tout capteur qu'Ecowitt sortirait ensuite.
+  Seuls l'extérieur, la console et la foudre ont été vus dans de vrais envois ; les autres
+  capteurs suivent les noms de champs d'aioecowitt, sans capture.
 - **Tests** : `src/tests.rs` sur trois vrais envois (`integrations/ecowitt/fixtures/` :
   GW1200B des tests d'aioecowitt, GW2000A avec WS90 seul, GW2000A avec WH57 et champs vides ;
   PASSKEY fictifs) : conversions, piézo contre auget, champs non lus, canaux, valeurs
