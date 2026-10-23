@@ -222,7 +222,20 @@ appareils les nomment).
 - Ambre = allumé, bleu = climat/froid, corail = attention. Grandes cibles tactiles, peu de mots,
   aucun jargon. Police Figtree Variable, icônes Material Design (sélection dans
   `lib/icons.js` : seules celles-ci sont dans le paquet).
-- Jetons CSS sous `.maison` dans `maison.css` (l'Atelier garde son propre style).
+- Jetons CSS sous `.maison` dans `maison.css` (l'Atelier garde son propre style) : couleurs,
+  rayons, et depuis octobre 2026 une échelle d'espacement (`--sp-1` 4 px à `--sp-8` 32 px),
+  quelques tailles de texte (`--fs-xs` à `--fs-xl`) et **trois largeurs d'écran, et seulement
+  celles-là** : téléphone (< 768 px), petit téléphone (< 560 px), tablette (< 1180 px). Elles
+  sont répétées telles quelles dans les media queries (une variable n'y entre pas).
+- **La tuile** (`ui/Tile.svelte`), façon Apple Home : un disque avec l'icône, le nom, un mot
+  d'état ; allumée, elle vient en avant (`--tile-on`) et le disque prend sa couleur (ambre
+  lampe, bleu climat, vert ce qui joue, corail ce qui cloche), ou la couleur de la lampe.
+  Variantes : `row` (basse, disque et mots côte à côte : un relevé, une personne), `compact`
+  (le disque seul), `value` (un grand chiffre), `badge` (cadenas, main), `glyph` (une
+  initiale), `static` (un relevé sans action), `href` (un lien), `onmore` (un petit bouton :
+  réglage, télécommande). Tout ce qui se commande ou se lit passe par elle : pièces, lumières
+  favorites, pièces chauffées, présence, surveillance, modes, sécurité, Salon, Dehors. La
+  carte vivante de Système reste un schéma (ses nœuds sont reliés par des traits).
 - Règle de style : **pas de bordure gauche colorée** sur les cartes.
 - Une lampe injoignable n'est jamais affichée allumée (sa dernière valeur est une supposition).
 - Les ordres retenus par la garde ouvrent la feuille « C'est moi » (code PIN), qui sert aussi

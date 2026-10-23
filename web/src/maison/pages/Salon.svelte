@@ -6,6 +6,7 @@
   import Remote from '../ui/Remote.svelte';
   import LightTile from '../ui/LightTile.svelte';
   import SpeakerCard from '../ui/SpeakerCard.svelte';
+  import Tile from '../ui/Tile.svelte';
   import AmbiancePicker from '../ui/AmbiancePicker.svelte';
 
   const s = $derived(home.config?.salon ?? {});
@@ -125,7 +126,7 @@
         {/if}
         {#if has('app')}<div class="apps" role="group" aria-label={t('salon.ouvrir_une_appli')}>
           {#each LAUNCH as pkg (pkg)}
-            <button class:on={app === pkg} disabled={!tvOn || busy != null} onclick={() => open(pkg)}>{appLabel(pkg)}</button>
+            <Tile row icon="tv" label={appLabel(pkg)} on={app === pkg} tone="cool" busy={busy === pkg} dim={!tvOn} pressed={app === pkg} onclick={() => (!tvOn || busy != null ? null : open(pkg))} />
           {/each}
         </div>{/if}
       </section>
@@ -307,32 +308,10 @@
   }
 
   .apps {
-    display: flex;
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
     gap: var(--sp-2);
     margin-top: 18px;
-  }
-
-  .apps button {
-    border: 0;
-    border-radius: 999px;
-    padding: 8px 14px;
-    font: inherit;
-    font-size: var(--fs-md);
-    font-weight: 650;
-    background: var(--surface-2);
-    color: var(--ink-2);
-    cursor: pointer;
-  }
-
-  .apps button.on {
-    background: var(--cool-soft);
-    color: var(--cool);
-  }
-
-  .apps button:disabled {
-    opacity: 0.5;
-    cursor: default;
   }
 
   @media (max-width: 559.98px) {

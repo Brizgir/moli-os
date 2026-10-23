@@ -13,6 +13,7 @@
   import { t } from '../../lib/i18n.svelte.js';
   import Icon from '../ui/Icon.svelte';
   import LightTile from '../ui/LightTile.svelte';
+  import Tile from '../ui/Tile.svelte';
   import SunArc from '../ui/SunArc.svelte';
   import Forecast from '../ui/Forecast.svelte';
   import OutdoorPlan from '../ui/OutdoorPlan.svelte';
@@ -145,15 +146,12 @@
           <h2><Icon name="people" size={18} />{t('maison.dehors.qui_sorti')}</h2>
           <span class="muted">{away.length ? t('maison.dehors.dehors_compte', { count: away.length }) : t('maison.dehors.tous_la')}</span>
         </div>
-        <ul class="people">
+        <div class="tiles">
           {#each sorted as p (p.id)}
             {@const here = whereabouts(p.id)}
-            <li class:in={here.home === true}>
-              <span class="dot" style:background={colorOf(p)}>{p.name.slice(0, 1).toUpperCase()}</span>
-              <span class="who"><b>{p.name}</b><small>{place(p)}{#if here.since}{' · '}{relative(here.since, home.now)}{/if}</small></span>
-            </li>
+            <Tile row static glyph={p.name.slice(0, 1).toUpperCase()} label={p.name} state={`${place(p)}${here.since ? ` · ${relative(here.since, home.now)}` : ''}`} on={here.home !== true} tone="cool" tint={colorOf(p)} />
           {/each}
-        </ul>
+        </div>
       </section>
     {/if}
 
@@ -161,11 +159,11 @@
     {#if aqi != null || uv != null || v(air, 'pm2_5') != null}
       <section class="card">
         <div class="card-head"><h2><Icon name="leaf" size={18} />{t('maison.dehors.air')}</h2><span class="chip {aqiTone}">{aqiWord}</span></div>
-        <div class="pairs">
-          <div><small>{t('maison.dehors.indice')}</small><b class="num">{num(aqi)}</b></div>
-          <div><small>UV</small><b class="num">{num(uv, 0)}</b><em class="muted">{uvWord}</em></div>
-          <div><small>{t('maison.dehors.particules')}</small><b class="num">{num(v(air, 'pm2_5'), 1)} µg/m³</b></div>
-          <div><small>{t('maison.dehors.ozone')}</small><b class="num">{num(v(air, 'ozone'))} µg/m³</b></div>
+        <div class="tiles">
+          <Tile row static icon="leaf" label={t('maison.dehors.indice')} value={num(aqi)} tone="good" />
+          <Tile row static icon="sun" label="UV" state={uvWord} value={num(uv, 0)} tone="warm" />
+          <Tile row static icon="cloud" label={t('maison.dehors.particules')} value={`${num(v(air, 'pm2_5'), 1)} µg/m³`} tone="cool" />
+          <Tile row static icon="cloud" label={t('maison.dehors.ozone')} value={`${num(v(air, 'ozone'))} µg/m³`} tone="cool" />
         </div>
       </section>
     {/if}
@@ -176,11 +174,11 @@
           <h2><Icon name="pool" size={18} />{t('maison.dehors.piscine')}</h2>
           {#if v(pool, 'action_required') === true}<span class="chip cool">{t('maison.dehors.coup_oeil')}</span>{:else}<span class="chip good">{t('maison.dehors.tout_va_bien')}</span>{/if}
         </div>
-        <div class="pairs">
-          <div><small>{t('maison.dehors.eau')}</small><b class="num">{v(pool, 'temperature') != null ? `${num(v(pool, 'temperature'), 1)}°` : '—'}</b></div>
-          <div><small>pH</small><b class="num">{num(ph, 1)}</b>{#if phWord}<em class="muted">{phWord}</em>{/if}</div>
-          <div><small>{t('maison.dehors.chlore')}</small><b class="num">{orp != null ? `${num(orp)} mV` : '—'}</b>{#if orpWord}<em class="muted">{orpWord}</em>{/if}</div>
-          <div><small>{t('maison.dehors.filtration')}</small><b class="num">{v(pool, 'filtration') != null ? t('maison.dehors.heures_jour', { hours: num(v(pool, 'filtration')) }) : '—'}</b></div>
+        <div class="tiles">
+          <Tile row static icon="pool" label={t('maison.dehors.eau')} value={v(pool, 'temperature') != null ? `${num(v(pool, 'temperature'), 1)}°` : '—'} tone="cool" />
+          <Tile row static icon="water" label="pH" state={phWord ?? ''} value={num(ph, 1)} tone="cool" />
+          <Tile row static icon="water" label={t('maison.dehors.chlore')} state={orpWord ?? ''} value={orp != null ? `${num(orp)} mV` : '—'} tone="cool" />
+          <Tile row static icon="fan" label={t('maison.dehors.filtration')} value={v(pool, 'filtration') != null ? t('maison.dehors.heures_jour', { hours: num(v(pool, 'filtration')) }) : '—'} tone="cool" />
         </div>
         {#if v(pool, 'temperature') == null && ph == null}
           <p class="muted small">{t('maison.dehors.sans_mesure')}</p>
@@ -306,11 +304,6 @@
   }
 
   .facts > div,
-  .pairs > div {
-    display: grid;
-    gap: 2px;
-    align-content: start;
-  }
 
   .facts :global(svg) {
     color: var(--ink-3);
@@ -355,10 +348,10 @@
     display: none;
   }
 
-  .pairs {
+  .tiles {
     display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 18px 16px;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: var(--sp-2);
   }
 
   .small {
@@ -376,45 +369,6 @@
   .lights {
     display: grid;
     gap: 10px;
-  }
-
-  .people {
-    margin: 0;
-    padding: 0;
-    list-style: none;
-    display: grid;
-    gap: 10px;
-  }
-
-  .people li {
-    display: flex;
-    align-items: center;
-    gap: var(--sp-3);
-  }
-
-  .people li.in {
-    opacity: 0.6;
-  }
-
-  .dot {
-    flex: none;
-    width: 36px;
-    height: 36px;
-    border-radius: 50%;
-    display: grid;
-    place-items: center;
-    color: #fff;
-    font-weight: 800;
-  }
-
-  .who b {
-    display: block;
-    font-size: 15px;
-  }
-
-  .who small {
-    font-weight: 500;
-    font-size: var(--fs-sm);
   }
 
   @media (max-width: 767.98px) {
