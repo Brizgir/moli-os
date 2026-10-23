@@ -1,6 +1,6 @@
 <script>
   import { onMount } from 'svelte';
-  import { home, hub, value, nameOf, hidden, relative, lastSeen, ringing } from '../lib/home.svelte.js';
+  import { home, hub, nameOf, hidden, relative, lastSeen, ringing } from '../lib/home.svelte.js';
   import { t } from '../../lib/i18n.svelte.js';
   import Icon from '../ui/Icon.svelte';
   import CameraTile from '../ui/CameraTile.svelte';

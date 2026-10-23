@@ -11,7 +11,7 @@
   let { surface = 'bubble', big = false, autofocus = false, placeholder = null } = $props();
 
   let text = $state('');
-  let field;
+  let field = $state();
 
   const voiceOk = $derived(moli.status?.listen && canRecord());
   // Never a dead button: on a phone there is no tooltip, so a tap says why.

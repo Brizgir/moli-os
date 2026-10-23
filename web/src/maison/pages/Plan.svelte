@@ -680,7 +680,7 @@
   /** Empty: as high as the floor's walls; else a low wall, a railing. */
   function wallHeight(event) {
     const v = cm(event, 1, 1000);
-    setWall(({ height, ...rest }) => (v ? { ...rest, height: v } : rest));
+    setWall(({ height: _height, ...rest }) => (v ? { ...rest, height: v } : rest));
   }
 
   function addOpening() {

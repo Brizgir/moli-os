@@ -210,13 +210,6 @@
     max-width: 520px;
   }
 
-  code {
-    font-size: var(--fs-sm);
-    background: var(--surface-2);
-    padding: 2px 6px;
-    border-radius: 6px;
-  }
-
   /* ---- the conversation and its board ---- */
   .started {
     display: grid;

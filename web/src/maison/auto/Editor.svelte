@@ -26,7 +26,6 @@
   let ask = $state('');
   let thinking = $state(false);
   let canvas = $state();
-  let loaded = $state(false);
   let error = $state('');
   let dryRun = null;
 
@@ -34,7 +33,6 @@
   const selectedNode = $derived(selected?.kind === 'node' ? a?.graph.nodes.find((n) => n.id === selected.id) : null);
   const problemNodes = $derived(new Set(check.problems.filter((p) => p.level === 'error' && p.node).map((p) => p.node)));
   const errors = $derived(check.problems.filter((p) => p.level === 'error'));
-  const warnings = $derived(check.problems.filter((p) => p.level === 'warning'));
   const renamed = $derived(renamedIn(a?.graph));
 
   async function load() {
@@ -66,7 +64,6 @@
         error = err.message;
       }
     }
-    loaded = true;
     requestAnimationFrame(() => canvas?.fit());
   }
 

@@ -16,7 +16,7 @@ Tout tourne en conteneur, aucune toolchain locale requise :
 ```
 .\scripts\dev.ps1 sh scripts/check.sh   # Windows : fmt + clippy pedantic -D warnings + tests + catalogue + fuites, obligatoire avant chaque commit
 sh scripts/dev.sh sh scripts/check.sh   # Linux, macOS : la même chose, dans l'image docker/dev.Dockerfile
-cd web && npm run build && cd .. && node scripts/i18n-check.mjs   # si l'interface a changé : build et traductions
+cd web && npm run lint && npm run check && npm test && npm run build && cd .. && node scripts/i18n-check.mjs   # si l'interface a changé : lint, svelte-check, tests, build, traductions
 docker build -t moli-os .               # l'image (Svelte → Rust musl → scratch)
 ```
 

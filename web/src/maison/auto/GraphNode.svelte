@@ -41,7 +41,7 @@
   {#if status && STATUS[status]}
     <span class="badge {status}" title={t('automatismes.badge.' + status)}><Icon name={STATUS[status]} size={14} /></span>
   {/if}
-  {#each outs as port, i (port)}
+  {#each outs as port (port)}
     <span
       class="port out"
       style="top:{portY(node.type, port) - 7}px"

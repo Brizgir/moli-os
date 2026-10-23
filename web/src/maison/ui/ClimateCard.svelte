@@ -143,6 +143,8 @@
 </script>
 
 <div class="clim" class:on data-tone={m.tone} class:unreachable={!reachable(id)}>
+  <!-- A slider when it can write (role and tabindex together), a picture otherwise. -->
+  <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
   <div
     class="dial"
     class:live={writable}

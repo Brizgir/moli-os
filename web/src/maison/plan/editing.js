@@ -96,7 +96,7 @@ export function straight(w) {
 export function unturned(w) {
   const box = straight(w);
   if (!box) return w;
-  const { r, ...rest } = w;
+  const { r: _r, ...rest } = w;
   return { ...rest, ...box };
 }
 

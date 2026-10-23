@@ -1,6 +1,6 @@
 <script>
   import { onMount } from 'svelte';
-  import { hub, home, value, act, nameOf, roomOf, protectedRoom, num, deg, clock, heatedRoom, heatedRooms, deviceKind, pending } from '../lib/home.svelte.js';
+  import { hub, home, value, act, protectedRoom, num, deg, clock, heatedRoom, heatedRooms, deviceKind, pending } from '../lib/home.svelte.js';
   import { timed, useTimed } from '../lib/timed.svelte.js';
   import { nextHeating } from '../lib/today.js';
   import { t } from '../../lib/i18n.svelte.js';

@@ -187,7 +187,6 @@
     color: var(--ink-3);
   }
 
-  input[type='text'],
   input:not([type]),
   select {
     width: 100%;

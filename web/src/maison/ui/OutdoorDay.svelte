@@ -3,7 +3,7 @@
   // over the last 24 hours, the coldest and warmest moments, and how it
   // compares with the same time yesterday.
   import { onMount } from 'svelte';
-  import { home, clock, num } from '../lib/home.svelte.js';
+  import { clock, num } from '../lib/home.svelte.js';
   import { temperatureDay, sparkPath } from '../lib/outside.js';
   import { t } from '../../lib/i18n.svelte.js';
   import Icon from './Icon.svelte';

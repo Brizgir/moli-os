@@ -1,6 +1,6 @@
 <script>
   import { onMount } from 'svelte';
-  import { hub, home, note } from '../lib/home.svelte.js';
+  import { hub, note } from '../lib/home.svelte.js';
   import { asHuman, CANCELLED } from '../lib/auto.svelte.js';
   import { dashboard, startDashboard, loadDashboard, current, canEdit, beginEditing, draftCards } from '../lib/dashboard.svelte.js';
   import { move, shift, update, setHidden, add, remove, duplicate, defaultLayout, SPAN } from '../lib/layout.js';
