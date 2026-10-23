@@ -11,17 +11,20 @@ const shown = () => Object.values(hub.devices).filter((d) => !hidden(d.id));
 const choice = (d) => ({ value: d.id, label: nameOf(d.id) });
 const ofKind = (kind) => shown().filter((d) => deviceKind(d) === kind);
 
-/** The light tiles the page may show: the favourites, else one per room
- *  that has lights (its Hue room, else its lamps together). */
+/** The light tiles the page may show: the favourites first, then one per
+ *  room that has lights no favourite speaks for (its Hue room, else its
+ *  lamps together), so that every light of the house has a tile. */
 export function lightTiles() {
-  const favourites = home.config?.favorites?.lights ?? [];
-  if (favourites.length) return favourites.map((l) => ({ ...l, also: l.also ?? [] }));
-  return roomList()
+  const favourites = (home.config?.favorites?.lights ?? []).map((l) => ({ ...l, also: l.also ?? [] }));
+  const covered = new Set(favourites.flatMap((l) => [l.id, ...l.also]));
+  const rooms = roomList()
     .filter((r) => r.group || r.lights.length)
+    .filter((r) => ![r.group?.id, ...r.lights.map((d) => d.id)].some((id) => id && covered.has(id)))
     .map((r) => {
       const first = r.group ?? r.lights[0];
       return { id: first.id, name: r.name, icon: r.icon, also: r.lights.map((d) => d.id).filter((id) => id !== first.id) };
     });
+  return [...favourites, ...rooms];
 }
 
 /** The clims of the page: the favourites that exist (a Netatmo room is the

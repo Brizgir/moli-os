@@ -167,8 +167,10 @@
 </div>
 
 <style>
+  /* minmax(0, …): no child (the bar's chips) may widen the page. */
   .pieces {
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     gap: 22px;
   }
 

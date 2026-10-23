@@ -39,8 +39,12 @@
 {/if}
 
 <style>
+  /* In a row of tools (Pièces), the strip shrinks and scrolls rather than
+     widening the page. */
   .filters {
     display: flex;
+    flex: 1 1 220px;
+    min-width: 0;
     gap: 6px;
     overflow-x: auto;
     padding-bottom: 2px;
