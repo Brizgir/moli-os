@@ -6,5 +6,6 @@
 3. Import (clés jamais affichées) : `… python3 - < tuya-export.py | docker exec -i moli-os
    /moli-os tuya import`. Les clés vont au coffre, `tuya.json` sans clé.
 4. Déclarer `kind = "tuya"` ; `moli-os check-config`, redémarrer. Corriger à la main `ip`,
-   `version` ou `room` dans `tuya.json` si besoin (conservés aux imports suivants).
+   `version` ou `room` dans `tuya.json` si besoin (conservés aux imports suivants). Inutile
+   après un changement d'adresse par la box : le pilote retrouve l'appareil et corrige `ip`.
 5. Tester une prise neutre, humain présent, jamais un radiateur de chambre.

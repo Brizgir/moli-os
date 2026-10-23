@@ -25,7 +25,7 @@ use tokio::time::timeout;
 use crate::device::Address;
 use crate::protocol::{Codec, Frame, Version, cmd};
 
-const PORT: u16 = 6668;
+pub(crate) const PORT: u16 = 6668;
 /// Long enough for a device on the home Wi-Fi to accept a connection.
 const KNOCK: Duration = Duration::from_millis(800);
 /// One identification attempt, all included.
@@ -198,7 +198,7 @@ async fn question(
 
 /// Whether the device at `ip` is `id`: it answers sensibly only to its own
 /// key (3.3: a status it encrypted; 3.4/3.5: the proof of the handshake).
-async fn identify(at: SocketAddr, id: &str, key: [u8; 16], version: Version) -> bool {
+pub(crate) async fn identify(at: SocketAddr, id: &str, key: [u8; 16], version: Version) -> bool {
     let attempt = async {
         let stream = TcpStream::connect(at).await.ok()?;
         let (mut reader, mut writer) = stream.into_split();
@@ -253,10 +253,37 @@ async fn next_frame(codec: &Codec, reader: &mut OwnedReadHalf, buf: &mut Vec<u8>
     }
 }
 
+/// A fake 3.3 device on loopback: answers a DP query with its status,
+/// encrypted with its own key (as a real one does).
+#[cfg(test)]
+pub(crate) async fn fake_device(key: [u8; 16]) -> u16 {
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+    tokio::spawn(async move {
+        loop {
+            let Ok((mut stream, _)) = listener.accept().await else {
+                return;
+            };
+            let mut chunk = [0u8; 1024];
+            let _ = stream.read(&mut chunk).await;
+            let mut codec = Codec::new(Version::V33, key);
+            let mut reply = codec.encode(cmd::DP_QUERY, br#"{"devId":"bf01","dps":{"1":true}}"#);
+            // A device's answer carries a return code after the header.
+            reply.splice(16..16, [0, 0, 0, 0]);
+            let total = reply.len();
+            let len = u32::try_from(total - 16).unwrap().to_be_bytes();
+            reply[12..16].copy_from_slice(&len);
+            let crc = crc32fast::hash(&reply[..total - 8]).to_be_bytes();
+            reply[total - 8..total - 4].copy_from_slice(&crc);
+            let _ = stream.write_all(&reply).await;
+        }
+    });
+    port
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tokio::net::TcpListener;
 
     #[test]
     fn the_home_network_is_a_slash_24() {
@@ -264,34 +291,6 @@ mod tests {
         assert_eq!(n.len(), 254);
         assert_eq!(n[0], Ipv4Addr::new(192, 168, 0, 1));
         assert_eq!(n[253], Ipv4Addr::new(192, 168, 0, 254));
-    }
-
-    /// A fake 3.3 device on loopback: answers a DP query with its status,
-    /// encrypted with its own key (as a real one does).
-    async fn fake_device(key: [u8; 16]) -> u16 {
-        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let port = listener.local_addr().unwrap().port();
-        tokio::spawn(async move {
-            loop {
-                let Ok((mut stream, _)) = listener.accept().await else {
-                    return;
-                };
-                let mut chunk = [0u8; 1024];
-                let _ = stream.read(&mut chunk).await;
-                let mut codec = Codec::new(Version::V33, key);
-                let mut reply =
-                    codec.encode(cmd::DP_QUERY, br#"{"devId":"bf01","dps":{"1":true}}"#);
-                // A device's answer carries a return code after the header.
-                reply.splice(16..16, [0, 0, 0, 0]);
-                let total = reply.len();
-                let len = u32::try_from(total - 16).unwrap().to_be_bytes();
-                reply[12..16].copy_from_slice(&len);
-                let crc = crc32fast::hash(&reply[..total - 8]).to_be_bytes();
-                reply[total - 8..total - 4].copy_from_slice(&crc);
-                let _ = stream.write_all(&reply).await;
-            }
-        });
-        port
     }
 
     #[tokio::test]

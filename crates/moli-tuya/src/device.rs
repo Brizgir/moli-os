@@ -2,6 +2,7 @@
 //! status pushes, heartbeats, orders. Reconnects on its own.
 
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use moli_core::Value;
@@ -34,6 +35,13 @@ pub type Address = Option<(String, Version)>;
 pub enum Up {
     State(usize, Vec<(String, Value)>),
     Online(usize, bool),
+    /// The device proved, with its key, that it answers at `to` now, no
+    /// longer at `from` (the address in the device file).
+    Moved {
+        index: usize,
+        from: String,
+        to: String,
+    },
 }
 
 /// An order: DP values to set, and who waits for the outcome.
@@ -68,6 +76,9 @@ pub struct Link {
     pub address: watch::Receiver<Address>,
     pub orders: mpsc::Receiver<Order>,
     pub up: mpsc::Sender<Up>,
+    /// Whether a session is up: discovery looks for a pinned device only
+    /// when it is not.
+    pub reachable: Arc<AtomicBool>,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -222,11 +233,13 @@ impl Link {
         // the device file; never a reason to stop.
         let mut watching = true;
         let mut floor = Floor::new(self.device.version);
+        // Where the device file has it: an address proven elsewhere is
+        // reported once (only an address the file had is ever corrected).
+        let mut settled = self.device.ip.clone();
         loop {
             let Some((ip, announced)) = self.address.borrow().clone() else {
                 if online.is_none() {
-                    online = Some(false);
-                    let _ = self.up.send(Up::Online(self.index, false)).await;
+                    self.set_online(&mut online, false).await;
                 }
                 if !self.idle(None, &mut watching).await {
                     return;
@@ -235,13 +248,14 @@ impl Link {
             };
             let version = floor.version(&self.device.name, announced);
             let started = Instant::now();
-            let result = self.session(&ip, version, &mut online, &mut floor).await;
+            let result = self
+                .session(&ip, version, (&mut online, &mut settled), &mut floor)
+                .await;
             if self.up.is_closed() {
                 return;
             }
             if online != Some(false) {
-                online = Some(false);
-                let _ = self.up.send(Up::Online(self.index, false)).await;
+                self.set_online(&mut online, false).await;
             }
             if let Err(e) = result {
                 tracing::debug!(device = self.device.name, ip, error = %e, "tuya link down");
@@ -255,6 +269,28 @@ impl Link {
             }
             backoff = (backoff * 2).min(BACKOFF_MAX);
         }
+    }
+
+    /// Says the device came online or went away.
+    async fn set_online(&self, online: &mut Option<bool>, now: bool) {
+        *online = Some(now);
+        self.reachable.store(now, Ordering::Relaxed);
+        let _ = self.up.send(Up::Online(self.index, now)).await;
+    }
+
+    /// The device proved its key at `ip`: reported once if the device file
+    /// has it elsewhere.
+    async fn settle(&self, ip: &str, settled: &mut Option<String>) {
+        let Some(from) = settled.as_deref().filter(|from| *from != ip) else {
+            return;
+        };
+        let moved = Up::Moved {
+            index: self.index,
+            from: from.to_owned(),
+            to: ip.to_owned(),
+        };
+        ip.clone_into(settled.get_or_insert_default());
+        let _ = self.up.send(moved).await;
     }
 
     /// Away from the device: refuse orders until the backoff ends (if any)
@@ -288,7 +324,7 @@ impl Link {
         &mut self,
         ip: &str,
         version: Version,
-        online: &mut Option<bool>,
+        (online, settled): (&mut Option<bool>, &mut Option<String>),
         floor: &mut Floor,
     ) -> Result<(), LinkError> {
         let stream = timeout(CONNECT, TcpStream::connect((ip, PORT)))
@@ -311,7 +347,10 @@ impl Link {
             let finish = codec.session_finish(local, &answer)?;
             floor.proved(version);
             writer.write_all(&finish).await?;
+            self.settle(ip, settled).await;
         }
+        // 3.3: the first payload opened with the key is the proof.
+        let mut proved = version.negotiates();
 
         let id = self.device.id.as_str();
         let query = if version == Version::V33 {
@@ -347,20 +386,13 @@ impl Link {
                     buf.extend_from_slice(&chunk[..n]);
                     while let Some(frame) = codec.decode(&mut buf)? {
                         if *online != Some(true) {
-                            *online = Some(true);
-                            let _ = self.up.send(Up::Online(self.index, true)).await;
+                            self.set_online(online, true).await;
                         }
-                        if matches!(frame.cmd, cmd::CONTROL | cmd::CONTROL_NEW) {
-                            // The device took the order, or refused it.
-                            let outcome = match frame.retcode {
-                                Some(0) | None => Ok(()),
-                                Some(code) => Err(moli_i18n::tr!("pilotes.tuya.refuse", code = code)),
-                            };
-                            for (_, done) in pending.drain(..) {
-                                let _ = done.send(outcome.clone());
-                            }
+                        acknowledged(&frame, &mut pending);
+                        if self.heard(&mut codec, &mut writer, &frame, mist.as_mut(), &mut pending).await? && !proved {
+                            proved = true;
+                            self.settle(ip, settled).await;
                         }
-                        self.heard(&mut codec, &mut writer, &frame, mist.as_mut(), &mut pending).await?;
                     }
                 }
                 _ = heartbeat.tick() => {
@@ -393,10 +425,11 @@ impl Link {
         }
     }
 
-    /// A frame from the device: its DPs are published. A diffuser whose
-    /// timer just ran out on its own, mist still on, is switched off by the
-    /// driver's own order, as the app promises. Not a person's nor an
-    /// automation's doing: the log says so.
+    /// A frame from the device: its DPs are published. `true`: its payload
+    /// opened with the device's key. A diffuser whose timer just ran out on
+    /// its own, mist still on, is switched off by the driver's own order, as
+    /// the app promises. Not a person's nor an automation's doing: the log
+    /// says so.
     async fn heard(
         &self,
         codec: &mut Codec,
@@ -404,13 +437,14 @@ impl Link {
         frame: &Frame,
         mist: Option<&mut MistTimer>,
         pending: &mut Pending,
-    ) -> Result<(), LinkError> {
+    ) -> Result<bool, LinkError> {
         let dps = self.report(codec, frame).await;
+        let opened = dps.is_some();
         let (Some(dps), Some(timer)) = (dps, mist) else {
-            return Ok(());
+            return Ok(opened);
         };
         if !timer.observe(frame.cmd, &dps) {
-            return Ok(());
+            return Ok(opened);
         }
         tracing::info!(
             device = self.device.name,
@@ -434,10 +468,11 @@ impl Link {
                 "tuya diffuser not switched off after its timer"
             );
         });
-        Ok(())
+        Ok(true)
     }
 
-    /// Publishes the DPs a frame carries, and hands them back raw.
+    /// Publishes the DPs a frame carries, and hands them back raw (`Some`:
+    /// the payload opened with the device's key).
     async fn report(&self, codec: &Codec, frame: &Frame) -> Option<Map<String, Json>> {
         if !matches!(
             frame.cmd,
@@ -468,6 +503,20 @@ impl Link {
             let _ = self.up.send(Up::State(self.index, values)).await;
         }
         Some(dps.clone())
+    }
+}
+
+/// The device took the order, or refused it: those waiting are told.
+fn acknowledged(frame: &Frame, pending: &mut Pending) {
+    if !matches!(frame.cmd, cmd::CONTROL | cmd::CONTROL_NEW) {
+        return;
+    }
+    let outcome = match frame.retcode {
+        Some(0) | None => Ok(()),
+        Some(code) => Err(moli_i18n::tr!("pilotes.tuya.refuse", code = code)),
+    };
+    for (_, done) in pending.drain(..) {
+        let _ = done.send(outcome.clone());
     }
 }
 
@@ -702,12 +751,13 @@ mod tests {
             address,
             orders,
             up,
+            reachable: Arc::new(AtomicBool::new(false)),
         };
         let session = tokio::spawn(async move {
             link.session(
                 "127.0.0.31",
                 Version::V33,
-                &mut Some(false),
+                (&mut Some(false), &mut None),
                 &mut Floor::new(None),
             )
             .await
@@ -737,5 +787,60 @@ mod tests {
         // 3.3 in the file proves nothing.
         let mut floor = Floor::new(Some(Version::V33));
         assert_eq!(floor.version("prise", Version::V33), Version::V33);
+    }
+    fn link(ip: Option<&str>) -> (Link, mpsc::Receiver<Up>) {
+        let device: TuyaDevice = serde_json::from_value(json!({
+            "id": "bf00fictif0diffuseur", "name": "Diffuseur", "ip": ip, "dps": []
+        }))
+        .unwrap();
+        let (up, rx) = mpsc::channel(8);
+        let (_, address) = watch::channel(None);
+        let (_, orders) = mpsc::channel(1);
+        let link = Link {
+            index: 3,
+            device: Arc::new(device),
+            key: *b"0123456789abcdef",
+            address,
+            orders,
+            up,
+            reachable: Arc::new(AtomicBool::new(false)),
+        };
+        (link, rx)
+    }
+
+    #[tokio::test]
+    async fn an_address_proven_elsewhere_than_the_file_is_reported_once() {
+        let (link, mut rx) = link(Some("192.168.1.10"));
+        let mut settled = link.device.ip.clone();
+        // Where the file says: nothing to report.
+        link.settle("192.168.1.10", &mut settled).await;
+        assert!(rx.try_recv().is_err());
+        // Elsewhere: reported, then known.
+        link.settle("192.168.1.42", &mut settled).await;
+        let Ok(Up::Moved { index, from, to }) = rx.try_recv() else {
+            panic!("expected a move");
+        };
+        assert_eq!(
+            (index, from.as_str(), to.as_str()),
+            (3, "192.168.1.10", "192.168.1.42")
+        );
+        link.settle("192.168.1.42", &mut settled).await;
+        assert!(rx.try_recv().is_err());
+        // No address in the file: none is added.
+        let (link, mut rx) = self::link(None);
+        let mut settled = None;
+        link.settle("192.168.1.42", &mut settled).await;
+        assert!(rx.try_recv().is_err());
+    }
+
+    #[tokio::test]
+    async fn being_online_is_shared_with_discovery() {
+        let (link, mut rx) = link(Some("192.168.1.10"));
+        let mut online = None;
+        link.set_online(&mut online, true).await;
+        assert!(link.reachable.load(Ordering::Relaxed));
+        assert!(matches!(rx.try_recv(), Ok(Up::Online(3, true))));
+        link.set_online(&mut online, false).await;
+        assert!(!link.reachable.load(Ordering::Relaxed));
     }
 }

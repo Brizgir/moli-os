@@ -246,6 +246,16 @@ impl DriverCtx {
         self.remember_address(address).await;
     }
 
+    /// One of this instance's devices answers at another address now:
+    /// journaled only. For a driver with many devices, which keeps their
+    /// addresses itself (the instance's single known address is untouched).
+    pub fn journal_address(&self, device: &DeviceId, from: &str, to: &str) {
+        if self.owns(device) {
+            self.hub
+                .record_address(&self.instance, Some(device.clone()), from, to);
+        }
+    }
+
     /// The current value of one of this instance's points (restored from
     /// the state cache after a restart), if any.
     #[must_use]

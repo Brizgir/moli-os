@@ -9,7 +9,10 @@
 //! in `tuya.json` in the data directory. From then on each device is reached on the LAN
 //! (TCP 6668); addresses and protocol versions come from the device file,
 //! the devices' own UDP broadcasts, or, when those are not heard, from
-//! asking the listeners of the home network with each key (`seek`).
+//! asking the listeners of the home network with each key (`seek`). A
+//! device the box gave another address is followed by its broadcasts and,
+//! once it proved its key there, its new address is written back to the
+//! device file.
 
 pub mod cloud;
 mod device;
@@ -21,6 +24,8 @@ use std::collections::{HashMap, HashSet};
 use std::net::{Ipv4Addr, SocketAddr};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::{Duration, Instant};
 
 use moli_core::DeviceId;
 use moli_runtime::{BoxFuture, Driver, DriverCtx};
@@ -130,7 +135,7 @@ async fn run(config: &Config, devices_file: &Path, ctx: &mut DriverCtx) -> anyho
 
     let (up_tx, mut up) = mpsc::channel::<Up>(256);
     let mut orders: HashMap<DeviceId, (usize, mpsc::Sender<Order>)> = HashMap::new();
-    let mut addresses: HashMap<String, Arc<watch::Sender<Address>>> = HashMap::new();
+    let mut followed: HashMap<String, Followed> = HashMap::new();
     let mut wanted = Vec::new();
     let mut devices: Vec<(DeviceId, Arc<TuyaDevice>)> = Vec::new();
     let mut tasks = tokio::task::JoinSet::new();
@@ -168,23 +173,18 @@ async fn run(config: &Config, devices_file: &Path, ctx: &mut DriverCtx) -> anyho
         let id = device.id.clone();
         ctx.upsert_device(device);
         let dev = Arc::new(dev);
-        let start = dev
-            .ip
-            .clone()
-            .map(|ip| (ip, dev.version.unwrap_or(Version::V33)));
-        let (addr_tx, addr_rx) = watch::channel(start);
-        let addr_tx = Arc::new(addr_tx);
+        let (follow, addr_rx, reachable) = Followed::start(&dev, key);
         if dev.ip.is_none() {
             wanted.push(seek::Wanted {
                 id: dev.id.clone(),
                 name: dev.name.trim().to_owned(),
                 key,
-                address: Arc::clone(&addr_tx),
+                address: Arc::clone(&follow.address),
             });
         }
+        followed.insert(dev.id.clone(), follow);
         let (order_tx, order_rx) = mpsc::channel(8);
         let index = devices.len();
-        addresses.insert(dev.id.clone(), addr_tx);
         orders.insert(id.clone(), (index, order_tx));
         devices.push((id, Arc::clone(&dev)));
         tasks.spawn(
@@ -195,6 +195,7 @@ async fn run(config: &Config, devices_file: &Path, ctx: &mut DriverCtx) -> anyho
                 address: addr_rx,
                 orders: order_rx,
                 up: up_tx.clone(),
+                reachable,
             }
             .run(),
         );
@@ -208,11 +209,11 @@ async fn run(config: &Config, devices_file: &Path, ctx: &mut DriverCtx) -> anyho
     if missing_keys > 0 {
         tracing::warn!(instance = %ctx.instance(), missing_keys, "tuya devices without a local key are skipped (re-run the import)");
     }
-    locate(config, &devices, addresses, wanted, &mut tasks);
+    locate(config, &devices, followed, wanted, &mut tasks);
     ctx.ready();
     tracing::info!(instance = %ctx.instance(), devices = devices.len(), "tuya devices loaded");
 
-    let keys_came = serve(ctx, &mut up, &orders, &devices, await_keys).await;
+    let keys_came = serve(ctx, &mut up, &orders, &devices, devices_file, await_keys).await;
     tasks.abort_all();
     if keys_came {
         anyhow::bail!(moli_i18n::tr!("pilotes.tuya.cles_cloud"));
@@ -243,6 +244,7 @@ async fn serve(
     up: &mut mpsc::Receiver<Up>,
     orders: &HashMap<DeviceId, (usize, mpsc::Sender<Order>)>,
     devices: &[(DeviceId, Arc<TuyaDevice>)],
+    devices_file: &Path,
     await_keys: bool,
 ) -> bool {
     let mut look = tokio::time::interval(std::time::Duration::from_secs(20));
@@ -267,6 +269,15 @@ async fn serve(
                     }
                 }
                 Some(Up::Online(index, online)) => ctx.set_availability(&devices[index].0, online),
+                Some(Up::Moved { index, from, to }) => {
+                    let (id, dev) = &devices[index];
+                    tracing::info!(instance = %ctx.instance(), device = dev.name.trim(), from, to, "tuya device answers at a new address");
+                    ctx.journal_address(id, &from, &to);
+                    if let Err(e) = write_address(devices_file, &dev.id, &to).await {
+                        // Followed anyway until the next start.
+                        tracing::warn!(file = %devices_file.display(), error = %e, "tuya device file not updated");
+                    }
+                }
                 None => break,
             },
         }
@@ -297,7 +308,7 @@ fn start_cloud(
 fn locate(
     config: &Config,
     devices: &[(DeviceId, Arc<TuyaDevice>)],
-    addresses: HashMap<String, Arc<watch::Sender<Address>>>,
+    followed: HashMap<String, Followed>,
     wanted: Vec<seek::Wanted>,
     tasks: &mut tokio::task::JoinSet<()>,
 ) {
@@ -313,11 +324,7 @@ fn locate(
         tasks.spawn(seek::seek(seek::neighbours(*first), wanted, known.clone()));
     }
     if config.discovery {
-        let pinned: HashMap<String, bool> = devices
-            .iter()
-            .map(|(_, d)| (d.id.clone(), d.ip.is_some() && d.version.is_some()))
-            .collect();
-        tasks.spawn(discover(addresses, pinned));
+        tasks.spawn(discover(followed));
     }
 }
 
@@ -365,15 +372,133 @@ fn dispatch(
     });
 }
 
+/// A device's address, as discovery keeps it.
+#[derive(Clone)]
+struct Followed {
+    address: Arc<watch::Sender<Address>>,
+    /// `ip` and `version` both in the device file.
+    pinned: Option<Pinned>,
+}
+
+#[derive(Clone)]
+struct Pinned {
+    key: [u8; 16],
+    reachable: Arc<AtomicBool>,
+}
+
+/// A pinned device announced elsewhere is asked there at most this often.
+const CHECK_AGAIN: Duration = Duration::from_secs(60);
+
+/// What one announcement does to a device.
+#[derive(Debug, PartialEq, Eq)]
+enum Heard {
+    Nothing,
+    /// Taken as it is (the announced version passes the link's floor).
+    Take,
+    /// A pinned device out of reach, announced elsewhere: taken only if it
+    /// answers there with its key.
+    Check,
+}
+
+impl Followed {
+    /// Where `dev` is first, as its file says; what its link reads, and
+    /// whether the link is up.
+    fn start(dev: &TuyaDevice, key: [u8; 16]) -> (Self, watch::Receiver<Address>, Arc<AtomicBool>) {
+        let start = dev
+            .ip
+            .clone()
+            .map(|ip| (ip, dev.version.unwrap_or(Version::V33)));
+        let (address, rx) = watch::channel(start);
+        let reachable = Arc::new(AtomicBool::new(false));
+        // Both in the file: a person said where and how; an announcement
+        // moves it only once it is out of reach, and its key proved it.
+        let pinned = (dev.ip.is_some() && dev.version.is_some()).then(|| Pinned {
+            key,
+            reachable: Arc::clone(&reachable),
+        });
+        let follow = Self {
+            address: Arc::new(address),
+            pinned,
+        };
+        (follow, rx, reachable)
+    }
+
+    fn heard(&self, ip: &str) -> Heard {
+        let Some(pinned) = &self.pinned else {
+            return Heard::Take;
+        };
+        let here = self
+            .address
+            .borrow()
+            .as_ref()
+            .is_some_and(|(at, _)| at == ip);
+        if here || pinned.reachable.load(Ordering::Relaxed) {
+            Heard::Nothing
+        } else {
+            Heard::Check
+        }
+    }
+
+    /// Takes `ip`, announced in `version`. `false`: nothing changed.
+    fn take(&self, id: &str, ip: &str, version: Version) -> bool {
+        self.address.send_if_modified(|current| {
+            let next = Some((ip.to_owned(), version));
+            if *current == next {
+                return false;
+            }
+            tracing::info!(device = id, ip, ?version, "tuya device found");
+            *current = next;
+            true
+        })
+    }
+
+    /// A pinned device announced at `ip`: moved there, in the version its
+    /// file gives, if it answers at `at` with its own key.
+    async fn check(&self, id: &str, ip: &str, at: SocketAddr) -> bool {
+        let Some(pinned) = &self.pinned else {
+            return false;
+        };
+        let Some((old, version)) = self.address.borrow().clone() else {
+            return false;
+        };
+        if !seek::identify(at, id, pinned.key, version).await {
+            tracing::debug!(
+                device = id,
+                ip,
+                "tuya announcement not confirmed by the device's key"
+            );
+            return false;
+        }
+        tracing::info!(
+            device = id,
+            old,
+            new = ip,
+            "tuya device found at a new address"
+        );
+        self.take(id, ip, version)
+    }
+}
+
+/// A broadcast (`datagram`, from `from`) → the device it announces, where
+/// it is and its version. Where the broadcast came from, not what it
+/// claims: an `ip` that differs from the sender is not believed.
+fn announcement(datagram: &[u8], from: SocketAddr) -> Option<(String, String, Version)> {
+    let json = protocol::open_broadcast(datagram)?;
+    let id = json.get("gwId")?.as_str()?;
+    let version = json
+        .get("version")
+        .and_then(|v| v.as_str())
+        .and_then(Version::parse)?;
+    Some((id.to_owned(), from.ip().to_string(), version))
+}
+
 /// Listens to the devices' broadcasts (3.1–3.3 on 6666/6667, 3.4+ also on
-/// 7000) and keeps every device's address and version up to date. Devices
-/// with both pinned in the file are left alone. Anyone can broadcast: a
-/// device is never spoken to in an older version than it proved, or than
-/// its file says (`device::Floor`).
-async fn discover(
-    addresses: HashMap<String, Arc<watch::Sender<Address>>>,
-    pinned: HashMap<String, bool>,
-) {
+/// 7000) and keeps every device's address and version up to date. A device
+/// with both pinned in the file keeps them while it answers; out of reach,
+/// it follows its announcements once its key proved them (`Followed::check`).
+/// Anyone can broadcast: a device is never spoken to in an older version
+/// than it proved, or than its file says (`device::Floor`).
+async fn discover(followed: HashMap<String, Followed>) {
     let mut sockets = Vec::new();
     for port in [6666u16, 6667, 7000] {
         match broadcast_socket(port) {
@@ -394,42 +519,75 @@ async fn discover(
                 let Ok((n, from)) = socket.recv_from(&mut buf).await else {
                     return;
                 };
-                let Some(json) = protocol::open_broadcast(&buf[..n]) else {
+                let Some(heard) = announcement(&buf[..n], from) else {
                     continue;
                 };
-                let (Some(id), Some(version)) = (
-                    json.get("gwId").and_then(|v| v.as_str()),
-                    json.get("version")
-                        .and_then(|v| v.as_str())
-                        .and_then(Version::parse),
-                ) else {
-                    continue;
-                };
-                // Where the broadcast came from, not what it claims.
-                let ip = from.ip().to_string();
-                if found_tx.send((id.to_owned(), ip, version)).await.is_err() {
+                if found_tx.send(heard).await.is_err() {
                     return;
                 }
             }
         });
     }
     drop(found_tx);
+    // (device, address) last asked, so a device announcing every few
+    // seconds is not asked each time.
+    let mut asked: HashMap<(String, String), Instant> = HashMap::new();
+    let mut checks = tokio::task::JoinSet::new();
     while let Some((id, ip, version)) = found.recv().await {
-        if pinned.get(&id).copied().unwrap_or(false) {
+        while checks.try_join_next().is_some() {}
+        let Some(device) = followed.get(&id) else {
             continue;
-        }
-        if let Some(sender) = addresses.get(&id) {
-            sender.send_if_modified(|current| {
-                let next = Some((ip.clone(), version));
-                if *current == next {
-                    return false;
+        };
+        match device.heard(&ip) {
+            Heard::Nothing => {}
+            Heard::Take => {
+                device.take(&id, &ip, version);
+            }
+            Heard::Check => {
+                let now = Instant::now();
+                asked.retain(|_, at| now.duration_since(*at) < CHECK_AGAIN);
+                if asked.contains_key(&(id.clone(), ip.clone())) {
+                    continue;
                 }
-                tracing::info!(device = id, ip, ?version, "tuya device found");
-                *current = next;
-                true
-            });
+                let Ok(at) = ip.parse::<Ipv4Addr>() else {
+                    continue;
+                };
+                asked.insert((id.clone(), ip.clone()), now);
+                let device = device.clone();
+                checks.spawn(async move {
+                    device.check(&id, &ip, (at, seek::PORT).into()).await;
+                });
+            }
         }
     }
+}
+
+/// Writes `id`'s new address in the device file (the rest as the import
+/// writes it), through a temporary file. Nothing to change: not written.
+async fn write_address(file: &Path, id: &str, ip: &str) -> anyhow::Result<()> {
+    let bytes = tokio::fs::read(file).await?;
+    let Some(text) = with_address(&bytes, id, ip)? else {
+        return Ok(());
+    };
+    let tmp = file.with_extension("json.tmp");
+    tokio::fs::write(&tmp, text).await?;
+    tokio::fs::rename(&tmp, file).await?;
+    Ok(())
+}
+
+/// The device file with `id` at `ip`; `None` when it already is, or when
+/// the file does not have the device or has no address for it (one a
+/// person removed is not put back).
+fn with_address(bytes: &[u8], id: &str, ip: &str) -> serde_json::Result<Option<String>> {
+    let mut file: DeviceFile = serde_json::from_slice(bytes)?;
+    let Some(device) = file.devices.iter_mut().find(|d| d.id == id) else {
+        return Ok(None);
+    };
+    match &device.ip {
+        Some(old) if old != ip => device.ip = Some(ip.to_owned()),
+        _ => return Ok(None),
+    }
+    Ok(Some(serde_json::to_string_pretty(&file)? + "\n"))
 }
 
 /// Shared with anything else listening (Home Assistant's localtuya):
@@ -547,5 +705,128 @@ mod tests {
             !text.contains("0123456789abcdef"),
             "no key in the device file"
         );
+    }
+    // ---- a device the box gave another address (fictitious announcements)
+
+    const ID: &str = "bf00fictif0diffuseur";
+    const KEY: [u8; 16] = *b"0123456789abcdef";
+
+    fn followed(at: &str, pinned: bool) -> (Followed, watch::Receiver<Address>) {
+        let (tx, rx) = watch::channel(Some((at.to_owned(), Version::V33)));
+        let followed = Followed {
+            address: Arc::new(tx),
+            pinned: pinned.then(|| Pinned {
+                key: KEY,
+                reachable: Arc::new(AtomicBool::new(false)),
+            }),
+        };
+        (followed, rx)
+    }
+
+    #[test]
+    fn an_announcement_names_the_device_and_where_it_came_from() {
+        let datagram = protocol::broadcast_33(
+            format!(r#"{{"ip":"192.168.1.42","gwId":"{ID}","active":2,"encrypt":true,"productKey":"fictif","version":"3.3"}}"#)
+                .as_bytes(),
+        );
+        let from: SocketAddr = ([192, 168, 1, 42], 6667).into();
+        assert_eq!(
+            announcement(&datagram, from),
+            Some((ID.to_owned(), "192.168.1.42".to_owned(), Version::V33))
+        );
+        // What it claims is not believed: where it came from is.
+        let elsewhere: SocketAddr = ([192, 168, 1, 7], 6667).into();
+        assert_eq!(
+            announcement(&datagram, elsewhere).map(|(_, ip, _)| ip),
+            Some("192.168.1.7".to_owned())
+        );
+        // Without an id or a version, or not a broadcast at all: nothing.
+        let anonymous = protocol::broadcast_33(br#"{"ip":"192.168.1.42","version":"3.3"}"#);
+        assert_eq!(announcement(&anonymous, from), None);
+        assert_eq!(announcement(b"not a broadcast", from), None);
+    }
+
+    #[test]
+    fn a_pinned_device_follows_its_announcements_only_out_of_reach() {
+        // Not pinned: followed as before.
+        let (free, _rx) = followed("192.168.1.10", false);
+        assert_eq!(free.heard("192.168.1.42"), Heard::Take);
+        // Pinned and announced where it is: nothing to do.
+        let (pinned, _rx) = followed("192.168.1.10", true);
+        assert_eq!(pinned.heard("192.168.1.10"), Heard::Nothing);
+        // Out of reach, announced elsewhere: asked there.
+        assert_eq!(pinned.heard("192.168.1.42"), Heard::Check);
+        // Answering where the file says: an announcement elsewhere is ignored.
+        let reachable = &pinned.pinned.as_ref().unwrap().reachable;
+        reachable.store(true, Ordering::Relaxed);
+        assert_eq!(pinned.heard("192.168.1.42"), Heard::Nothing);
+    }
+
+    #[tokio::test]
+    async fn a_pinned_device_moves_once_its_key_answers_there() {
+        // The device, now at another address (loopback stands for it).
+        let port = seek::fake_device(KEY).await;
+        let there: SocketAddr = ([127, 0, 0, 1], port).into();
+
+        // Someone else announcing it, without its key: not taken.
+        let (pinned, rx) = followed("192.168.1.10", true);
+        let mut impostor = pinned.clone();
+        impostor.pinned.as_mut().unwrap().key = *b"fedcba9876543210";
+        assert!(!impostor.check(ID, "127.0.0.1", there).await);
+        assert_eq!(rx.borrow().as_ref().unwrap().0, "192.168.1.10");
+
+        // The device itself: taken, in the version of its file.
+        assert!(pinned.check(ID, "127.0.0.1", there).await);
+        assert_eq!(*rx.borrow(), Some(("127.0.0.1".to_owned(), Version::V33)));
+    }
+
+    #[test]
+    fn the_new_address_is_written_in_the_device_file() {
+        let file = serde_json::json!({ "devices": [
+            { "id": ID, "name": "Diffuseur", "category": "xxj", "ip": "192.168.1.10",
+              "version": "3.3", "room": "Salon", "dps": [] },
+            { "id": "bf00fictif0prise0001", "name": "Prise", "ip": "192.168.1.11", "dps": [] },
+            { "id": "bf00fictif0volet0001", "name": "Volet", "dps": [] },
+        ]})
+        .to_string();
+        let text = with_address(file.as_bytes(), ID, "192.168.1.42")
+            .unwrap()
+            .expect("moved");
+        let written = DeviceFile::parse(text.as_bytes()).unwrap();
+        assert_eq!(written.devices[0].ip.as_deref(), Some("192.168.1.42"));
+        // The rest as it was.
+        assert_eq!(written.devices[0].version, Some(Version::V33));
+        assert_eq!(written.devices[0].room.as_deref(), Some("Salon"));
+        assert_eq!(written.devices[1].ip.as_deref(), Some("192.168.1.11"));
+        assert_eq!(written.devices[2].ip, None);
+        // Already there, unknown, or without an address in the file: unchanged.
+        assert_eq!(
+            with_address(text.as_bytes(), ID, "192.168.1.42").unwrap(),
+            None
+        );
+        assert_eq!(
+            with_address(file.as_bytes(), "bf00fictif0inconnu01", "192.168.1.42").unwrap(),
+            None
+        );
+        assert_eq!(
+            with_address(file.as_bytes(), "bf00fictif0volet0001", "192.168.1.42").unwrap(),
+            None
+        );
+    }
+
+    #[tokio::test]
+    async fn the_device_file_is_rewritten_in_place() {
+        let dir = std::env::temp_dir().join(format!("moli-tuya-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("tuya.json");
+        let file = serde_json::json!({ "devices": [
+            { "id": ID, "name": "Diffuseur", "ip": "192.168.1.10", "version": "3.3", "dps": [] },
+        ]});
+        std::fs::write(&path, file.to_string()).unwrap();
+        write_address(&path, ID, "192.168.1.42").await.unwrap();
+        let written = DeviceFile::parse(&std::fs::read(&path).unwrap()).unwrap();
+        assert_eq!(written.devices[0].ip.as_deref(), Some("192.168.1.42"));
+        assert!(!dir.join("tuya.json.tmp").exists());
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 }

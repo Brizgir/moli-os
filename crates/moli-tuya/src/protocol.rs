@@ -522,6 +522,14 @@ pub fn open_broadcast(datagram: &[u8]) -> Option<serde_json::Value> {
     serde_json::from_str(text.trim_end_matches('\0')).ok()
 }
 
+/// A 3.3 broadcast of `json`, as a device sends it on 6666/6667 (tests).
+#[cfg(test)]
+pub(crate) fn broadcast_33(json: &[u8]) -> Vec<u8> {
+    let body = ecb_encrypt(&udp_key(), json, true);
+    // Header 16 + retcode 4, then the body.
+    frame_55aa(0, 19, &[&[0u8, 0, 0, 0][..], &body].concat(), None)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
