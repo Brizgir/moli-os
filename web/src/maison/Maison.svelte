@@ -70,7 +70,10 @@
   // the next page the house has), and « Plus » for the rest of the menu.
   const fourth = $derived(items.find((i) => i.path === 'chauffage') ?? items.find((i) => !['', 'pieces', 'moli'].includes(i.path)) ?? null);
   const tabs = $derived(['', 'pieces'].map((p) => items.find((i) => i.path === p)).filter(Boolean));
-  const rest = $derived(items.filter((i) => !['', 'pieces', 'moli'].includes(i.path) && i !== fourth));
+  // A tablet has the same bar, wider: two more pages before « Plus ».
+  let tablet = $state(false);
+  const extra = $derived(tablet ? items.filter((i) => !['', 'pieces', 'moli'].includes(i.path) && i !== fourth).slice(0, 2) : []);
+  const rest = $derived(items.filter((i) => !['', 'pieces', 'moli'].includes(i.path) && i !== fourth && !extra.includes(i)));
   let moreOpen = $state(false);
   const inMore = $derived(page === 'systeme' || rest.some((i) => i.path === page));
 
@@ -84,7 +87,15 @@
     prefersDark = media.matches;
     const update = (e) => (prefersDark = e.matches);
     media.addEventListener('change', update);
-    return () => media.removeEventListener('change', update);
+    // The same bounds as maison.css: tablet between the phone and the wide screen.
+    const mid = matchMedia('(min-width: 768px) and (max-width: 1179.98px)');
+    tablet = mid.matches;
+    const onMid = (e) => (tablet = e.matches);
+    mid.addEventListener('change', onMid);
+    return () => {
+      media.removeEventListener('change', update);
+      mid.removeEventListener('change', onMid);
+    };
   });
 
   // Auto: night after sunset (the house's own daylight), else the system's.
@@ -171,7 +182,7 @@
     </div>
   </nav>
 
-  <!-- Phones: a tab bar at the bottom instead of the side menu. -->
+  <!-- Phones and tablets: a tab bar at the bottom instead of the side menu. -->
   <nav class="tabbar" aria-label={t('commun.nav.aria')}>
     {#each tabs as item (item.path)}
       <a href="#/{item.path}" class:active={page === item.path} aria-current={page === item.path ? 'page' : undefined}>
@@ -186,6 +197,11 @@
         <Icon name={fourth.icon} size={22} /><span>{t(fourth.label)}</span>
       </a>
     {/if}
+    {#each extra as item (item.path)}
+      <a href="#/{item.path}" class:active={page === item.path} aria-current={page === item.path ? 'page' : undefined}>
+        <Icon name={item.icon} size={22} /><span>{t(item.label)}</span>
+      </a>
+    {/each}
     <button class:active={inMore || moreOpen} aria-expanded={moreOpen} aria-haspopup="dialog" onclick={() => (moreOpen = !moreOpen)}>
       <Icon name="dots" size={22} /><span>{t('commun.nav.plus')}</span>
     </button>
@@ -528,47 +544,9 @@
     color: #fff;
   }
 
-  /* Tablets: a narrow rail, the name under each icon. */
+  /* Phones and tablets: the tab bar at the bottom, the whole width for
+     the page. */
   @media (max-width: 1179.98px) {
-    .maison {
-      grid-template-columns: 104px minmax(0, 1fr);
-    }
-
-    .rail {
-      align-items: center;
-      padding: 22px 0 18px;
-    }
-
-    .brand {
-      padding: 0 0 14px;
-    }
-
-    .brand-name {
-      display: none;
-    }
-
-    .rail ul a,
-    .rail-foot a,
-    .rail-foot button {
-      flex-direction: column;
-      justify-content: center;
-      gap: var(--sp-1);
-      width: 84px;
-      min-height: 56px;
-      padding: 8px 2px;
-      border-radius: 18px;
-      text-align: center;
-    }
-
-    .label {
-      font-size: 11.5px;
-      font-weight: 600;
-      overflow-wrap: anywhere;
-    }
-  }
-
-  /* Phones: a tab bar at the bottom (home, rooms, Moli, heating, more). */
-  @media (max-width: 767.98px) {
     /* minmax(0, …): a `1fr` column grows to the widest page content and
        pushes every page sideways on a phone. */
     .maison {
@@ -585,8 +563,11 @@
       right: 12px;
       bottom: calc(12px + env(safe-area-inset-bottom));
       z-index: 25;
+      max-width: 760px;
+      margin: 0 auto;
       display: grid;
-      grid-template-columns: repeat(5, minmax(0, 1fr));
+      grid-auto-flow: column;
+      grid-auto-columns: minmax(0, 1fr);
       gap: var(--sp-1);
       padding: var(--sp-2);
       border-radius: 24px;
@@ -645,6 +626,8 @@
       position: absolute;
       left: 12px;
       right: 12px;
+      max-width: 760px;
+      margin: 0 auto;
       bottom: calc(96px + env(safe-area-inset-bottom));
       max-height: calc(100dvh - 140px);
       overflow-y: auto;
@@ -690,12 +673,18 @@
     }
 
     .content {
-      padding: 20px 16px 120px;
+      padding: 24px 24px 120px;
     }
 
     .notes {
       bottom: calc(100px + env(safe-area-inset-bottom));
       width: calc(100% - 32px);
+    }
+  }
+
+  @media (max-width: 767.98px) {
+    .content {
+      padding: 20px 16px 120px;
     }
   }
 

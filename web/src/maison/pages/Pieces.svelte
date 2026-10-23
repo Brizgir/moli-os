@@ -266,8 +266,9 @@
     color: var(--warm-ink);
   }
 
+  /* 300 px: two columns on a tablet, three on a wide screen. */
   .rooms {
-    columns: 3 340px;
+    columns: 3 300px;
     column-gap: 20px;
   }
 

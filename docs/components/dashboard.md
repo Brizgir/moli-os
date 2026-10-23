@@ -29,11 +29,12 @@ Le flux SSE `/api/events` est ouvert **une seule fois** et partagé (`web/src/li
 | Système | `#/systeme` | accès à l'**Atelier**, **Pages affichées** (voir « Ce qui s'affiche selon la maison »), **carte vivante** du système et comparaison avec HA (voir plus bas) ; **appairage des télés** (19 oct.) : une carte par télé qui s'appaire par un code affiché (point `pairing_code`, pilotes `androidtv`, `philips` et `hisense`) : « Afficher le code », puis le code tapé (`ui/TvPairing.svelte` : le code de la maison d'abord sur un 403, comme Ring), rien une fois appairée. La carte lit la forme du code sur le point (`lib/tvs.js`, `codeShape`) : `pairing_code` numérique = autant de chiffres que son `max` (Hisense : 4, envoyé en nombre), texte = les 6 caractères hexadécimaux d'Android TV |
 
 Navigation (refonte d'octobre 2026, maquette `docs/design/maquette-2026-10/`) : menu latéral
-avec le nom de chaque page sur grand écran (≥ 1180 px), rail étroit icône + nom sur tablette (768 à 1179 px),
-et sur téléphone (< 768 px) une **barre d'onglets en bas** : Accueil, Pièces, Moli au centre,
-Chauffage (ou la page suivante du menu s'il n'y en a pas), **Plus** (une feuille avec le reste
-du menu, Système, Atelier et le thème ; cibles ≥ 44 px). Pied du menu : thème, Système.
-L'Atelier s'ouvre depuis Système (sa première carte). Bulle « Demander à Moli » sur toutes les
+avec le nom de chaque page sur grand écran (≥ 1180 px), et en dessous (téléphone et tablette)
+une **barre d'onglets en bas** : Accueil, Pièces, Moli au centre, Chauffage (ou la page
+suivante du menu s'il n'y en a pas), sur tablette (768 à 1179 px) deux pages de plus, puis
+**Plus** (une feuille avec le reste du menu, Système, Atelier et le thème ; cibles ≥ 44 px).
+Pied du menu : thème, Système. L'Atelier s'ouvre depuis Système (sa première carte). Moli se
+demande depuis le menu ou le milieu de la barre (plus de bulle flottante). Sur toutes les
 pages sauf Moli (sur téléphone, Moli est au centre de la barre).
 
 ## Ce qui s'affiche selon la maison
