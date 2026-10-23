@@ -164,10 +164,21 @@
     color: var(--ink);
   }
 
-  /* Over the map: white words, a soft shadow. */
+  /* Over the map: white words, a soft shadow, and a veil darkening the
+     corner they sit in (clouds are white too). */
   .live .now {
     color: #ffd75e;
     filter: drop-shadow(0 1px 8px rgb(0 0 0 / 55%));
+  }
+
+  .live::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    border-radius: inherit;
+    background: linear-gradient(to bottom right, transparent 35%, rgb(10 14 22 / 58%) 100%);
+    pointer-events: none;
   }
 
   .live .words {
@@ -219,7 +230,9 @@
       margin: 0 -4px;
     }
 
+    /* Inside the rounded card: no bleed above or below. */
     .space {
+      inset: 0;
       border-radius: var(--r-lg);
       -webkit-mask-image: linear-gradient(90deg, transparent 0%, #000 28%), linear-gradient(180deg, transparent 0%, #000 16%, #000 84%, transparent 100%);
       mask-image: linear-gradient(90deg, transparent 0%, #000 28%), linear-gradient(180deg, transparent 0%, #000 16%, #000 84%, transparent 100%);

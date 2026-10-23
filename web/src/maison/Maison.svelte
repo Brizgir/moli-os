@@ -1,8 +1,8 @@
 <script>
   import '@fontsource-variable/figtree';
   import './maison.css';
-  import { onMount } from 'svelte';
-  import { home, hub, start, value, savePref, visiblePages, pageChoices, camerasAsDoorbell } from './lib/home.svelte.js';
+  import { onMount, untrack } from 'svelte';
+  import { home, hub, start, value, savePref, visiblePages, pageChoices, camerasAsDoorbell, dismissHeld } from './lib/home.svelte.js';
   import { loadPeople } from './lib/people.svelte.js';
   import { menuFacts } from './lib/menu.svelte.js';
   import { t } from '../lib/i18n.svelte.js';
@@ -19,7 +19,6 @@
   import Impression from './pages/Impression.svelte';
   import Dehors from './pages/Dehors.svelte';
   import Moli from './pages/Moli.svelte';
-  import MoliSheet from './moli/MoliSheet.svelte';
   import Automatismes from './pages/Automatismes.svelte';
   import Systeme from './pages/Systeme.svelte';
   import Parler from './pages/Parler.svelte';
@@ -75,7 +74,6 @@
   let moreOpen = $state(false);
   const inMore = $derived(page === 'systeme' || rest.some((i) => i.path === page));
 
-  let moliOpen = $state(false);
   let prefersDark = $state(false);
 
   onMount(() => {
@@ -127,10 +125,13 @@
   }
 
   const page = $derived(route.split('/')[0] ?? '');
-  // A tap in « Plus » goes somewhere: the sheet closes behind it.
+  // A tap in « Plus » goes somewhere: the sheet closes behind it. So does
+  // the code sheet: an order held on another page is not what the person
+  // is doing any more.
   $effect(() => {
     void route;
     moreOpen = false;
+    if (untrack(() => home.held)) dismissHeld();
   });
 </script>
 
@@ -257,17 +258,6 @@
       <Accueil />
     {/if}
   </main>
-
-  {#if page !== 'moli'}
-    <button class="orb" onclick={() => (moliOpen = true)} aria-label={t('commun.demander_moli')}>
-      <Orb size={38} state={moli.busy ? 'thinking' : 'idle'} />
-      <span class="orb-text">{t('commun.demander_moli')}</span>
-    </button>
-  {/if}
-
-  {#if moliOpen}
-    <MoliSheet onclose={() => (moliOpen = false)} />
-  {/if}
 
   {#if home.held}
     <PinSheet />
@@ -429,28 +419,6 @@
     max-width: 1440px;
     width: 100%;
     min-width: 0;
-  }
-
-  /* Moli, always one tap away. */
-  .orb {
-    position: fixed;
-    right: 28px;
-    bottom: 28px;
-    z-index: 30;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 10px 22px 10px 10px;
-    border: 0;
-    border-radius: 999px;
-    background: var(--surface);
-    box-shadow: var(--shadow-lift);
-    font-weight: 650;
-    transition: transform 0.2s var(--ease);
-  }
-
-  .orb:hover {
-    transform: translateY(-2px);
   }
 
   .notes {
@@ -723,11 +691,6 @@
 
     .content {
       padding: 20px 16px 120px;
-    }
-
-    /* Moli is the tab bar's middle. */
-    .orb {
-      display: none;
     }
 
     .notes {
