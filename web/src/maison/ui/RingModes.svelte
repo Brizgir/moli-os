@@ -2,6 +2,7 @@
   import { hub, home, value, act, hidden, relative, nameOf } from '../lib/home.svelte.js';
   import { t } from '../../lib/i18n.svelte.js';
   import Icon from './Icon.svelte';
+  import Tile from './Tile.svelte';
 
   /** The Ring location's watch (« Modes » in the Ring app): disarmed, home,
    *  away, with the current one in evidence. Changing it is a person's
@@ -38,12 +39,9 @@
       <h2><Icon name="shield" size={18} />{watches.length > 1 ? nameOf(d.id) : t('salon.surveillance.titre')}</h2>
       {#if d.online === false}<span class="chip">{t('salon.securite.hors_ligne')}</span>{/if}
     </div>
-    <div class="modes" role="radiogroup" aria-label={t('salon.surveillance.titre')}>
+    <div class="modes" role="group" aria-label={t('salon.surveillance.titre')}>
       {#each MODES as [mode, icon] (mode)}
-        <button role="radio" aria-checked={current === mode} class:on={current === mode} class:asked={asked === mode} disabled={d.online === false} onclick={() => choose(d, mode)}>
-          <Icon name={icon} size={18} />
-          <span>{t(`salon.surveillance.${mode}`)}</span>
-        </button>
+        <Tile {icon} label={t(`salon.surveillance.${mode}`)} on={current === mode} tone="cool" busy={asked === mode} dim={d.online === false} pressed={current === mode} onclick={() => choose(d, mode)} />
       {/each}
     </div>
     <p class="muted">
@@ -79,54 +77,11 @@
     font-size: var(--fs-md);
   }
 
+  /* Three tiles side by side when the card is wide enough, else they wrap. */
   .modes {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(92px, 1fr));
     gap: var(--sp-2);
-  }
-
-  .modes button {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 6px;
-    padding: 12px 8px;
-    border-radius: 14px;
-    border: 2px solid transparent;
-    background: var(--surface-2);
-    color: var(--ink-2);
-    font: inherit;
-    font-size: var(--fs-md);
-    font-weight: 600;
-    cursor: pointer;
-    min-height: 44px;
-  }
-
-  .compact .modes button {
-    flex-direction: row;
-    padding: 10px 8px;
-    font-size: var(--fs-sm);
-  }
-
-  .modes button:focus-visible {
-    outline: 3px solid var(--cool);
-    outline-offset: 2px;
-  }
-
-  .modes button.on {
-    background: var(--cool-soft);
-    color: var(--cool);
-    border-color: var(--cool);
-  }
-
-  .modes button.asked {
-    border-style: dashed;
-    border-color: var(--ink-3);
-  }
-
-  .modes button:disabled {
-    opacity: 0.5;
-    cursor: default;
   }
 
   p {

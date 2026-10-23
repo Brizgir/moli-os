@@ -3,6 +3,7 @@
   import { hub, home, device, value, since, nameOf, roomOf, hidden, doorOpen, isOn, clock, relative } from '../lib/home.svelte.js';
   import { t } from '../../lib/i18n.svelte.js';
   import Icon from './Icon.svelte';
+  import Tile from './Tile.svelte';
 
   /** The house's safety at a glance: the doors, what moves, the alarm. A
    *  sensor gone silent says so: a dead battery, an unknown state or a
@@ -132,52 +133,42 @@
   </div>
 
   {#if doors.length}
-    <div class="doors">
+    <div class="tiles">
       {#each doors as d (d.id)}
-        <div class="door" class:open={d.open === true} class:silent={d.silent}>
-          <span class="badge"><Icon name={d.silent ? 'offline' : d.open ? 'door-open' : 'door-closed'} size={22} /></span>
-          <span class="what">
-            <b>{d.name}</b>
-            <small>
-              {#if d.silent}
-                {t('salon.securite.muet', { raison: d.why })}
-              {:else}
-                {d.open ? t('salon.securite.ouverte') : t('salon.securite.fermee')}{(changed[d.id] ?? d.at) ? ` ${when(changed[d.id] ?? d.at)}` : ''}
-              {/if}
-            </small>
-          </span>
-          {#if d.pct != null && !d.silent}<span class="pct" class:low={d.pct <= 20}>{d.pct} %</span>{/if}
-        </div>
+        <Tile
+          row
+          static
+          icon={d.silent ? 'offline' : d.open ? 'door-open' : 'door-closed'}
+          label={d.name}
+          state={d.silent ? t('salon.securite.muet', { raison: d.why }) : `${d.open ? t('salon.securite.ouverte') : t('salon.securite.fermee')}${(changed[d.id] ?? d.at) ? ` ${when(changed[d.id] ?? d.at)}` : ''}`}
+          value={d.pct != null && !d.silent ? `${d.pct} %` : null}
+          on={!d.silent}
+          tone={d.open ? 'warm' : 'good'}
+          dim={d.silent} />
       {/each}
     </div>
   {/if}
 
   {#if sensors.length}
-    <ul class="moves">
+    <div class="tiles">
       {#each sensors as s (s.id)}
-        <li class:moving={s.moving} class:silent={s.silent}>
-          <Icon name={s.outside ? 'cctv' : 'motion'} size={17} />
-          <span class="name">{s.name}{#if s.room && !s.outside && s.room !== s.name}<small class="muted"> · {s.room}</small>{/if}</span>
-          <span class="state">
-            {#if s.silent}
-              {t('salon.securite.detecteur_muet', { raison: s.why })}
-            {:else if s.moving}
-              {t('salon.securite.mouvement_etat')}{s.at ? ` ${when(s.at)}` : ''}
-            {:else}
-              {t('salon.securite.calme')}{s.at ? ` ${when(s.at)}` : ''}
-            {/if}
-          </span>
-        </li>
+        <Tile
+          row
+          static
+          icon={s.outside ? 'cctv' : 'motion'}
+          label={s.room && !s.outside && s.room !== s.name ? `${s.name} · ${s.room}` : s.name}
+          state={s.silent ? t('salon.securite.detecteur_muet', { raison: s.why }) : `${s.moving ? t('salon.securite.mouvement_etat') : t('salon.securite.calme')}${s.at ? ` ${when(s.at)}` : ''}`}
+          on={s.moving}
+          tone="warm"
+          dim={s.silent} />
       {/each}
-    </ul>
+    </div>
   {/if}
 
   {#if alarm.length}
-    <div class="alarm">
+    <div class="tiles">
       {#each alarm as a (a.id)}
-        <span class="chip" class:alert={a.on === true && a.ringing} class:good={a.on === true && !a.ringing}>
-          <Icon name={a.ringing ? 'alert' : 'lock'} size={14} />{a.name} : {a.on == null ? '?' : a.on ? t('salon.oui') : t('salon.non')}
-        </span>
+        <Tile row static icon={a.ringing ? 'alert' : 'lock'} label={a.name} state={a.on == null ? '?' : a.on ? t('salon.oui') : t('salon.non')} on={a.on === true} tone={a.ringing ? 'alert' : 'good'} dim={a.on == null} />
       {/each}
     </div>
   {/if}
@@ -194,122 +185,9 @@
     gap: 10px;
   }
 
-  .doors {
+  .tiles {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
-    gap: 10px;
-  }
-
-  .door {
-    display: grid;
-    grid-template-columns: auto 1fr auto;
-    align-items: center;
-    gap: var(--sp-3);
-    padding: 12px 14px;
-    border-radius: var(--r-sm);
-    background: var(--good-soft);
-    color: var(--ink);
-  }
-
-  .door .badge {
-    display: grid;
-    place-items: center;
-    width: 40px;
-    height: 40px;
-    border-radius: 12px;
-    background: var(--surface);
-    color: var(--good);
-  }
-
-  .door.open {
-    background: var(--warm-soft);
-  }
-
-  .door.open .badge {
-    color: var(--warm-ink);
-  }
-
-  .door.silent {
-    background: var(--surface-2);
-  }
-
-  .door.silent .badge {
-    color: var(--ink-3);
-  }
-
-  .what {
-    display: grid;
-    min-width: 0;
-  }
-
-  .what b {
-    font-size: 15px;
-    font-weight: 700;
-  }
-
-  .what small {
-    font-size: 12.5px;
-    color: var(--ink-2);
-  }
-
-  .pct {
-    font-size: var(--fs-xs);
-    font-weight: 650;
-    color: var(--ink-3);
-  }
-
-  .pct.low {
-    color: var(--warm-ink);
-  }
-
-  .moves {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    display: grid;
-    gap: 2px;
-  }
-
-  .moves li {
-    display: grid;
-    grid-template-columns: auto 1fr auto;
-    align-items: center;
-    gap: 10px;
-    padding: 8px 4px;
-    font-size: var(--fs-md);
-    color: var(--ink-2);
-  }
-
-  .moves li + li {
-    border-top: 1px solid var(--line);
-  }
-
-  .moves .name {
-    color: var(--ink);
-    font-weight: 600;
-    min-width: 0;
-  }
-
-  .moves .state {
-    font-size: var(--fs-sm);
-  }
-
-  .moves li.moving {
-    color: var(--warm-ink);
-  }
-
-  .moves li.moving .state {
-    font-weight: 700;
-  }
-
-  .moves li.silent .state {
-    color: var(--ink-3);
-    font-style: italic;
-  }
-
-  .alarm {
-    display: flex;
-    flex-wrap: wrap;
     gap: var(--sp-2);
   }
 </style>

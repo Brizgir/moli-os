@@ -1,7 +1,7 @@
 <script>
   import { hub, value, act, pending } from '../lib/home.svelte.js';
   import { t, locale } from '../../lib/i18n.svelte.js';
-  import Icon from '../ui/Icon.svelte';
+  import Tile from '../ui/Tile.svelte';
 
   // The house's mode (a helper, « Mode Maison »): one tap, like Home
   // Assistant's mode buttons. Beside it, the speakers that talk
@@ -29,60 +29,27 @@
 </script>
 
 {#if modes.length}
-  <div class="modes" role="radiogroup" aria-label={t('maison.accueil.mode_maison')}>
+  <div class="modes" role="group" aria-label={t('maison.accueil.mode_maison')}>
     {#each modes as m (m)}
-      <button role="radio" aria-checked={m === mode} class:on={m === mode} disabled={pending(modeDevice.id, 'state')} onclick={() => setMode(m)}>
-        <Icon name={MODE_ICON[m] ?? 'home'} size={16} />{modeName(m)}
-      </button>
+      <Tile row icon={MODE_ICON[m] ?? 'home'} label={modeName(m)} on={m === mode} tone="warm" busy={pending(modeDevice.id, 'state') && m !== mode} pressed={m === mode} onclick={() => setMode(m)} />
     {/each}
     {#if talkers.length}
-      <span class="sep" aria-hidden="true"></span>
-      <button class="hush" class:on={quiet} aria-pressed={quiet} onclick={toggleQuiet} title={quiet ? t('maison.accueil.sonos_reparle') : t('maison.accueil.sonos_coupe')}>
-        <Icon name={quiet ? 'volume-off' : 'speaker'} size={16} />{quiet && quietUntil ? t('maison.accueil.sonos_muette_jusqua', { time: new Date(quietUntil).toLocaleTimeString(locale(), { hour: '2-digit', minute: '2-digit' }) }) : t('maison.accueil.sonos_muette')}
-      </button>
+      <Tile
+        row
+        icon={quiet ? 'volume-off' : 'speaker'}
+        label={quiet && quietUntil ? t('maison.accueil.sonos_muette_jusqua', { time: new Date(quietUntil).toLocaleTimeString(locale(), { hour: '2-digit', minute: '2-digit' }) }) : t('maison.accueil.sonos_muette')}
+        on={quiet}
+        tone="alert"
+        pressed={quiet}
+        onclick={toggleQuiet} />
     {/if}
   </div>
 {/if}
 
 <style>
   .modes {
-    display: flex;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
     gap: var(--sp-2);
-    overflow-x: auto;
-    scrollbar-width: none;
-    min-width: 0;
-  }
-
-  .modes button {
-    flex: none;
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    border: 0;
-    border-radius: 999px;
-    padding: 8px 14px;
-    font: inherit;
-    font-size: var(--fs-md);
-    font-weight: 650;
-    background: var(--surface-2);
-    color: var(--ink-3);
-    cursor: pointer;
-  }
-
-  .modes button.on {
-    background: var(--warm-soft);
-    color: var(--warm-ink);
-  }
-
-  .modes .sep {
-    flex: none;
-    width: 1px;
-    margin: 6px 4px;
-    background: var(--line, color-mix(in srgb, var(--ink) 14%, transparent));
-  }
-
-  .modes button.hush.on {
-    background: color-mix(in srgb, var(--alert) 16%, var(--surface-2));
-    color: var(--alert);
   }
 </style>
