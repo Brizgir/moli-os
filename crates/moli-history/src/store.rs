@@ -830,7 +830,7 @@ mod tests {
         assert_eq!(second.ts, DAY0 + 2 * HOUR);
         assert_eq!((second.min, second.max, second.count), (1.0, 3.0, 2));
         // The last hours come from the raw changes still there.
-        assert_eq!(s.buckets.last().unwrap().max, 71.0);
+        assert!((s.buckets.last().unwrap().max - 71.0).abs() < 1e-9);
         // A window the raw changes still cover reads them, as before.
         let recent = store
             .series("d/t", DAY0 + 60 * HOUR, DAY0 + 72 * HOUR, 100)

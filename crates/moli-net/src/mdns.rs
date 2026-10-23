@@ -111,7 +111,9 @@ pub fn query(kinds: &[&str]) -> anyhow::Result<Vec<u8>> {
     Ok(out)
 }
 
-/// `_name._tcp` or `_name._udp`, name of letters, digits and `-`.
+/// `_name._tcp` or `_name._udp`, name of letters, digits and `-`. Up to a
+/// DNS label (63), not RFC 6335's 15: devices announce longer ones
+/// (`_androidtvremote2._tcp`).
 #[must_use]
 pub fn service_type(kind: &str) -> bool {
     let Some((name, proto)) = kind.split_once('.') else {
@@ -120,7 +122,7 @@ pub fn service_type(kind: &str) -> bool {
     let Some(name) = name.strip_prefix('_') else {
         return false;
     };
-    (1..=15).contains(&name.len())
+    (1..=62).contains(&name.len())
         && name.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-')
         && matches!(proto, "_tcp" | "_udp")
 }
@@ -376,6 +378,8 @@ mod tests {
         assert!(!service_type("hue._tcp"));
         assert!(!service_type("_._tcp"));
         assert!(!service_type("_a.b._tcp"));
+        assert!(service_type("_androidtvremote2._tcp"));
+        assert!(!service_type(&format!("_{}._tcp", "a".repeat(63))));
     }
 
     #[test]
