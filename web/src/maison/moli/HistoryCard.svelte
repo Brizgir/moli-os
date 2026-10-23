@@ -123,12 +123,12 @@
     margin: 0;
     padding: 0;
     display: grid;
-    gap: 8px;
+    gap: var(--sp-2);
   }
 
   li {
     display: flex;
     justify-content: space-between;
-    gap: 12px;
+    gap: var(--sp-3);
   }
 </style>

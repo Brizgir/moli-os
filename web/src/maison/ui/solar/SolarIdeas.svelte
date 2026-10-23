@@ -53,15 +53,15 @@
   .done {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--sp-2);
     margin-bottom: 16px;
-    font-size: 14px;
+    font-size: var(--fs-md);
     font-weight: 600;
     color: var(--self);
   }
 
   .group {
-    font-size: 12px;
+    font-size: var(--fs-xs);
     font-weight: 700;
     letter-spacing: 0.1em;
     text-transform: uppercase;
@@ -86,7 +86,7 @@
     grid-template-columns: auto minmax(0, 1fr) auto;
     gap: 14px;
     align-items: start;
-    padding: 16px;
+    padding: var(--sp-4);
     border-radius: var(--r-md);
     background: var(--surface-2);
   }
@@ -102,7 +102,7 @@
     border-radius: 50%;
     display: grid;
     place-items: center;
-    font-size: 13px;
+    font-size: var(--fs-sm);
     font-weight: 750;
     background: var(--surface);
     color: var(--ink-2);
@@ -115,7 +115,7 @@
 
   .body {
     display: grid;
-    gap: 8px;
+    gap: var(--sp-2);
     min-width: 0;
   }
 
@@ -167,7 +167,7 @@
     display: flex;
     gap: 6px;
     align-items: flex-start;
-    font-size: 12px;
+    font-size: var(--fs-xs);
     line-height: 1.4;
     color: var(--ink-3);
   }
@@ -191,7 +191,7 @@
     transform: translateY(-1px);
   }
 
-  @media (max-width: 560px) {
+  @media (max-width: 559.98px) {
     .ideas li {
       grid-template-columns: auto minmax(0, 1fr);
     }

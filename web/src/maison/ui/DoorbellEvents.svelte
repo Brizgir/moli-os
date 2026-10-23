@@ -79,19 +79,19 @@
     background: var(--surface-2);
     display: grid;
     place-items: center;
-    padding: 12px;
+    padding: var(--sp-3);
     color: var(--ink-3);
-    font-size: 14px;
+    font-size: var(--fs-md);
     text-align: center;
   }
 
   .facts {
     display: grid;
-    gap: 4px;
+    gap: var(--sp-1);
   }
 
   .facts .muted {
-    font-size: 13px;
+    font-size: var(--fs-sm);
   }
 
   @media (max-width: 767.98px) {

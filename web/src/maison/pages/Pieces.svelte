@@ -175,7 +175,7 @@
   .bar {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: var(--sp-3);
     flex-wrap: wrap;
   }
 
@@ -221,7 +221,7 @@
     background: transparent;
     color: var(--ink-3);
     font: inherit;
-    font-size: 13px;
+    font-size: var(--fs-sm);
     font-weight: 700;
     cursor: pointer;
   }
@@ -234,7 +234,7 @@
 
   .floor {
     display: grid;
-    gap: 12px;
+    gap: var(--sp-3);
   }
 
   .floor-title {
@@ -242,7 +242,7 @@
     align-items: baseline;
     gap: 10px;
     margin: 0;
-    font-size: 13px;
+    font-size: var(--fs-sm);
     font-weight: 750;
     letter-spacing: 0.06em;
     text-transform: uppercase;
@@ -259,7 +259,7 @@
   }
 
   .floor-title small {
-    font-size: 12px;
+    font-size: var(--fs-xs);
     font-weight: 600;
     letter-spacing: 0;
     text-transform: none;
@@ -284,7 +284,7 @@
     align-content: center;
     gap: 6px;
     min-height: 140px;
-    padding: 16px;
+    padding: var(--sp-4);
     border: 2px dashed color-mix(in srgb, var(--ink-3) 40%, transparent);
     border-radius: var(--r-lg);
     background: transparent;
@@ -300,7 +300,7 @@
   }
 
   .add-room small {
-    font-size: 13px;
+    font-size: var(--fs-sm);
     font-weight: 500;
     color: var(--ink-3);
   }

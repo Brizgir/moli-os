@@ -68,7 +68,7 @@
 <style>
   .proposal {
     display: grid;
-    gap: 8px;
+    gap: var(--sp-2);
     padding: 12px 14px;
     border-radius: 14px;
     background: var(--cool-soft);
@@ -86,7 +86,7 @@
   }
 
   .was {
-    font-size: 13px;
+    font-size: var(--fs-sm);
     color: var(--ink-3);
     text-decoration: line-through;
   }
@@ -100,18 +100,18 @@
     display: flex;
     align-items: center;
     gap: 6px;
-    font-size: 13px;
+    font-size: var(--fs-sm);
     color: var(--cool);
     font-weight: 600;
   }
 
   .small {
-    font-size: 12px;
+    font-size: var(--fs-xs);
   }
 
   .row {
     display: flex;
-    gap: 8px;
+    gap: var(--sp-2);
     flex-wrap: wrap;
   }
 

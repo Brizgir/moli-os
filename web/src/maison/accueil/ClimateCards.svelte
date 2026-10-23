@@ -35,7 +35,7 @@
   .clims {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 12px;
+    gap: var(--sp-3);
   }
 
   @media (max-width: 767.98px) {

@@ -234,7 +234,7 @@
 <style>
   .curves {
     display: grid;
-    gap: 12px;
+    gap: var(--sp-3);
     min-width: 0;
   }
 
@@ -292,7 +292,7 @@
   .chip {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--sp-2);
     background: var(--surface-2);
     border: 2px solid transparent;
   }
@@ -344,7 +344,7 @@
   .rooms {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr));
-    gap: 12px;
+    gap: var(--sp-3);
   }
 
   .busy {
@@ -414,7 +414,7 @@
     display: grid;
     grid-template-columns: auto minmax(0, 1fr) auto;
     align-items: center;
-    gap: 8px;
+    gap: var(--sp-2);
     font-size: 0.9rem;
   }
 

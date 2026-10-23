@@ -89,7 +89,7 @@
 
   .moli p {
     padding-top: 2px;
-    font-size: 16px;
+    font-size: var(--fs-base);
     line-height: 1.45;
   }
 
@@ -112,7 +112,7 @@
     padding: 6px 12px;
     background: var(--surface-2);
     color: var(--ink-2);
-    font-size: 13px;
+    font-size: var(--fs-sm);
     font-weight: 650;
   }
 

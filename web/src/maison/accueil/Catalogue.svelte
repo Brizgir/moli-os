@@ -100,9 +100,9 @@
     background: var(--surface);
     border-radius: var(--r-xl);
     box-shadow: var(--shadow-lift);
-    padding: 24px;
+    padding: var(--sp-6);
     display: grid;
-    gap: 16px;
+    gap: var(--sp-4);
     align-content: start;
   }
 
@@ -115,13 +115,13 @@
 
   h2 {
     margin: 0;
-    font-size: 20px;
+    font-size: var(--fs-lg);
     font-weight: 750;
   }
 
   h3 {
     margin: 0 0 8px;
-    font-size: 13px;
+    font-size: var(--fs-sm);
     font-weight: 700;
     color: var(--ink-3);
   }
@@ -144,7 +144,7 @@
     background: transparent;
     color: var(--ink);
     font: inherit;
-    font-size: 16px;
+    font-size: var(--fs-base);
     outline: none;
   }
 
@@ -153,13 +153,13 @@
     padding: 0;
     list-style: none;
     display: grid;
-    gap: 4px;
+    gap: var(--sp-1);
   }
 
   li {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: var(--sp-3);
     min-height: 52px;
     padding: 4px 6px 4px 12px;
     border-radius: 14px;
@@ -189,12 +189,12 @@
   }
 
   .words small {
-    font-size: 12px;
+    font-size: var(--fs-xs);
     color: var(--ink-3);
   }
 
   .state {
-    font-size: 13px;
+    font-size: var(--fs-sm);
     font-weight: 650;
     color: var(--ink-3);
     padding: 0 10px;
@@ -225,13 +225,13 @@
     background: var(--surface-2);
     color: var(--ink-2);
     font: inherit;
-    font-size: 14px;
+    font-size: var(--fs-md);
     font-weight: 650;
     cursor: pointer;
   }
 
   .muted {
     margin: 0;
-    font-size: 13px;
+    font-size: var(--fs-sm);
   }
 </style>

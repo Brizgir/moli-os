@@ -66,7 +66,7 @@
     flex: 1;
     min-width: 220px;
     gap: 2px;
-    font-size: 14px;
+    font-size: var(--fs-md);
   }
 
   .good {

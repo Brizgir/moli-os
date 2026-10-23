@@ -49,11 +49,11 @@
   li {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--sp-2);
     padding: 8px 10px 8px 12px;
     border-radius: 14px;
     background: var(--surface-2);
-    font-size: 14px;
+    font-size: var(--fs-md);
   }
 
   li span {
@@ -63,12 +63,12 @@
   }
 
   small {
-    font-size: 12px;
+    font-size: var(--fs-xs);
     color: var(--ink-3);
   }
 
   b {
-    font-size: 12px;
+    font-size: var(--fs-xs);
     font-weight: 700;
     color: var(--ink-3);
   }
@@ -105,7 +105,7 @@
     background: var(--cool);
     color: #fff;
     font-weight: 700;
-    font-size: 13px;
+    font-size: var(--fs-sm);
   }
 
   .no {

@@ -205,7 +205,7 @@
   .row {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: var(--sp-3);
     flex-wrap: wrap;
   }
 
@@ -227,7 +227,7 @@
 
   .tones {
     display: flex;
-    gap: 4px;
+    gap: var(--sp-1);
   }
 
   .tones button {
@@ -270,7 +270,7 @@
   .side {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--sp-2);
     justify-content: flex-end;
   }
 
@@ -322,7 +322,7 @@
   .tags {
     display: flex;
     flex-wrap: wrap;
-    gap: 4px;
+    gap: var(--sp-1);
   }
 
   .tag {
@@ -357,7 +357,7 @@
     cursor: default;
   }
 
-  @media (max-width: 560px) {
+  @media (max-width: 559.98px) {
     .list li {
       grid-template-columns: 4.5em minmax(0, 1fr);
     }

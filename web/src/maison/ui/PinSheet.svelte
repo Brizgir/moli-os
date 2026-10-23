@@ -159,7 +159,7 @@
     display: grid;
     justify-items: center;
     text-align: center;
-    gap: 8px;
+    gap: var(--sp-2);
   }
 
   .lock {
@@ -173,14 +173,14 @@
   }
 
   h2 {
-    font-size: 20px;
+    font-size: var(--fs-lg);
     font-weight: 700;
     margin-top: 6px;
   }
 
   .why {
     color: var(--ink-2);
-    font-size: 14px;
+    font-size: var(--fs-md);
     max-width: 280px;
   }
 
@@ -205,14 +205,14 @@
   .error {
     min-height: 20px;
     color: var(--alert);
-    font-size: 14px;
+    font-size: var(--fs-md);
     font-weight: 600;
   }
 
   .pad {
     display: grid;
     grid-template-columns: repeat(3, 72px);
-    gap: 12px;
+    gap: var(--sp-3);
   }
 
   .pad button {

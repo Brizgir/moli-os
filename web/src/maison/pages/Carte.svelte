@@ -220,11 +220,11 @@
   .layout {
     display: grid;
     grid-template-columns: minmax(0, 1fr) 320px;
-    gap: 16px;
+    gap: var(--sp-4);
     align-items: start;
   }
 
-  @media (max-width: 900px) {
+  @media (max-width: 1179.98px) {
     .layout {
       grid-template-columns: minmax(0, 1fr);
     }
@@ -245,22 +245,22 @@
 
   aside {
     display: grid;
-    gap: 16px;
+    gap: var(--sp-4);
   }
 
   .card {
     display: grid;
-    gap: 12px;
+    gap: var(--sp-3);
   }
 
   h2 {
-    font-size: 16px;
+    font-size: var(--fs-base);
     font-weight: 700;
   }
 
   ul {
     display: grid;
-    gap: 8px;
+    gap: var(--sp-2);
     margin: 0;
     padding: 0;
     list-style: none;
@@ -270,7 +270,7 @@
     display: flex;
     align-items: center;
     gap: 10px;
-    font-size: 14px;
+    font-size: var(--fs-md);
   }
 
   li > div {
@@ -303,7 +303,7 @@
   label {
     display: grid;
     gap: 6px;
-    font-size: 14px;
+    font-size: var(--fs-md);
     font-weight: 650;
   }
 
@@ -320,7 +320,7 @@
   .row {
     display: flex;
     justify-content: flex-end;
-    gap: 8px;
+    gap: var(--sp-2);
   }
 
   .primary,
@@ -352,7 +352,7 @@
   .small {
     min-height: 32px;
     padding: 0 10px;
-    font-size: 13px;
+    font-size: var(--fs-sm);
   }
 
   .danger {
@@ -366,11 +366,11 @@
   .error {
     color: var(--alert);
     font-weight: 600;
-    font-size: 14px;
+    font-size: var(--fs-md);
   }
 
   .hint {
-    font-size: 13px;
+    font-size: var(--fs-sm);
   }
 
   :global(.person-pin span) {

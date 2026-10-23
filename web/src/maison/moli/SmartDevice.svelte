@@ -41,6 +41,6 @@
 
 <style>
   .tight {
-    padding: 8px;
+    padding: var(--sp-2);
   }
 </style>

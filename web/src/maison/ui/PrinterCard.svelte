@@ -172,13 +172,13 @@
 <style>
   .printer {
     display: grid;
-    gap: 16px;
+    gap: var(--sp-4);
   }
 
   .head {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: var(--sp-3);
     flex-wrap: wrap;
   }
 
@@ -209,7 +209,7 @@
   }
 
   .title .muted {
-    font-size: 13px;
+    font-size: var(--fs-sm);
   }
 
   .round {
@@ -232,7 +232,7 @@
   .job {
     display: grid;
     grid-template-columns: 120px minmax(0, 1fr);
-    gap: 16px;
+    gap: var(--sp-4);
     align-items: center;
   }
 
@@ -255,12 +255,12 @@
 
   .facts {
     display: grid;
-    gap: 8px;
+    gap: var(--sp-2);
     min-width: 0;
   }
 
   .name {
-    font-size: 16px;
+    font-size: var(--fs-base);
     font-weight: 650;
     overflow-wrap: anywhere;
   }
@@ -302,13 +302,13 @@
   }
 
   .when {
-    font-size: 14px;
+    font-size: var(--fs-md);
     color: var(--ink-2);
   }
 
   .message {
     margin: 0;
-    font-size: 13px;
+    font-size: var(--fs-sm);
     color: var(--alert);
   }
 
@@ -326,12 +326,12 @@
 
   .temps small {
     color: var(--ink-3);
-    font-size: 12px;
+    font-size: var(--fs-xs);
     font-weight: 600;
   }
 
   .temps b {
-    font-size: 16px;
+    font-size: var(--fs-base);
     font-weight: 650;
   }
 
@@ -341,7 +341,7 @@
     padding: 0;
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr));
-    gap: 8px;
+    gap: var(--sp-2);
   }
 
   .tools li {
@@ -368,12 +368,12 @@
   }
 
   .tool-name {
-    font-size: 13px;
+    font-size: var(--fs-sm);
     font-weight: 700;
   }
 
   .tools small {
-    font-size: 12px;
+    font-size: var(--fs-xs);
     color: var(--ink-3);
     overflow-wrap: anywhere;
   }
@@ -387,7 +387,7 @@
   .act {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--sp-2);
     border: 0;
     border-radius: 999px;
     padding: 10px 18px;
@@ -409,13 +409,13 @@
 
   .totals {
     margin: 0;
-    font-size: 13px;
+    font-size: var(--fs-sm);
   }
 
-  @media (max-width: 560px) {
+  @media (max-width: 559.98px) {
     .job {
       grid-template-columns: 88px minmax(0, 1fr);
-      gap: 12px;
+      gap: var(--sp-3);
     }
 
     .thumb {

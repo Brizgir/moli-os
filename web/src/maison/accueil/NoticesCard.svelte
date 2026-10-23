@@ -92,14 +92,14 @@
 
   .notices .chip {
     padding: 9px 14px;
-    font-size: 14px;
+    font-size: var(--fs-md);
   }
 
   /* « Tout va bien »: in place of the alerts, when there are none. */
   .all-good {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: var(--sp-3);
     padding: 14px 18px;
     border-radius: 16px;
     background: var(--good-soft);

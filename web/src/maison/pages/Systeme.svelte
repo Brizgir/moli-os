@@ -371,13 +371,13 @@
     flex: 1;
     display: grid;
     gap: 2px;
-    font-size: 14px;
+    font-size: var(--fs-md);
   }
 
   .systeme {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
-    gap: 20px;
+    gap: var(--sp-5);
   }
 
   .systeme > :global(*) {
@@ -414,7 +414,7 @@
   .versus {
     display: grid;
     gap: 14px;
-    padding: 20px;
+    padding: var(--sp-5);
     border-radius: var(--r-lg);
     background: var(--surface);
     box-shadow: var(--shadow);
@@ -422,7 +422,7 @@
 
   .vs-head {
     display: flex;
-    gap: 12px;
+    gap: var(--sp-3);
     align-items: baseline;
     flex-wrap: wrap;
   }
@@ -430,7 +430,7 @@
   .vs {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
-    gap: 16px;
+    gap: var(--sp-4);
   }
 
   .vs > div {
@@ -440,7 +440,7 @@
   }
 
   .vs small {
-    font-size: 12px;
+    font-size: var(--fs-xs);
     font-weight: 700;
     color: var(--ink-3);
     text-transform: uppercase;
@@ -448,7 +448,7 @@
   }
 
   .vs p b {
-    font-size: 20px;
+    font-size: var(--fs-lg);
   }
 
   .big {
@@ -467,13 +467,13 @@
   .alert {
     color: var(--alert);
     font-weight: 700;
-    font-size: 13px;
+    font-size: var(--fs-sm);
   }
 
   .trend {
     display: flex;
     align-items: flex-end;
-    gap: 4px;
+    gap: var(--sp-1);
     height: 48px;
     /* Delivery after delivery, the bars grow in number: never wider than the card. */
     overflow: hidden;
@@ -489,7 +489,7 @@
   .trend small {
     margin-left: 10px;
     align-self: center;
-    font-size: 12px;
+    font-size: var(--fs-xs);
   }
 
   .map {
@@ -536,13 +536,13 @@
 
   .col {
     display: grid;
-    gap: 8px;
+    gap: var(--sp-2);
     align-content: center;
     position: relative;
   }
 
   .col h2 {
-    font-size: 12px;
+    font-size: var(--fs-xs);
     letter-spacing: 0.12em;
     text-transform: uppercase;
     color: var(--ink-3);
@@ -580,11 +580,11 @@
 
   .node b {
     font-weight: 700;
-    font-size: 14px;
+    font-size: var(--fs-md);
   }
 
   .node small {
-    font-size: 12px;
+    font-size: var(--fs-xs);
     color: var(--ink-3);
   }
 
@@ -617,7 +617,7 @@
   .core {
     display: grid;
     justify-items: center;
-    gap: 4px;
+    gap: var(--sp-1);
     padding: 22px 16px;
     text-align: center;
     border-radius: var(--r-lg);
@@ -642,7 +642,7 @@
     margin: 10px 0 0;
     padding: 0;
     display: grid;
-    gap: 4px;
+    gap: var(--sp-1);
     font-size: 12.5px;
     color: var(--ink-2);
   }
@@ -669,7 +669,7 @@
 
   .bricks {
     display: grid;
-    gap: 8px;
+    gap: var(--sp-2);
   }
 
   .ic {
@@ -711,7 +711,7 @@
   .explain {
     position: relative;
     display: grid;
-    gap: 8px;
+    gap: var(--sp-2);
     max-width: 720px;
   }
 
@@ -721,7 +721,7 @@
 
   .explain .how {
     color: var(--ink-2);
-    font-size: 14px;
+    font-size: var(--fs-md);
   }
 
   .x {
@@ -737,10 +737,10 @@
     place-items: center;
   }
 
-  @media (max-width: 1100px) {
+  @media (max-width: 1179.98px) {
     .map {
       grid-template-columns: 1fr 1fr;
-      gap: 24px;
+      gap: var(--sp-6);
     }
 
     .links {
@@ -748,7 +748,7 @@
     }
   }
 
-  @media (max-width: 640px) {
+  @media (max-width: 559.98px) {
     .map {
       grid-template-columns: minmax(0, 1fr);
     }

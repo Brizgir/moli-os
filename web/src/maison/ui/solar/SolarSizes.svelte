@@ -55,7 +55,7 @@
   }
 
   .kwc small {
-    font-size: 14px;
+    font-size: var(--fs-md);
     font-weight: 600;
     color: var(--ink-3);
   }
@@ -63,8 +63,8 @@
   .line {
     display: flex;
     justify-content: space-between;
-    gap: 8px;
-    font-size: 13px;
+    gap: var(--sp-2);
+    font-size: var(--fs-sm);
   }
 
   .line b {
@@ -82,7 +82,7 @@
     text-align: right;
   }
 
-  @media (max-width: 560px) {
+  @media (max-width: 559.98px) {
     .sizes {
       grid-template-columns: minmax(0, 1fr);
     }

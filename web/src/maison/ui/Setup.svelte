@@ -150,7 +150,7 @@
   label {
     display: grid;
     gap: 6px;
-    font-size: 14px;
+    font-size: var(--fs-md);
     font-weight: 650;
   }
 
@@ -178,7 +178,7 @@
   }
 
   code {
-    font-size: 13px;
+    font-size: var(--fs-sm);
   }
 
   .command {
@@ -191,7 +191,7 @@
   .error {
     min-height: 20px;
     color: var(--alert);
-    font-size: 14px;
+    font-size: var(--fs-md);
     font-weight: 600;
   }
 

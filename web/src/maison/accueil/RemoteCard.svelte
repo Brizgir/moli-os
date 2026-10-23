@@ -79,7 +79,7 @@
   }
 
   .remote-text span {
-    font-size: 13px;
+    font-size: var(--fs-sm);
   }
 
   .go {

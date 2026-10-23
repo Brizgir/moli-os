@@ -439,7 +439,7 @@
 
   .moved {
     margin-top: 12px;
-    font-size: 13px;
+    font-size: var(--fs-sm);
     color: var(--ink-2);
     line-height: 1.45;
   }
@@ -451,7 +451,7 @@
 
   .table {
     margin-top: 12px;
-    font-size: 13px;
+    font-size: var(--fs-sm);
   }
 
   .table summary {

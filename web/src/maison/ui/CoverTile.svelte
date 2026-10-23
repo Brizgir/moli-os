@@ -55,7 +55,7 @@
     background: var(--surface);
     border-radius: 999px;
     padding: 8px 12px;
-    font-size: 13px;
+    font-size: var(--fs-sm);
     font-weight: 650;
     box-shadow: var(--shadow);
   }

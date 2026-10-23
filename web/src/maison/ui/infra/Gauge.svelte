@@ -64,13 +64,13 @@
   }
 
   .label {
-    font-size: 13px;
+    font-size: var(--fs-sm);
     font-weight: 650;
     color: var(--ink-2);
   }
 
   small {
-    font-size: 12px;
+    font-size: var(--fs-xs);
     color: var(--ink-3);
   }
 </style>

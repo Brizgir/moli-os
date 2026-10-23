@@ -219,7 +219,7 @@
 <style>
   .infra {
     display: grid;
-    gap: 20px;
+    gap: var(--sp-5);
   }
 
   .head {
@@ -239,20 +239,20 @@
     color: var(--warm-ink);
     display: grid;
     gap: 6px;
-    font-size: 14px;
+    font-size: var(--fs-md);
     font-weight: 600;
   }
 
   .issues li {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--sp-2);
   }
 
   .grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr));
-    gap: 20px;
+    gap: var(--sp-5);
     align-items: start;
   }
 
@@ -267,7 +267,7 @@
   }
 
   .small {
-    font-size: 13px;
+    font-size: var(--fs-sm);
   }
 
   .server {
@@ -277,14 +277,14 @@
   .gauges {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
-    gap: 12px;
+    gap: var(--sp-3);
   }
 
   .facts {
     display: flex;
     flex-wrap: wrap;
     gap: 8px 18px;
-    font-size: 13px;
+    font-size: var(--fs-sm);
     color: var(--ink-2);
   }
 
@@ -297,7 +297,7 @@
   .sparks {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-    gap: 16px;
+    gap: var(--sp-4);
   }
 
   .containers,
@@ -367,7 +367,7 @@
 
   .more {
     display: flex;
-    gap: 16px;
+    gap: var(--sp-4);
   }
 
   .link {
@@ -375,7 +375,7 @@
     background: none;
     padding: 0;
     font: inherit;
-    font-size: 13px;
+    font-size: var(--fs-sm);
     font-weight: 650;
     color: var(--cool);
     cursor: pointer;
@@ -384,8 +384,8 @@
   .stopped li {
     display: flex;
     align-items: center;
-    gap: 8px;
-    font-size: 13px;
+    gap: var(--sp-2);
+    font-size: var(--fs-sm);
     color: var(--ink-2);
   }
 
@@ -397,7 +397,7 @@
     display: grid;
     grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) auto;
     align-items: center;
-    gap: 12px;
+    gap: var(--sp-3);
     font-size: 13.5px;
   }
 
@@ -429,7 +429,7 @@
   .backups li {
     display: flex;
     align-items: flex-start;
-    gap: 8px;
+    gap: var(--sp-2);
     color: var(--good);
   }
 
@@ -444,7 +444,7 @@
   }
 
   .backups small {
-    font-size: 12px;
+    font-size: var(--fs-xs);
   }
 
   .kv {
@@ -452,7 +452,7 @@
     grid-template-columns: auto 1fr;
     gap: 6px 16px;
     margin: 0;
-    font-size: 14px;
+    font-size: var(--fs-md);
   }
 
   .kv dt {
@@ -465,7 +465,7 @@
   }
 
 
-  @media (max-width: 520px) {
+  @media (max-width: 559.98px) {
     .containers li {
       grid-template-columns: auto minmax(0, 1fr) 54px 60px;
     }

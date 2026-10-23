@@ -81,7 +81,7 @@
   .pill {
     padding: 4px 10px;
     border-radius: 999px;
-    font-size: 12px;
+    font-size: var(--fs-xs);
     font-weight: 700;
     background: var(--warm-soft);
     color: var(--warm-ink);
@@ -101,19 +101,19 @@
     display: flex;
     align-items: center;
     gap: 6px;
-    font-size: 13px;
+    font-size: var(--fs-sm);
     color: var(--cool);
     font-weight: 600;
   }
 
   .err {
-    font-size: 13px;
+    font-size: var(--fs-sm);
     color: var(--alert);
   }
 
   .row {
     display: flex;
-    gap: 8px;
+    gap: var(--sp-2);
     flex-wrap: wrap;
   }
 

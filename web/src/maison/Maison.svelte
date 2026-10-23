@@ -311,7 +311,7 @@
     box-sizing: border-box;
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: var(--sp-1);
     padding: 26px 16px 18px;
     overflow-y: auto;
     scrollbar-width: none;
@@ -344,7 +344,7 @@
     margin: 0;
     padding: 0;
     display: grid;
-    gap: 4px;
+    gap: var(--sp-1);
   }
 
   .rail ul a,
@@ -353,7 +353,7 @@
     box-sizing: border-box;
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: var(--sp-3);
     width: 100%;
     min-height: 46px;
     padding: 0 14px;
@@ -427,7 +427,7 @@
     bottom: 28px;
     transform: translateX(-50%);
     display: grid;
-    gap: 8px;
+    gap: var(--sp-2);
     z-index: 40;
     pointer-events: none;
   }
@@ -442,7 +442,7 @@
     z-index: 60;
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--sp-2);
     padding: 8px 14px;
     border-radius: 999px;
     background: var(--warm);
@@ -464,7 +464,7 @@
 
   .notice {
     display: flex;
-    gap: 12px;
+    gap: var(--sp-3);
     align-items: flex-start;
     padding: 14px 12px 14px 14px;
     border-radius: var(--r-md);
@@ -497,7 +497,7 @@
 
   .notice small {
     color: var(--ink-3);
-    font-size: 12px;
+    font-size: var(--fs-xs);
   }
 
   .notice button {
@@ -529,7 +529,7 @@
   }
 
   /* Tablets: a narrow rail, the name under each icon. */
-  @media (max-width: 1099.98px) {
+  @media (max-width: 1179.98px) {
     .maison {
       grid-template-columns: 104px minmax(0, 1fr);
     }
@@ -552,7 +552,7 @@
     .rail-foot button {
       flex-direction: column;
       justify-content: center;
-      gap: 4px;
+      gap: var(--sp-1);
       width: 84px;
       min-height: 56px;
       padding: 8px 2px;
@@ -587,8 +587,8 @@
       z-index: 25;
       display: grid;
       grid-template-columns: repeat(5, minmax(0, 1fr));
-      gap: 4px;
-      padding: 8px;
+      gap: var(--sp-1);
+      padding: var(--sp-2);
       border-radius: 24px;
       background: var(--surface);
       box-shadow: var(--shadow-lift);

@@ -207,7 +207,7 @@
 
   .compose {
     display: grid;
-    gap: 12px;
+    gap: var(--sp-3);
     padding: 16px 18px;
     border-radius: var(--r-md);
     background: var(--surface-2);
@@ -229,7 +229,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 12px;
+    gap: var(--sp-3);
   }
 
   .count.over {
@@ -239,7 +239,7 @@
   .btn {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--sp-2);
     border: 0;
     border-radius: 999px;
     padding: 10px 18px;
@@ -261,7 +261,7 @@
   .recent {
     display: flex;
     flex-wrap: wrap;
-    gap: 8px;
+    gap: var(--sp-2);
   }
 
   .recent .chip {
@@ -281,7 +281,7 @@
 
   .targets {
     display: grid;
-    gap: 16px;
+    gap: var(--sp-4);
   }
 
   .door {
@@ -295,7 +295,7 @@
   .door h2 {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--sp-2);
     margin: 0;
     font-size: 1.05rem;
   }
@@ -387,7 +387,7 @@
   .small {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
+    gap: var(--sp-1);
     font-size: 0.8rem;
   }
 

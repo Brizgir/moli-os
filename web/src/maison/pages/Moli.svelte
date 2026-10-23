@@ -139,7 +139,7 @@
     display: flex;
     flex-wrap: wrap;
     justify-content: center;
-    gap: 8px;
+    gap: var(--sp-2);
     margin-top: 4px;
   }
 
@@ -151,7 +151,7 @@
     box-shadow: var(--shadow);
     color: var(--ink-2);
     font-weight: 600;
-    font-size: 14px;
+    font-size: var(--fs-md);
     transition: transform 0.15s var(--ease), color 0.15s;
   }
 
@@ -173,8 +173,8 @@
 
   .skills li {
     display: grid;
-    gap: 4px;
-    padding: 16px;
+    gap: var(--sp-1);
+    padding: var(--sp-4);
     border-radius: var(--r-md);
     background: color-mix(in srgb, var(--surface) 60%, transparent);
   }
@@ -192,16 +192,16 @@
 
   .skills small {
     color: var(--ink-3);
-    font-size: 13px;
+    font-size: var(--fs-sm);
   }
 
   .trust {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--sp-2);
     margin-top: 10px;
     color: var(--ink-3);
-    font-size: 13px;
+    font-size: var(--fs-sm);
     max-width: 560px;
   }
 
@@ -211,7 +211,7 @@
   }
 
   code {
-    font-size: 13px;
+    font-size: var(--fs-sm);
     background: var(--surface-2);
     padding: 2px 6px;
     border-radius: 6px;
@@ -246,7 +246,7 @@
 
   .talk h1 {
     flex: 1;
-    font-size: 20px;
+    font-size: var(--fs-lg);
     letter-spacing: -0.01em;
   }
 
@@ -255,7 +255,7 @@
     background: none;
     color: var(--ink-3);
     font-weight: 650;
-    font-size: 13px;
+    font-size: var(--fs-sm);
   }
 
   .scroll {
@@ -274,7 +274,7 @@
 
   .board {
     display: grid;
-    gap: 16px;
+    gap: var(--sp-4);
     padding-top: 6px;
   }
 
@@ -295,7 +295,7 @@
     font-weight: 600;
   }
 
-  @media (max-width: 980px) {
+  @media (max-width: 1179.98px) {
     .started {
       display: block;
     }

@@ -202,13 +202,13 @@
 <style>
   .paper {
     display: grid;
-    gap: 16px;
+    gap: var(--sp-4);
   }
 
   .head {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: var(--sp-3);
   }
 
   .logo {
@@ -232,7 +232,7 @@
   }
 
   .title .muted {
-    font-size: 13px;
+    font-size: var(--fs-sm);
   }
 
   .round {
@@ -264,8 +264,8 @@
     display: grid;
     grid-template-columns: 120px 1fr 48px;
     align-items: center;
-    gap: 12px;
-    font-size: 14px;
+    gap: var(--sp-3);
+    font-size: var(--fs-md);
   }
 
   .inks .label {
@@ -298,11 +298,11 @@
   .job {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--sp-2);
     padding: 10px 12px;
     border-radius: var(--r-sm);
     background: var(--surface-2);
-    font-size: 14px;
+    font-size: var(--fs-md);
     color: var(--ink-2);
   }
 
@@ -328,7 +328,7 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 8px;
+    gap: var(--sp-2);
     min-height: 46px;
     padding: 0 18px;
     border: none;
@@ -347,7 +347,7 @@
 
   .sheet {
     display: grid;
-    gap: 12px;
+    gap: var(--sp-3);
     padding: 14px;
     border-radius: var(--r-md);
     background: var(--surface-2);
@@ -356,7 +356,7 @@
   .file {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--sp-2);
     min-width: 0;
   }
 
@@ -368,7 +368,7 @@
 
   .file .muted {
     flex: 1;
-    font-size: 13px;
+    font-size: var(--fs-sm);
     white-space: nowrap;
   }
 
@@ -381,7 +381,7 @@
 
   .seg {
     display: inline-flex;
-    padding: 4px;
+    padding: var(--sp-1);
     background: var(--surface);
     border-radius: 999px;
     gap: 2px;
@@ -393,7 +393,7 @@
     border-radius: 999px;
     padding: 7px 12px;
     font: inherit;
-    font-size: 13px;
+    font-size: var(--fs-sm);
     font-weight: 650;
     color: var(--ink-3);
     cursor: pointer;
@@ -407,8 +407,8 @@
   .stepper {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
-    padding: 4px;
+    gap: var(--sp-1);
+    padding: var(--sp-1);
     border-radius: 999px;
     background: var(--surface);
   }
@@ -427,15 +427,15 @@
   .stepper span {
     min-width: 46px;
     text-align: center;
-    font-size: 13px;
+    font-size: var(--fs-sm);
     font-weight: 700;
   }
 
   .pages {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
-    font-size: 13px;
+    gap: var(--sp-2);
+    font-size: var(--fs-sm);
     color: var(--ink-2);
   }
 
@@ -451,7 +451,7 @@
 
   .note {
     margin: 0;
-    font-size: 13px;
+    font-size: var(--fs-sm);
   }
 
   .note.error {
@@ -462,7 +462,7 @@
     color: var(--good);
   }
 
-  @media (max-width: 480px) {
+  @media (max-width: 559.98px) {
     .inks li {
       grid-template-columns: 96px 1fr 44px;
     }

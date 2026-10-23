@@ -157,7 +157,7 @@
 <style>
   .seg {
     display: inline-flex;
-    padding: 4px;
+    padding: var(--sp-1);
     background: var(--surface-2);
     border-radius: 999px;
     gap: 2px;
@@ -168,7 +168,7 @@
     background: none;
     border-radius: 999px;
     padding: 7px 12px;
-    font-size: 13px;
+    font-size: var(--fs-sm);
     font-weight: 650;
     color: var(--ink-3);
     cursor: pointer;
@@ -183,11 +183,11 @@
   .body {
     display: grid;
     grid-template-columns: minmax(180px, 240px) minmax(0, 1fr);
-    gap: 20px;
+    gap: var(--sp-5);
     align-items: center;
   }
 
-  @media (max-width: 640px) {
+  @media (max-width: 559.98px) {
     .body {
       grid-template-columns: minmax(0, 1fr);
       justify-items: center;
@@ -232,8 +232,8 @@
   h3 {
     display: flex;
     align-items: center;
-    gap: 8px;
-    font-size: 14px;
+    gap: var(--sp-2);
+    font-size: var(--fs-md);
     font-weight: 700;
   }
 
@@ -275,8 +275,8 @@
     display: grid;
     grid-template-columns: auto 1fr auto;
     align-items: center;
-    gap: 8px;
-    font-size: 13px;
+    gap: var(--sp-2);
+    font-size: var(--fs-sm);
     border-radius: 6px;
   }
 

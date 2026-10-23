@@ -159,9 +159,9 @@
     display: grid;
     place-content: center;
     justify-items: center;
-    gap: 8px;
+    gap: var(--sp-2);
     color: #8a93a8;
-    font-size: 13px;
+    font-size: var(--fs-sm);
   }
 
   .top {
@@ -171,20 +171,20 @@
     right: 12px;
     display: flex;
     justify-content: space-between;
-    gap: 8px;
+    gap: var(--sp-2);
   }
 
   .live {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--sp-2);
     padding: 6px 12px 6px 10px;
     border-radius: 999px;
     background: rgb(10 14 22 / 55%);
     backdrop-filter: blur(6px);
     color: #fff;
     font-weight: 650;
-    font-size: 13px;
+    font-size: var(--fs-sm);
   }
 
   .live i {

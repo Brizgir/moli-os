@@ -111,7 +111,7 @@
     display: grid;
     place-items: center;
     margin: 0;
-    padding: 24px;
+    padding: var(--sp-6);
     color: var(--ink-2);
     text-align: center;
   }

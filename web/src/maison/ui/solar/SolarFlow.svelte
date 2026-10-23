@@ -226,7 +226,7 @@
     flex-wrap: wrap;
     justify-content: center;
     gap: 4px 14px;
-    font-size: 12px;
+    font-size: var(--fs-xs);
     color: var(--ink-3);
   }
 

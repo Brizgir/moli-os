@@ -35,7 +35,7 @@
     min-width: 0;
     max-width: 100%;
     display: flex;
-    gap: 8px;
+    gap: var(--sp-2);
     overflow-x: auto;
     padding: 2px 2px 6px;
     scrollbar-width: thin;
@@ -95,7 +95,7 @@
   }
 
   .name {
-    font-size: 12px;
+    font-size: var(--fs-xs);
     font-weight: 600;
     text-align: center;
     line-height: 1.2;

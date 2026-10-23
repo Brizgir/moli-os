@@ -62,7 +62,7 @@
     background: var(--surface);
     color: var(--ink-2);
     font: inherit;
-    font-size: 13px;
+    font-size: var(--fs-sm);
     font-weight: 600;
     white-space: nowrap;
     cursor: pointer;

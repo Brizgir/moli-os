@@ -72,7 +72,7 @@
   .tiles {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 12px;
+    gap: var(--sp-3);
   }
 
   .moods {
@@ -81,7 +81,7 @@
     padding-top: 16px;
     border-top: 1px solid var(--line);
     display: grid;
-    gap: 12px;
+    gap: var(--sp-3);
   }
 
   .moods-head {
@@ -97,7 +97,7 @@
     align-items: center;
     gap: 6px;
     font-weight: 700;
-    font-size: 14px;
+    font-size: var(--fs-md);
   }
 
   .rooms {
@@ -115,7 +115,7 @@
     border-radius: 999px;
     padding: 6px 12px;
     font: inherit;
-    font-size: 13px;
+    font-size: var(--fs-sm);
     font-weight: 650;
     background: var(--surface-2);
     color: var(--ink-3);

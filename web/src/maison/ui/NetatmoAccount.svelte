@@ -164,7 +164,7 @@
   .row {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: var(--sp-3);
   }
 
   .ico {
@@ -188,7 +188,7 @@
     margin: 0;
     padding-left: 1.3em;
     display: grid;
-    gap: 8px;
+    gap: var(--sp-2);
   }
 
   .steps li {
@@ -209,12 +209,12 @@
 
   .form {
     display: grid;
-    gap: 8px;
+    gap: var(--sp-2);
   }
 
   .form label {
     display: grid;
-    gap: 4px;
+    gap: var(--sp-1);
   }
 
   .form input {

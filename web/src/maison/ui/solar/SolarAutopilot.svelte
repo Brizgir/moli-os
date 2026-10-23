@@ -91,7 +91,7 @@
   .compare {
     display: grid;
     gap: 10px;
-    padding: 16px;
+    padding: var(--sp-4);
     border-radius: var(--r-md);
     background: var(--surface-2);
     margin-bottom: 16px;
@@ -101,11 +101,11 @@
     display: grid;
     grid-template-columns: minmax(130px, 200px) minmax(0, 1fr) 52px;
     align-items: center;
-    gap: 12px;
+    gap: var(--sp-3);
   }
 
   .who {
-    font-size: 14px;
+    font-size: var(--fs-md);
     font-weight: 600;
     color: var(--ink-2);
   }
@@ -135,12 +135,12 @@
 
   .row b {
     text-align: right;
-    font-size: 16px;
+    font-size: var(--fs-base);
     font-weight: 700;
   }
 
   .small {
-    font-size: 13px;
+    font-size: var(--fs-sm);
   }
 
   .loads {
@@ -170,7 +170,7 @@
 
   .loads li.empty {
     display: block;
-    font-size: 14px;
+    font-size: var(--fs-md);
   }
 
   .badge {
@@ -198,7 +198,7 @@
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 8px;
+    gap: var(--sp-2);
     font-size: 15px;
   }
 
@@ -220,7 +220,7 @@
   }
 
   .note {
-    font-size: 12px;
+    font-size: var(--fs-xs);
     color: var(--ink-3);
     line-height: 1.4;
   }
@@ -286,7 +286,7 @@
     transform: translateX(20px);
   }
 
-  @media (max-width: 560px) {
+  @media (max-width: 559.98px) {
     .row {
       grid-template-columns: minmax(0, 1fr) 48px;
     }

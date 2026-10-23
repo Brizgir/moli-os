@@ -133,8 +133,8 @@
     background: none;
     color: var(--ink-3);
     font-weight: 650;
-    font-size: 13px;
-    padding: 8px;
+    font-size: var(--fs-sm);
+    padding: var(--sp-2);
   }
 
   .scroll {
@@ -149,7 +149,7 @@
 
   .hello {
     display: grid;
-    gap: 8px;
+    gap: var(--sp-2);
     padding-top: 18px;
   }
 
@@ -161,7 +161,7 @@
 
   .ideas {
     display: grid;
-    gap: 8px;
+    gap: var(--sp-2);
     margin-top: 14px;
   }
 
@@ -182,7 +182,7 @@
 
   .asleep {
     display: grid;
-    gap: 8px;
+    gap: var(--sp-2);
     padding-top: 18px;
   }
 
@@ -193,7 +193,7 @@
     }
   }
 
-  @media (max-width: 760px) {
+  @media (max-width: 767.98px) {
     .sheet {
       right: 0;
       left: 0;

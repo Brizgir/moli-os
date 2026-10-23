@@ -110,14 +110,14 @@
 
   form {
     display: flex;
-    gap: 8px;
+    gap: var(--sp-2);
   }
 
   input {
     flex: 1;
     min-width: 0;
     font: inherit;
-    font-size: 20px;
+    font-size: var(--fs-lg);
     letter-spacing: 0.25em;
     text-transform: uppercase;
     padding: 8px 12px;

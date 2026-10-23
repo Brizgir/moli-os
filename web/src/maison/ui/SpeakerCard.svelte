@@ -191,7 +191,7 @@
 
   .modes {
     display: flex;
-    gap: 8px;
+    gap: var(--sp-2);
   }
 
   .modes button {
@@ -206,7 +206,7 @@
     background: var(--surface-2);
     color: var(--ink-2);
     font: inherit;
-    font-size: 14px;
+    font-size: var(--fs-md);
     font-weight: 600;
     cursor: pointer;
   }
@@ -222,7 +222,7 @@
 
   .field {
     display: flex;
-    gap: 8px;
+    gap: var(--sp-2);
   }
 
   .field input {

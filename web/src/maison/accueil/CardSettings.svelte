@@ -147,9 +147,9 @@
     background: var(--surface);
     border-radius: var(--r-xl);
     box-shadow: var(--shadow-lift);
-    padding: 24px;
+    padding: var(--sp-6);
     display: grid;
-    gap: 16px;
+    gap: var(--sp-4);
   }
 
   header {
@@ -161,7 +161,7 @@
 
   h2 {
     margin: 0;
-    font-size: 20px;
+    font-size: var(--fs-lg);
     font-weight: 750;
   }
 
@@ -176,14 +176,14 @@
 
   .field > span,
   legend {
-    font-size: 13px;
+    font-size: var(--fs-sm);
     font-weight: 700;
     color: var(--ink-2);
     padding: 0;
   }
 
   .field small {
-    font-size: 12px;
+    font-size: var(--fs-xs);
     color: var(--ink-3);
   }
 
@@ -199,14 +199,14 @@
     background: var(--surface-2);
     color: var(--ink);
     font: inherit;
-    font-size: 16px;
+    font-size: var(--fs-base);
   }
 
   .segmented {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 4px;
-    padding: 4px;
+    gap: var(--sp-1);
+    padding: var(--sp-1);
     border-radius: 12px;
     background: var(--surface-2);
   }
@@ -218,7 +218,7 @@
     background: transparent;
     color: var(--ink-3);
     font: inherit;
-    font-size: 14px;
+    font-size: var(--fs-md);
     font-weight: 650;
     cursor: pointer;
   }
@@ -234,7 +234,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 12px;
+    gap: var(--sp-3);
     min-height: 44px;
     font-size: 15px;
   }
@@ -295,7 +295,7 @@
   .actions {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--sp-2);
     flex-wrap: wrap;
   }
 
@@ -313,7 +313,7 @@
     border: 0;
     border-radius: 12px;
     font: inherit;
-    font-size: 14px;
+    font-size: var(--fs-md);
     font-weight: 650;
     cursor: pointer;
   }

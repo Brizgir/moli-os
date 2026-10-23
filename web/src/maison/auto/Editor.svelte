@@ -543,7 +543,7 @@
   .pill {
     padding: 6px 12px;
     border-radius: 999px;
-    font-size: 13px;
+    font-size: var(--fs-sm);
     font-weight: 700;
     background: var(--surface-2);
     color: var(--ink-2);
@@ -566,14 +566,14 @@
 
   .actions {
     display: flex;
-    gap: 8px;
+    gap: var(--sp-2);
     flex-wrap: wrap;
   }
 
   .actions button {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--sp-2);
     border: 0;
     border-radius: 999px;
     padding: 10px 16px;
@@ -668,7 +668,7 @@
   .warn {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--sp-2);
     font-size: 13.5px;
     color: var(--cool);
     font-weight: 600;
@@ -677,7 +677,7 @@
   .body {
     display: grid;
     grid-template-columns: minmax(0, 1fr) 360px;
-    gap: 16px;
+    gap: var(--sp-4);
     min-height: 0;
   }
 
@@ -730,10 +730,10 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 8px;
+    gap: var(--sp-2);
     border: 0;
     border-radius: 14px;
-    padding: 12px;
+    padding: var(--sp-3);
     background: var(--surface-2);
     font-weight: 700;
     color: var(--ink);
@@ -744,7 +744,7 @@
     display: grid;
     gap: 6px;
     margin-top: 12px;
-    font-size: 13px;
+    font-size: var(--fs-sm);
     font-weight: 650;
     color: var(--ink-2);
   }
@@ -777,7 +777,7 @@
 
   .run-list span {
     flex: 1;
-    font-size: 14px;
+    font-size: var(--fs-md);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -804,11 +804,11 @@
   }
 
   .run-detail {
-    padding: 12px;
+    padding: var(--sp-3);
     border-radius: 14px;
     background: var(--surface-2);
     margin-bottom: 10px;
-    font-size: 14px;
+    font-size: var(--fs-md);
   }
 
   .run-detail ul {
@@ -816,7 +816,7 @@
     margin: 8px 0;
     padding: 0;
     display: grid;
-    gap: 4px;
+    gap: var(--sp-1);
   }
 
   .run-detail li span {
@@ -873,7 +873,7 @@
     font-weight: 700;
   }
 
-  @media (max-width: 1100px) {
+  @media (max-width: 1179.98px) {
     .editor {
       height: auto;
     }

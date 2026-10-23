@@ -247,15 +247,15 @@
   .ideas {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
-    gap: 12px;
+    gap: var(--sp-3);
   }
 
   .ideas button,
   .blank {
     display: grid;
-    gap: 4px;
+    gap: var(--sp-1);
     align-content: start;
-    padding: 16px;
+    padding: var(--sp-4);
     border: 0;
     border-radius: var(--r-md);
     background: var(--surface);
@@ -284,7 +284,7 @@
 
   .ideas small,
   .blank small {
-    font-size: 13px;
+    font-size: var(--fs-sm);
     color: var(--ink-3);
     line-height: 1.35;
   }
@@ -306,13 +306,13 @@
 
   .section span {
     font-weight: 500;
-    font-size: 13px;
+    font-size: var(--fs-sm);
   }
 
   .grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr));
-    gap: 16px;
+    gap: var(--sp-4);
   }
 
   .auto {
@@ -334,7 +334,7 @@
   .head {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: var(--sp-3);
   }
 
   .ic {
@@ -404,10 +404,10 @@
   .pill {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
+    gap: var(--sp-1);
     padding: 4px 10px;
     border-radius: 999px;
-    font-size: 12px;
+    font-size: var(--fs-xs);
     font-weight: 700;
     background: var(--surface-2);
     color: var(--ink-3);
@@ -477,7 +477,7 @@
   }
 
   .imported summary span {
-    font-size: 13px;
+    font-size: var(--fs-sm);
   }
 
   .imported[open] summary {
@@ -488,7 +488,7 @@
   .warn {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--sp-2);
     font-size: 13.5px;
     color: var(--cool);
     font-weight: 600;
@@ -500,14 +500,14 @@
     margin: 0;
     padding: 0;
     display: grid;
-    gap: 8px;
+    gap: var(--sp-2);
   }
 
   .feed li {
     display: flex;
     align-items: center;
     gap: 10px;
-    font-size: 14px;
+    font-size: var(--fs-md);
   }
 
   .feed a {
@@ -528,17 +528,17 @@
     display: flex;
     align-items: center;
     gap: 6px;
-    font-size: 13px;
+    font-size: var(--fs-sm);
   }
 
-  @media (max-width: 560px) {
+  @media (max-width: 559.98px) {
     .ask {
       border-radius: var(--r-lg);
       flex-wrap: wrap;
     }
 
     .ask input {
-      font-size: 16px;
+      font-size: var(--fs-base);
     }
   }
 </style>

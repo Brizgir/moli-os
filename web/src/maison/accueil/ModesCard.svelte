@@ -47,7 +47,7 @@
 <style>
   .modes {
     display: flex;
-    gap: 8px;
+    gap: var(--sp-2);
     overflow-x: auto;
     scrollbar-width: none;
     min-width: 0;
@@ -62,7 +62,7 @@
     border-radius: 999px;
     padding: 8px 14px;
     font: inherit;
-    font-size: 14px;
+    font-size: var(--fs-md);
     font-weight: 650;
     background: var(--surface-2);
     color: var(--ink-3);

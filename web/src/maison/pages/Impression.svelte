@@ -38,13 +38,13 @@
   .impression {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
-    gap: 20px;
+    gap: var(--sp-5);
   }
 
   .grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(min(100%, 440px), 1fr));
-    gap: 20px;
+    gap: var(--sp-5);
     align-items: start;
   }
 </style>

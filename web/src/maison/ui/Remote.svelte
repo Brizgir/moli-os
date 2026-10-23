@@ -345,7 +345,7 @@
     background: none;
     padding: 7px 12px;
     border-radius: 999px;
-    font-size: 12px;
+    font-size: var(--fs-xs);
     font-weight: 650;
     color: var(--ink-3);
   }
@@ -397,7 +397,7 @@
   .middle {
     display: grid;
     grid-template-columns: 1fr 58px;
-    gap: 12px;
+    gap: var(--sp-3);
     align-items: stretch;
   }
 
@@ -470,13 +470,13 @@
   .write {
     display: grid;
     grid-template-columns: 1fr 50px;
-    gap: 8px;
+    gap: var(--sp-2);
     align-items: center;
   }
 
   .write input {
     font: inherit;
-    font-size: 16px;
+    font-size: var(--fs-base);
     height: 50px;
     padding: 0 16px;
     border-radius: 16px;
@@ -498,7 +498,7 @@
 
   .write small {
     grid-column: 1 / -1;
-    font-size: 12px;
+    font-size: var(--fs-xs);
     color: var(--ink-3);
   }
 
@@ -553,7 +553,7 @@
     background: var(--surface-2);
     box-shadow: var(--key-shadow);
     font-weight: 750;
-    font-size: 20px;
+    font-size: var(--fs-lg);
     color: var(--ink);
   }
 
@@ -589,7 +589,7 @@
   }
 
   .pad-hint small {
-    font-size: 12px;
+    font-size: var(--fs-xs);
   }
 
   .ripple {
@@ -665,7 +665,7 @@
 
   .status {
     text-align: center;
-    font-size: 13px;
+    font-size: var(--fs-sm);
     color: var(--ink-3);
     font-weight: 600;
   }

@@ -71,7 +71,7 @@
     position: absolute;
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: var(--sp-3);
     padding: 0 16px 0 12px;
     border-radius: 18px;
     background: var(--surface);
@@ -158,7 +158,7 @@
   }
 
   .text b {
-    font-size: 14px;
+    font-size: var(--fs-md);
     font-weight: 700;
   }
 

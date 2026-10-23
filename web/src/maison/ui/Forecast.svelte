@@ -88,14 +88,14 @@
   }
 
   .strip small {
-    font-size: 12px;
+    font-size: var(--fs-xs);
     font-weight: 650;
     color: var(--ink-3);
     white-space: nowrap;
   }
 
   .strip b {
-    font-size: 16px;
+    font-size: var(--fs-base);
     font-weight: 700;
   }
 
@@ -105,7 +105,7 @@
 
   em {
     font-style: normal;
-    font-size: 12px;
+    font-size: var(--fs-xs);
     font-weight: 650;
     color: var(--cool);
   }
@@ -120,14 +120,14 @@
     margin: 0;
     padding: 0;
     display: grid;
-    gap: 4px;
+    gap: var(--sp-1);
   }
 
   .days li {
     display: grid;
     grid-template-columns: 52px 26px 1fr 48px;
     align-items: center;
-    gap: 12px;
+    gap: var(--sp-3);
     padding: 7px 10px;
     border-radius: var(--r-sm);
   }
@@ -137,7 +137,7 @@
   }
 
   .days small {
-    font-size: 13px;
+    font-size: var(--fs-sm);
     font-weight: 700;
   }
 
@@ -146,7 +146,7 @@
   }
 
   .days em {
-    font-size: 13px;
+    font-size: var(--fs-sm);
     text-align: right;
   }
 
@@ -155,7 +155,7 @@
     grid-template-columns: 36px 1fr 36px;
     align-items: center;
     gap: 10px;
-    font-size: 14px;
+    font-size: var(--fs-md);
   }
 
   .range b {
@@ -179,10 +179,10 @@
     background: linear-gradient(90deg, var(--cool), var(--sun));
   }
 
-  @media (max-width: 760px) {
+  @media (max-width: 767.98px) {
     .days li {
       grid-template-columns: 44px 24px 1fr 40px;
-      gap: 8px;
+      gap: var(--sp-2);
     }
   }
 </style>

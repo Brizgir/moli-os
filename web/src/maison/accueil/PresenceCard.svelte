@@ -54,7 +54,7 @@
   li {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: var(--sp-3);
     opacity: 0.6;
   }
 
@@ -84,6 +84,6 @@
   }
 
   .muted {
-    font-size: 13px;
+    font-size: var(--fs-sm);
   }
 </style>

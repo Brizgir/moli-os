@@ -206,7 +206,7 @@
   .edit {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--sp-2);
     min-height: 44px;
     padding: 0 16px;
     border: 0;
@@ -214,7 +214,7 @@
     background: var(--surface);
     color: var(--ink-2);
     font: inherit;
-    font-size: 14px;
+    font-size: var(--fs-md);
     font-weight: 600;
     cursor: pointer;
     box-shadow: var(--shadow);
@@ -226,7 +226,7 @@
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     grid-auto-flow: dense;
-    gap: 20px;
+    gap: var(--sp-5);
     align-items: start;
   }
 
@@ -308,7 +308,7 @@
 
   .hidden-tray h2 {
     margin: 0;
-    font-size: 14px;
+    font-size: var(--fs-md);
     font-weight: 700;
     color: var(--ink-3);
   }
@@ -322,7 +322,7 @@
   .chips button {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--sp-2);
     min-height: 44px;
     padding: 0 16px;
     border: 1px dashed var(--ink-3);
@@ -330,7 +330,7 @@
     background: transparent;
     color: var(--ink-2);
     font: inherit;
-    font-size: 14px;
+    font-size: var(--fs-md);
     font-weight: 600;
     cursor: pointer;
   }
@@ -355,7 +355,7 @@
   @media (max-width: 767.98px) {
     .grid {
       grid-template-columns: minmax(0, 1fr);
-      gap: 16px;
+      gap: var(--sp-4);
     }
 
     .slot > :global(*),

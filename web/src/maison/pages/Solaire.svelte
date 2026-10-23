@@ -397,7 +397,7 @@
     --grid: var(--cool);
     display: grid;
     grid-template-columns: minmax(0, 1fr);
-    gap: 20px;
+    gap: var(--sp-5);
   }
 
   :global(.maison[data-theme='night']) .solaire {
@@ -407,7 +407,7 @@
 
   .top {
     display: grid;
-    gap: 4px;
+    gap: var(--sp-1);
   }
 
   .back {
@@ -429,7 +429,7 @@
   .title {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: var(--sp-3);
   }
 
   .chip.demo {
@@ -469,7 +469,7 @@
   .hero {
     display: grid;
     grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
-    gap: 20px;
+    gap: var(--sp-5);
   }
 
   .flow-card {
@@ -483,23 +483,23 @@
   }
 
   .small {
-    font-size: 13px;
+    font-size: var(--fs-sm);
   }
 
   .kpis {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 20px;
+    gap: var(--sp-5);
   }
 
   .kpi {
     display: grid;
     align-content: start;
-    gap: 8px;
+    gap: var(--sp-2);
   }
 
   .eyebrow {
-    font-size: 12px;
+    font-size: var(--fs-xs);
     letter-spacing: 0.12em;
     text-transform: uppercase;
     color: var(--ink-3);
@@ -543,7 +543,7 @@
   }
 
   .tiny {
-    font-size: 12px;
+    font-size: var(--fs-xs);
   }
 
   .kpi .chip {
@@ -582,7 +582,7 @@
   .pager {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--sp-2);
     margin-left: auto;
   }
 
@@ -598,7 +598,7 @@
   }
 
   .intro {
-    font-size: 14px;
+    font-size: var(--fs-md);
     line-height: 1.5;
     color: var(--ink-2);
     margin: -4px 0 16px;
@@ -610,13 +610,13 @@
     border-radius: 999px;
     padding: 8px 14px;
     font-weight: 700;
-    font-size: 13px;
+    font-size: var(--fs-sm);
     background: var(--self);
     color: #fff;
   }
 
   .foot {
-    font-size: 13px;
+    font-size: var(--fs-sm);
     margin-top: 12px;
   }
 
@@ -628,13 +628,13 @@
     line-height: 1.5;
   }
 
-  @media (max-width: 1000px) {
+  @media (max-width: 1179.98px) {
     .hero {
       grid-template-columns: minmax(0, 1fr);
     }
   }
 
-  @media (max-width: 560px) {
+  @media (max-width: 559.98px) {
     .solaire,
     .hero,
     .kpis {
@@ -646,7 +646,7 @@
     }
 
     .kpi {
-      padding: 16px;
+      padding: var(--sp-4);
     }
 
     .eyebrow {

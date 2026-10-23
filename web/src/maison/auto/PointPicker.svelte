@@ -90,7 +90,7 @@
 <style>
   .picker {
     display: grid;
-    gap: 8px;
+    gap: var(--sp-2);
   }
 
   .chosen {
@@ -118,7 +118,7 @@
   .list {
     border-radius: 16px;
     background: var(--surface-2);
-    padding: 8px;
+    padding: var(--sp-2);
     display: grid;
     gap: 6px;
   }
@@ -157,7 +157,7 @@
     width: 100%;
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--sp-2);
     padding: 9px 10px;
     border: 0;
     border-radius: 10px;
@@ -181,7 +181,7 @@
   }
 
   .device small {
-    font-size: 12px;
+    font-size: var(--fs-xs);
     color: var(--ink-3);
   }
 

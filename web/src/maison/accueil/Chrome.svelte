@@ -40,7 +40,7 @@
   .chrome {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--sp-2);
     min-width: 0;
   }
 
@@ -97,7 +97,7 @@
     flex: none;
     display: flex;
     gap: 2px;
-    padding: 4px;
+    padding: var(--sp-1);
     border-radius: 12px;
     background: var(--surface-2);
   }
@@ -107,7 +107,7 @@
     height: 36px;
     border-radius: 9px;
     background: transparent;
-    font-size: 13px;
+    font-size: var(--fs-sm);
     font-weight: 650;
     color: var(--ink-3);
   }

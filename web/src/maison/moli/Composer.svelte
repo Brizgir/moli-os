@@ -109,7 +109,7 @@
     border: 0;
     background: none;
     font: inherit;
-    font-size: 16px;
+    font-size: var(--fs-base);
     color: var(--ink);
     padding: 10px 0;
     outline: none;
@@ -124,7 +124,7 @@
   }
 
   .big input {
-    font-size: 20px;
+    font-size: var(--fs-lg);
     padding: 14px 0;
   }
 

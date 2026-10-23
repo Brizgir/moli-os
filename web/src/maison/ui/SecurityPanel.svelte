@@ -204,7 +204,7 @@
     display: grid;
     grid-template-columns: auto 1fr auto;
     align-items: center;
-    gap: 12px;
+    gap: var(--sp-3);
     padding: 12px 14px;
     border-radius: var(--r-sm);
     background: var(--good-soft);
@@ -253,7 +253,7 @@
   }
 
   .pct {
-    font-size: 12px;
+    font-size: var(--fs-xs);
     font-weight: 650;
     color: var(--ink-3);
   }
@@ -276,7 +276,7 @@
     align-items: center;
     gap: 10px;
     padding: 8px 4px;
-    font-size: 14px;
+    font-size: var(--fs-md);
     color: var(--ink-2);
   }
 
@@ -291,7 +291,7 @@
   }
 
   .moves .state {
-    font-size: 13px;
+    font-size: var(--fs-sm);
   }
 
   .moves li.moving {
@@ -310,6 +310,6 @@
   .alarm {
     display: flex;
     flex-wrap: wrap;
-    gap: 8px;
+    gap: var(--sp-2);
   }
 </style>

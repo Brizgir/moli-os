@@ -121,7 +121,7 @@
   .row {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--sp-2);
     flex-wrap: wrap;
   }
 
@@ -132,7 +132,7 @@
   .what {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--sp-2);
     font-size: 15px;
   }
 
@@ -140,7 +140,7 @@
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    font-size: 13px;
+    font-size: var(--fs-sm);
     color: #b3bac8;
   }
 
@@ -170,7 +170,7 @@
     border-radius: 999px;
     background: #232935;
     color: #eceff5;
-    font-size: 13px;
+    font-size: var(--fs-sm);
     font-weight: 650;
   }
 
@@ -200,7 +200,7 @@
 
   .naming input {
     font: inherit;
-    font-size: 14px;
+    font-size: var(--fs-md);
     min-height: 36px;
     padding: 0 12px;
     border-radius: 10px;
@@ -213,13 +213,13 @@
   .action {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--sp-2);
     min-height: 40px;
     padding: 0 14px;
     border-radius: 12px;
     background: #232935;
     color: #eceff5;
-    font-size: 14px;
+    font-size: var(--fs-md);
     font-weight: 600;
   }
 
@@ -253,7 +253,7 @@
   .error {
     margin: 0;
     color: #ff7b62;
-    font-size: 14px;
+    font-size: var(--fs-md);
   }
 
   @media (max-width: 767.98px) {
@@ -264,7 +264,7 @@
 
     .action {
       padding: 0 10px;
-      font-size: 13px;
+      font-size: var(--fs-sm);
     }
 
     .help {

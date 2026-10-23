@@ -2,7 +2,14 @@
    Porcelain by day, a soft night after sunset. Warm amber means « on »,
    cool blue means climate, coral asks for attention. Big touch targets,
    few words, no jargon. Everything lives under .maison: the Atelier keeps
-   its own look. */
+   its own look.
+
+   Three widths, and only these (a media query cannot read a variable, so
+   the numbers are repeated as they are, never others):
+     phone   @media (max-width: 767.98px)   one column, the tab bar
+     narrow  @media (max-width: 559.98px)   a small phone: things stack
+     tablet  @media (max-width: 1179.98px)  the rail shrinks, two columns
+   The same 768 is `screenFor` in lib/layout.js (the phone's own layout). */
 
 .maison {
   --bg: #edf0f5;
@@ -26,6 +33,23 @@
   --alert-soft: #fde8e3;
   --shadow: 0 1px 2px rgb(23 32 56 / 5%), 0 10px 30px -12px rgb(23 32 56 / 16%);
   --shadow-lift: 0 1px 2px rgb(23 32 56 / 6%), 0 16px 40px -14px rgb(23 32 56 / 24%);
+  /* Spacing on a 4 px step; type on a few sizes. New code uses these,
+     old code moves to them as it is touched (a value off the scale is a
+     smell, not a crime). */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+  --fs-xs: 12px;
+  --fs-sm: 13px;
+  --fs-md: 14px;
+  --fs-base: 16px;
+  --fs-lg: 20px;
+  --fs-xl: 28px;
+  --dur: 0.2s;
   --r-xl: 32px;
   --r-lg: 26px;
   --r-md: 20px;
@@ -38,7 +62,7 @@
   background: var(--bg);
   color: var(--ink);
   font-family: var(--font);
-  font-size: 16px;
+  font-size: var(--fs-base);
   line-height: 1.35;
   -webkit-font-smoothing: antialiased;
   -webkit-tap-highlight-color: transparent;
@@ -106,7 +130,7 @@
   background: var(--surface);
   border-radius: var(--r-lg);
   box-shadow: var(--shadow);
-  padding: 20px;
+  padding: var(--sp-5);
   position: relative;
 }
 
@@ -114,7 +138,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: var(--sp-3);
   margin-bottom: 16px;
 }
 
@@ -125,7 +149,7 @@
   color: var(--ink-2);
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--sp-2);
 }
 
 .maison .card-head .more {
@@ -152,7 +176,7 @@
   border-radius: 999px;
   background: var(--surface-2);
   color: var(--ink-2);
-  font-size: 13px;
+  font-size: var(--fs-sm);
   font-weight: 550;
   white-space: nowrap;
 }

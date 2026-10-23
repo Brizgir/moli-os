@@ -314,7 +314,7 @@
 
   .room {
     display: grid;
-    gap: 12px;
+    gap: var(--sp-3);
   }
 
   .head {
@@ -325,13 +325,13 @@
 
   .empty {
     display: grid;
-    gap: 4px;
+    gap: var(--sp-1);
     margin: 0;
     padding: 14px 16px;
     border-radius: var(--r-sm);
     background: var(--surface-2);
     color: var(--ink-3);
-    font-size: 14px;
+    font-size: var(--fs-md);
   }
 
   .empty a {
@@ -397,7 +397,7 @@
     padding: 4px 9px;
     border-radius: 999px;
     background: var(--surface-2);
-    font-size: 13px;
+    font-size: var(--fs-sm);
   }
 
   .temp b {
@@ -413,13 +413,13 @@
   .guarded {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--sp-2);
     margin: 0;
     padding: 8px 12px;
     border-radius: 12px;
     background: var(--cool-soft);
     color: var(--cool);
-    font-size: 13px;
+    font-size: var(--fs-sm);
   }
 
   .gauge {
@@ -516,7 +516,7 @@
   .pads {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(98px, 1fr));
-    gap: 8px;
+    gap: var(--sp-2);
   }
 
   .pads.icons {
@@ -592,7 +592,7 @@
   }
 
   .pad b {
-    font-size: 13px;
+    font-size: var(--fs-sm);
     font-weight: 650;
     line-height: 1.2;
     display: -webkit-box;
@@ -644,7 +644,7 @@
     background: var(--surface-2);
     color: var(--ink);
     font: inherit;
-    font-size: 14px;
+    font-size: var(--fs-md);
     text-align: left;
     cursor: pointer;
   }

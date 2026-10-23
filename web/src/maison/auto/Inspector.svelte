@@ -216,7 +216,7 @@
   header {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: var(--sp-3);
   }
 
   h3 {
@@ -268,11 +268,11 @@
 
   .fields {
     display: grid;
-    gap: 8px;
+    gap: var(--sp-2);
   }
 
   .lbl {
-    font-size: 13px;
+    font-size: var(--fs-sm);
     font-weight: 700;
     color: var(--ink-2);
     margin-top: 6px;
@@ -305,8 +305,8 @@
 
   .seg {
     display: flex;
-    gap: 4px;
-    padding: 4px;
+    gap: var(--sp-1);
+    padding: var(--sp-1);
     border-radius: 14px;
     background: var(--surface-2);
   }
@@ -339,13 +339,13 @@
 
   .rule {
     display: grid;
-    gap: 8px;
+    gap: var(--sp-2);
   }
 
   .card-rule {
     display: grid;
     gap: 6px;
-    padding: 12px;
+    padding: var(--sp-3);
     border-radius: 16px;
     box-shadow: inset 0 0 0 1px var(--line);
   }
@@ -353,7 +353,7 @@
   .row {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--sp-2);
     flex-wrap: wrap;
   }
 
@@ -379,7 +379,7 @@
   .problem {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--sp-2);
     padding: 10px 12px;
     border-radius: 12px;
     font-size: 13.5px;
@@ -396,7 +396,7 @@
     justify-self: start;
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--sp-2);
     border: 0;
     border-radius: 999px;
     padding: 9px 14px;

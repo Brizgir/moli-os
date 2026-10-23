@@ -67,8 +67,8 @@
     max-height: min(680px, calc(100dvh - 48px));
     display: grid;
     grid-template-rows: auto auto 1fr;
-    gap: 12px;
-    padding: 20px;
+    gap: var(--sp-3);
+    padding: var(--sp-5);
     border-radius: var(--r-xl);
     background: var(--surface);
     box-shadow: var(--shadow-lift);
@@ -81,7 +81,7 @@
   }
 
   h2 {
-    font-size: 20px;
+    font-size: var(--fs-lg);
     font-weight: 700;
   }
 
@@ -112,7 +112,7 @@
   }
 
   h3 {
-    font-size: 12px;
+    font-size: var(--fs-xs);
     letter-spacing: 0.1em;
     text-transform: uppercase;
     color: var(--ink-3);
@@ -130,7 +130,7 @@
     width: 100%;
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: var(--sp-3);
     padding: 10px;
     border: 0;
     border-radius: 14px;
@@ -187,6 +187,6 @@
 
   .words small {
     color: var(--ink-3);
-    font-size: 13px;
+    font-size: var(--fs-sm);
   }
 </style>

@@ -1097,12 +1097,12 @@
     flex-wrap: wrap;
     align-items: flex-end;
     justify-content: space-between;
-    gap: 12px;
+    gap: var(--sp-3);
   }
 
   .actions {
     display: flex;
-    gap: 8px;
+    gap: var(--sp-2);
   }
 
   button.primary,
@@ -1162,7 +1162,7 @@
   .add {
     display: flex;
     flex-wrap: wrap;
-    gap: 8px;
+    gap: var(--sp-2);
     align-items: center;
   }
 
@@ -1192,7 +1192,7 @@
 
   .file.small {
     padding: 6px 12px;
-    font-size: 13px;
+    font-size: var(--fs-sm);
   }
 
   .file input {
@@ -1238,7 +1238,7 @@
 
   .board {
     display: grid;
-    gap: 16px;
+    gap: var(--sp-4);
   }
 
   .board.editing {
@@ -1263,7 +1263,7 @@
     background: var(--surface);
     color: var(--ink-2);
     font: inherit;
-    font-size: 13px;
+    font-size: var(--fs-sm);
     cursor: pointer;
   }
 
@@ -1289,7 +1289,7 @@
     background: none;
     color: var(--ink-2);
     font: inherit;
-    font-size: 13px;
+    font-size: var(--fs-sm);
     font-weight: 700;
     cursor: pointer;
   }
@@ -1314,7 +1314,7 @@
     background: var(--surface);
     color: var(--ink);
     font: inherit;
-    font-size: 13px;
+    font-size: var(--fs-sm);
   }
 
   .skins i {
@@ -1327,7 +1327,7 @@
   .pick {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--sp-2);
   }
 
   .seg {
@@ -1349,7 +1349,7 @@
     background: none;
     color: var(--ink-2);
     font: inherit;
-    font-size: 14px;
+    font-size: var(--fs-md);
     font-weight: 650;
     cursor: pointer;
   }
@@ -1363,7 +1363,7 @@
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 8px;
+    gap: var(--sp-2);
   }
 
   /* Big enough for a finger. */
@@ -1378,7 +1378,7 @@
     background: var(--surface);
     color: var(--ink);
     font: inherit;
-    font-size: 14px;
+    font-size: var(--fs-md);
     font-weight: 600;
     cursor: pointer;
   }
@@ -1412,7 +1412,7 @@
 
   .sheet label {
     display: grid;
-    gap: 4px;
+    gap: var(--sp-1);
     font-size: 12.5px;
     color: var(--ink-3);
   }
@@ -1480,9 +1480,9 @@
     all: unset;
     display: inline-flex;
     align-items: center;
-    gap: 4px;
+    gap: var(--sp-1);
     justify-self: start;
-    font-size: 13px;
+    font-size: var(--fs-sm);
     font-weight: 650;
     color: var(--ink-2);
     cursor: pointer;
@@ -1632,20 +1632,20 @@
     top: 100%;
     z-index: 5;
     display: grid;
-    gap: 4px;
+    gap: var(--sp-1);
     min-width: 180px;
     margin-top: 6px;
     padding: 12px 14px;
     border-radius: var(--r-sm);
     background: var(--surface);
     box-shadow: var(--shadow-lift);
-    font-size: 13px;
+    font-size: var(--fs-sm);
   }
 
   .card p {
     display: flex;
     justify-content: space-between;
-    gap: 12px;
+    gap: var(--sp-3);
     margin: 0;
     color: var(--ink-2);
   }
@@ -1657,10 +1657,10 @@
   .tray {
     display: grid;
     grid-template-rows: auto auto minmax(0, 1fr);
-    gap: 8px;
+    gap: var(--sp-2);
     max-height: 70vh;
     overflow: hidden;
-    padding: 12px;
+    padding: var(--sp-3);
     border-radius: var(--r-lg);
     background: var(--surface);
     box-shadow: var(--shadow);
@@ -1678,7 +1678,7 @@
   .tray button {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--sp-2);
     width: 100%;
     padding: 8px 10px;
     border-radius: var(--r-sm);
@@ -1709,7 +1709,7 @@
     margin: 0;
   }
 
-  @media (max-width: 760px) {
+  @media (max-width: 767.98px) {
     .board.editing {
       grid-template-columns: 1fr;
     }

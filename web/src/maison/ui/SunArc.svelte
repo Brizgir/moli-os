@@ -60,7 +60,7 @@
   .sun {
     display: grid;
     align-content: space-between;
-    gap: 8px;
+    gap: var(--sp-2);
   }
 
   .head {
@@ -73,7 +73,7 @@
   .head > b {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--sp-2);
     font-size: 17px;
     font-weight: 700;
   }
@@ -119,7 +119,7 @@
   }
 
   .noon {
-    font-size: 12px;
+    font-size: var(--fs-xs);
     font-weight: 650;
     fill: var(--ink-3);
   }
@@ -127,7 +127,7 @@
   .times {
     display: flex;
     justify-content: space-between;
-    font-size: 14px;
+    font-size: var(--fs-md);
   }
 
   .times b {

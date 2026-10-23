@@ -122,7 +122,7 @@
 
   .gauges {
     display: grid;
-    gap: 12px;
+    gap: var(--sp-3);
   }
 
   .gauges.pair {
@@ -188,11 +188,11 @@
   }
 
   .pair .value strong {
-    font-size: 28px;
+    font-size: var(--fs-xl);
   }
 
   .value span {
-    font-size: 12px;
+    font-size: var(--fs-xs);
     color: var(--ink-3);
     font-weight: 600;
   }
@@ -205,7 +205,7 @@
   .facts {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
-    gap: 8px;
+    gap: var(--sp-2);
     margin: 18px 0 14px;
     text-align: center;
   }

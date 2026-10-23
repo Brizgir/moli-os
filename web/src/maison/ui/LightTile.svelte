@@ -237,7 +237,7 @@
     background: var(--surface-3);
     color: var(--ink-2);
     font: inherit;
-    font-size: 13px;
+    font-size: var(--fs-sm);
     font-weight: 600;
     cursor: pointer;
   }
@@ -266,7 +266,7 @@
   .speed {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--sp-2);
   }
 
   .speed button {
@@ -304,7 +304,7 @@
 
   .bulbs {
     display: grid;
-    gap: 8px;
+    gap: var(--sp-2);
     padding: 0 12px 12px;
   }
 
@@ -326,7 +326,7 @@
     box-sizing: border-box;
     width: 100%;
     min-height: 112px;
-    padding: 16px;
+    padding: var(--sp-4);
     display: grid;
     grid-template-columns: auto 1fr;
     grid-template-rows: auto 1fr;
@@ -383,12 +383,12 @@
 
   .text b {
     font-weight: 650;
-    font-size: 16px;
+    font-size: var(--fs-base);
   }
 
   .text small {
     color: var(--ink-3);
-    font-size: 13px;
+    font-size: var(--fs-sm);
     font-weight: 550;
   }
 
@@ -451,7 +451,7 @@
   .controls {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: var(--sp-3);
     margin: -6px 16px 16px;
   }
 
@@ -472,7 +472,7 @@
     width: 30px;
     height: 30px;
     border-radius: 50%;
-    padding: 4px;
+    padding: var(--sp-1);
     background: conic-gradient(#ff1a1a, #ffd000, #16d94a, #00d0ff, #1f4dff, #8a2be2, #ff2d9a, #ff1a1a);
     cursor: pointer;
     transition: transform 0.2s var(--ease);

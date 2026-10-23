@@ -196,7 +196,7 @@
     bottom: 10px;
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: var(--sp-3);
     padding: 6px 12px 6px 6px;
     border-radius: 999px;
     background: rgb(6 10 20 / 55%);
@@ -227,7 +227,7 @@
     flex-wrap: wrap;
     gap: 6px 14px;
     align-items: center;
-    font-size: 12px;
+    font-size: var(--fs-xs);
     color: var(--ink-3);
     margin: 8px 4px 0;
   }
@@ -267,7 +267,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 12px;
+    gap: var(--sp-3);
     flex-wrap: wrap;
     margin-bottom: 8px;
   }
@@ -288,7 +288,7 @@
     border: 0;
     border-radius: 999px;
     padding: 6px 14px;
-    font-size: 13px;
+    font-size: var(--fs-sm);
     font-weight: 650;
     background: none;
     color: var(--ink-3);
@@ -305,7 +305,7 @@
     margin: 0;
     padding: 0 0 4px;
     display: flex;
-    gap: 4px;
+    gap: var(--sp-1);
     overflow-x: auto;
     scrollbar-width: thin;
   }
@@ -314,7 +314,7 @@
     flex: 1 0 58px;
     display: grid;
     justify-items: center;
-    gap: 4px;
+    gap: var(--sp-1);
     padding: 8px 2px;
     border-radius: 14px;
   }
@@ -324,14 +324,14 @@
   }
 
   .strip small {
-    font-size: 12px;
+    font-size: var(--fs-xs);
     font-weight: 650;
     color: var(--ink-3);
     white-space: nowrap;
   }
 
   .strip b {
-    font-size: 16px;
+    font-size: var(--fs-base);
     font-weight: 700;
   }
 
@@ -354,7 +354,7 @@
     display: flex;
     align-items: center;
     gap: 6px;
-    font-size: 13px;
+    font-size: var(--fs-sm);
   }
 
   .range span {
@@ -380,9 +380,9 @@
   .more {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
+    gap: var(--sp-1);
     margin-top: 12px;
-    font-size: 14px;
+    font-size: var(--fs-md);
     font-weight: 650;
     color: var(--ink-2);
     text-decoration: none;

@@ -173,23 +173,23 @@
   .spaces {
     display: flex;
     flex-wrap: wrap;
-    gap: 8px;
+    gap: var(--sp-2);
     margin-top: 14px;
   }
 
   .space {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--sp-2);
     padding: 7px 12px;
     border-radius: 999px;
     background: var(--surface-2);
-    font-size: 14px;
+    font-size: var(--fs-md);
     font-weight: 600;
   }
 
   .space small {
-    font-size: 13px;
+    font-size: var(--fs-sm);
     color: var(--ink-3);
     font-weight: 600;
   }

@@ -258,7 +258,7 @@
     flex: 1;
     min-width: 200px;
     gap: 2px;
-    font-size: 14px;
+    font-size: var(--fs-md);
   }
 
   .list {
@@ -295,7 +295,7 @@
     flex: 1;
     min-width: 180px;
     gap: 2px;
-    font-size: 14px;
+    font-size: var(--fs-md);
   }
 
   .phones {
@@ -308,11 +308,11 @@
   .chip {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
+    gap: var(--sp-1);
     padding: 2px 8px;
     border-radius: 999px;
     background: var(--surface-3);
-    font-size: 12px;
+    font-size: var(--fs-xs);
   }
 
   .actions {
@@ -326,7 +326,7 @@
     padding: 14px;
     border-radius: 16px;
     background: var(--cool-soft);
-    font-size: 14px;
+    font-size: var(--fs-md);
   }
 
   .invite code {
@@ -339,7 +339,7 @@
   .unassigned,
   .password {
     display: grid;
-    gap: 12px;
+    gap: var(--sp-3);
     padding: 14px;
     border-radius: 16px;
     background: var(--surface-2);
@@ -349,7 +349,7 @@
   fieldset {
     display: grid;
     gap: 6px;
-    font-size: 14px;
+    font-size: var(--fs-md);
     font-weight: 650;
   }
 
@@ -391,7 +391,7 @@
   .row {
     display: flex;
     justify-content: flex-end;
-    gap: 8px;
+    gap: var(--sp-2);
   }
 
   .phone-row {
@@ -399,7 +399,7 @@
     flex-wrap: wrap;
     align-items: center;
     justify-content: space-between;
-    gap: 8px;
+    gap: var(--sp-2);
     font-weight: 500;
   }
 
@@ -437,7 +437,7 @@
   .small {
     min-height: 34px;
     padding: 0 12px;
-    font-size: 13px;
+    font-size: var(--fs-sm);
   }
 
   .danger {
@@ -451,7 +451,7 @@
 
   .error {
     color: var(--alert);
-    font-size: 14px;
+    font-size: var(--fs-md);
     font-weight: 600;
   }
 

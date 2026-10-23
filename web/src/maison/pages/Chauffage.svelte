@@ -459,14 +459,14 @@
   .chauffage {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
-    gap: 16px;
+    gap: var(--sp-4);
     padding-bottom: 96px;
   }
 
   header {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: var(--sp-3);
   }
 
   .back {
@@ -482,7 +482,7 @@
 
   section {
     display: grid;
-    gap: 12px;
+    gap: var(--sp-3);
   }
 
   h2,
@@ -529,14 +529,14 @@
   .actions {
     display: flex;
     flex-wrap: wrap;
-    gap: 8px;
+    gap: var(--sp-2);
   }
 
   .choice,
   .zone {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--sp-2);
     min-height: 48px;
     padding: 8px 16px;
     border: 2px solid transparent;
@@ -578,7 +578,7 @@
   .zone-edit {
     display: grid;
     gap: 6px;
-    padding: 12px;
+    padding: var(--sp-3);
     border-radius: 16px;
     background: color-mix(in srgb, var(--zone) 12%, transparent);
   }
@@ -587,7 +587,7 @@
     display: grid;
     grid-template-columns: minmax(0, 1fr) 48px 4.5em 48px;
     align-items: center;
-    gap: 8px;
+    gap: var(--sp-2);
   }
 
   .temp-row .num {
@@ -610,7 +610,7 @@
 
   .name {
     display: grid;
-    gap: 4px;
+    gap: var(--sp-1);
   }
 
   .name input {
@@ -648,7 +648,7 @@
     display: grid;
     grid-template-columns: 48px minmax(0, 1fr);
     align-items: center;
-    gap: 8px;
+    gap: var(--sp-2);
   }
 
   .day-name {
@@ -743,7 +743,7 @@
 
   .sheet {
     display: grid;
-    gap: 12px;
+    gap: var(--sp-3);
     padding: 14px;
     border-radius: 18px;
     background: var(--surface-2);
@@ -752,18 +752,18 @@
   .edges {
     display: flex;
     flex-wrap: wrap;
-    gap: 12px;
+    gap: var(--sp-3);
   }
 
   .edge {
     display: grid;
-    gap: 4px;
+    gap: var(--sp-1);
   }
 
   .stepper {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--sp-2);
   }
 
   .stepper .num {
@@ -825,7 +825,7 @@
     flex-basis: 100%;
   }
 
-  @media (max-width: 720px) {
+  @media (max-width: 767.98px) {
     .savebar {
       margin-right: 0;
       bottom: 84px;

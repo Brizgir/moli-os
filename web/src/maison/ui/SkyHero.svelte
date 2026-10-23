@@ -88,7 +88,7 @@
     display: flex;
     justify-content: space-between;
     align-items: stretch;
-    gap: 16px;
+    gap: var(--sp-4);
     padding: 6px 0 0 4px;
     min-height: 160px;
   }
@@ -155,7 +155,7 @@
   .now {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: var(--sp-3);
     color: var(--sun);
   }
 
@@ -200,7 +200,7 @@
     display: inline-flex;
     align-items: center;
     gap: 5px;
-    font-size: 13px;
+    font-size: var(--fs-sm);
     font-weight: 550;
     opacity: 0.92;
   }
@@ -209,7 +209,7 @@
     max-width: 230px;
   }
 
-  @media (max-width: 760px) {
+  @media (max-width: 767.98px) {
     .hero {
       flex-direction: column;
       gap: 6px;

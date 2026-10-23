@@ -56,7 +56,7 @@
 <style>
   .watch {
     display: grid;
-    gap: 12px;
+    gap: var(--sp-3);
   }
 
   .head {
@@ -69,20 +69,20 @@
   .head h2 {
     display: flex;
     align-items: center;
-    gap: 8px;
-    font-size: 16px;
+    gap: var(--sp-2);
+    font-size: var(--fs-base);
     font-weight: 700;
     margin: 0;
   }
 
   .compact .head h2 {
-    font-size: 14px;
+    font-size: var(--fs-md);
   }
 
   .modes {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 8px;
+    gap: var(--sp-2);
   }
 
   .modes button {
@@ -96,7 +96,7 @@
     background: var(--surface-2);
     color: var(--ink-2);
     font: inherit;
-    font-size: 14px;
+    font-size: var(--fs-md);
     font-weight: 600;
     cursor: pointer;
     min-height: 44px;
@@ -105,7 +105,7 @@
   .compact .modes button {
     flex-direction: row;
     padding: 10px 8px;
-    font-size: 13px;
+    font-size: var(--fs-sm);
   }
 
   .modes button:focus-visible {
@@ -131,6 +131,6 @@
 
   p {
     margin: 0;
-    font-size: 13px;
+    font-size: var(--fs-sm);
   }
 </style>

@@ -207,7 +207,7 @@
   }
 
   .small {
-    font-size: 13px;
+    font-size: var(--fs-sm);
   }
 
   h3 {
@@ -215,7 +215,7 @@
     align-items: center;
     gap: 6px;
     margin: 0 0 8px;
-    font-size: 14px;
+    font-size: var(--fs-md);
     font-weight: 700;
     color: var(--ink-2);
   }
@@ -223,14 +223,14 @@
   .gauges {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
-    gap: 12px;
+    gap: var(--sp-3);
   }
 
   .facts {
     display: flex;
     flex-wrap: wrap;
     gap: 8px 18px;
-    font-size: 13px;
+    font-size: var(--fs-sm);
     color: var(--ink-2);
   }
 
@@ -305,7 +305,7 @@
   .power {
     display: flex;
     flex-wrap: wrap;
-    gap: 8px;
+    gap: var(--sp-2);
   }
 
   .ghost {
@@ -314,7 +314,7 @@
     border-radius: 999px;
     padding: 8px 14px;
     font: inherit;
-    font-size: 13px;
+    font-size: var(--fs-sm);
     font-weight: 650;
     color: var(--ink-2);
     cursor: pointer;
@@ -334,17 +334,17 @@
   .apps {
     display: flex;
     flex-wrap: wrap;
-    gap: 8px;
+    gap: var(--sp-2);
   }
 
   .app {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--sp-2);
     padding: 8px 14px;
     border-radius: 999px;
     background: var(--surface-2);
-    font-size: 14px;
+    font-size: var(--fs-md);
     font-weight: 650;
     color: var(--ink-3);
   }
@@ -372,7 +372,7 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 8px;
+    gap: var(--sp-2);
     min-height: 46px;
     padding: 0 18px;
     border: none;
@@ -391,7 +391,7 @@
 
   .note {
     margin: 0;
-    font-size: 13px;
+    font-size: var(--fs-sm);
   }
 
   .note.good {

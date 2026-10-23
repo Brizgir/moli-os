@@ -157,7 +157,7 @@
 <style>
   .body {
     display: grid;
-    gap: 20px;
+    gap: var(--sp-5);
     align-items: start;
   }
 
@@ -168,12 +168,12 @@
   .cams {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr));
-    gap: 16px;
+    gap: var(--sp-4);
   }
 
   .slot {
     display: grid;
-    gap: 8px;
+    gap: var(--sp-2);
   }
 
   .told {
@@ -208,7 +208,7 @@
     margin: 0;
     padding: 0;
     display: grid;
-    gap: 4px;
+    gap: var(--sp-1);
   }
 
   li button {
@@ -218,7 +218,7 @@
     display: grid;
     grid-template-columns: 72px 1fr auto;
     align-items: center;
-    gap: 12px;
+    gap: var(--sp-3);
     padding: 6px;
     border-radius: var(--r-sm);
     cursor: pointer;
@@ -263,7 +263,7 @@
   }
 
   time {
-    font-size: 13px;
+    font-size: var(--fs-sm);
     color: var(--ink-3);
   }
 
@@ -272,7 +272,7 @@
     margin-top: 10px;
   }
 
-  @media (max-width: 760px) {
+  @media (max-width: 767.98px) {
     .body.with-passages {
       grid-template-columns: minmax(0, 1fr);
     }

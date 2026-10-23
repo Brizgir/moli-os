@@ -294,7 +294,7 @@
   .row {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: var(--sp-3);
     flex-wrap: wrap;
   }
 
@@ -321,7 +321,7 @@
 
   .text .muted,
   small {
-    font-size: 13px;
+    font-size: var(--fs-sm);
   }
 
   .btn {
@@ -347,7 +347,7 @@
 
   .brain {
     display: grid;
-    gap: 8px;
+    gap: var(--sp-2);
   }
 
   .models {
@@ -365,14 +365,14 @@
     padding: 12px 14px;
     border-radius: var(--r-sm);
     background: var(--surface);
-    font-size: 14px;
+    font-size: var(--fs-md);
   }
 
   .how ol {
     margin: 0;
     padding-left: 20px;
     display: grid;
-    gap: 4px;
+    gap: var(--sp-1);
     color: var(--ink-2);
   }
 
@@ -390,15 +390,15 @@
 
   label {
     display: grid;
-    gap: 4px;
-    font-size: 12px;
+    gap: var(--sp-1);
+    font-size: var(--fs-xs);
     font-weight: 650;
     color: var(--ink-2);
   }
 
   input {
     font: inherit;
-    font-size: 14px;
+    font-size: var(--fs-md);
     padding: 9px 12px;
     border-radius: var(--r-sm);
     border: 1px solid var(--line);
@@ -425,7 +425,7 @@
 
   .tones {
     display: flex;
-    gap: 4px;
+    gap: var(--sp-1);
     padding: 3px;
     border-radius: 999px;
     background: var(--surface);
@@ -436,7 +436,7 @@
     border-radius: 999px;
     padding: 6px 12px;
     font: inherit;
-    font-size: 13px;
+    font-size: var(--fs-sm);
     font-weight: 650;
     background: none;
     color: var(--ink-2);
@@ -451,7 +451,7 @@
   .voices {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
-    gap: 8px;
+    gap: var(--sp-2);
   }
 
   .voice-chip {
@@ -472,7 +472,7 @@
     border: 0;
     background: none;
     font: inherit;
-    font-size: 14px;
+    font-size: var(--fs-md);
     font-weight: 650;
     color: var(--ink);
     padding: 8px 4px 8px 14px;

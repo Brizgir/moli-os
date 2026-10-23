@@ -158,7 +158,7 @@
   .layout {
     display: grid;
     grid-template-columns: minmax(320px, 400px) minmax(0, 1fr);
-    gap: 24px;
+    gap: var(--sp-6);
     align-items: start;
   }
 
@@ -175,7 +175,7 @@
     flex-wrap: wrap;
     justify-content: center;
     gap: 6px;
-    padding: 4px;
+    padding: var(--sp-1);
     border-radius: 999px;
     background: var(--surface-2);
     justify-self: center;
@@ -187,7 +187,7 @@
     border-radius: 999px;
     padding: 8px 16px;
     font: inherit;
-    font-size: 14px;
+    font-size: var(--fs-md);
     font-weight: 650;
     background: none;
     color: var(--ink-2);
@@ -211,7 +211,7 @@
   .now-col {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
-    gap: 20px;
+    gap: var(--sp-5);
   }
 
   .now {
@@ -244,7 +244,7 @@
   }
 
   .now h2 {
-    font-size: 28px;
+    font-size: var(--fs-xl);
     font-weight: 700;
     letter-spacing: -0.02em;
     margin: 6px 0 4px;
@@ -290,7 +290,7 @@
   }
 
   .small {
-    font-size: 13px;
+    font-size: var(--fs-sm);
     margin-top: 6px;
   }
 
@@ -309,7 +309,7 @@
   .apps {
     display: flex;
     flex-wrap: wrap;
-    gap: 8px;
+    gap: var(--sp-2);
     margin-top: 18px;
   }
 
@@ -318,7 +318,7 @@
     border-radius: 999px;
     padding: 8px 14px;
     font: inherit;
-    font-size: 14px;
+    font-size: var(--fs-md);
     font-weight: 650;
     background: var(--surface-2);
     color: var(--ink-2);
@@ -335,7 +335,7 @@
     cursor: default;
   }
 
-  @media (max-width: 560px) {
+  @media (max-width: 559.98px) {
     .playing {
       grid-template-columns: minmax(0, 1fr) auto;
     }
@@ -349,7 +349,7 @@
   .amb {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 12px;
+    gap: var(--sp-3);
   }
 
   .lamps {
@@ -359,7 +359,7 @@
     margin-top: 12px;
   }
 
-  @media (max-width: 1100px) {
+  @media (max-width: 1179.98px) {
     .layout {
       grid-template-columns: minmax(0, 1fr);
     }
@@ -369,7 +369,7 @@
     }
   }
 
-  @media (max-width: 560px) {
+  @media (max-width: 559.98px) {
     .amb,
     .lamps {
       grid-template-columns: 1fr;

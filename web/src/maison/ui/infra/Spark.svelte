@@ -58,13 +58,13 @@
   .spark {
     margin: 0;
     display: grid;
-    gap: 4px;
+    gap: var(--sp-1);
   }
 
   figcaption {
     display: flex;
     justify-content: space-between;
-    font-size: 12px;
+    font-size: var(--fs-xs);
     font-weight: 650;
     color: var(--ink-2);
   }
@@ -90,6 +90,6 @@
     height: 54px;
     display: grid;
     place-items: center;
-    font-size: 12px;
+    font-size: var(--fs-xs);
   }
 </style>

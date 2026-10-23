@@ -188,7 +188,7 @@
   .when {
     color: var(--ink-3);
     font-weight: 600;
-    font-size: 14px;
+    font-size: var(--fs-md);
   }
 
   .readout strong {
@@ -254,7 +254,7 @@
     grid-template-columns: auto 1fr auto;
     align-items: baseline;
     gap: 2px 10px;
-    font-size: 14px;
+    font-size: var(--fs-md);
   }
 
   .legend i {
@@ -267,7 +267,7 @@
   .legend small {
     grid-column: 3;
     justify-self: end;
-    font-size: 12px;
+    font-size: var(--fs-xs);
   }
 
   .legend b {

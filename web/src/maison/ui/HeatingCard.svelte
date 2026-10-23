@@ -179,7 +179,7 @@
 <style>
   .heating {
     display: grid;
-    gap: 16px;
+    gap: var(--sp-4);
   }
 
   .card-head {
@@ -188,19 +188,19 @@
   }
 
   .next {
-    font-size: 14px;
+    font-size: var(--fs-md);
     color: var(--ink-2);
   }
 
   .rooms {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-    gap: 12px;
+    gap: var(--sp-3);
   }
 
   .room {
     display: grid;
-    gap: 4px;
+    gap: var(--sp-1);
     padding: 14px 16px;
     border-radius: 18px;
     background: var(--surface-2);
@@ -237,7 +237,7 @@
   .setter {
     display: grid;
     gap: 14px;
-    padding: 16px;
+    padding: var(--sp-4);
     border-radius: 18px;
     background: var(--warm-soft);
   }
@@ -246,7 +246,7 @@
     display: flex;
     align-items: flex-start;
     justify-content: space-between;
-    gap: 12px;
+    gap: var(--sp-3);
   }
 
   .setter-head div {
@@ -257,7 +257,7 @@
   .setter-head small,
   .hint {
     margin: 0;
-    font-size: 13px;
+    font-size: var(--fs-sm);
     color: var(--ink-2);
   }
 
@@ -282,7 +282,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 20px;
+    gap: var(--sp-5);
   }
 
   .round {
@@ -315,7 +315,7 @@
     display: flex;
     align-items: center;
     gap: 6px;
-    font-size: 14px;
+    font-size: var(--fs-md);
     font-weight: 600;
     color: var(--ink-2);
     overflow: hidden;
@@ -335,7 +335,7 @@
   }
 
   .room small {
-    font-size: 13px;
+    font-size: var(--fs-sm);
     color: var(--ink-3);
   }
 

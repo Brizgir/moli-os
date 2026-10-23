@@ -424,7 +424,7 @@
   .energie {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
-    gap: 20px;
+    gap: var(--sp-5);
   }
 
   .head {
@@ -445,7 +445,7 @@
     background: var(--surface);
     box-shadow: var(--shadow);
     color: var(--ink-2);
-    font-size: 13px;
+    font-size: var(--fs-sm);
     font-weight: 650;
     text-decoration: none;
   }
@@ -453,12 +453,12 @@
   .heads {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
-    gap: 20px;
+    gap: var(--sp-5);
   }
 
   .eyebrow {
     display: block;
-    font-size: 12px;
+    font-size: var(--fs-xs);
     letter-spacing: 0.12em;
     text-transform: uppercase;
     color: var(--ink-3);
@@ -523,7 +523,7 @@
   }
 
   .small {
-    font-size: 13px;
+    font-size: var(--fs-sm);
   }
 
   .row {
@@ -531,13 +531,13 @@
     flex-wrap: wrap;
     align-items: center;
     gap: 8px 12px;
-    font-size: 14px;
+    font-size: var(--fs-md);
     margin-top: 10px;
   }
 
   .budget {
     display: grid;
-    gap: 8px;
+    gap: var(--sp-2);
     margin-top: 16px;
     padding-top: 14px;
     border-top: 1px solid var(--line);
@@ -600,13 +600,13 @@
     padding: 0;
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
-    gap: 12px;
+    gap: var(--sp-3);
   }
 
   .tip {
     display: grid;
     grid-template-columns: auto 1fr;
-    gap: 12px;
+    gap: var(--sp-3);
     padding: 14px;
     border-radius: var(--r-md);
     background: var(--surface-2);
@@ -643,13 +643,13 @@
   }
 
   .tip b {
-    font-size: 14px;
+    font-size: var(--fs-md);
     font-weight: 700;
   }
 
   .tip p {
     margin: 4px 0 0;
-    font-size: 13px;
+    font-size: var(--fs-sm);
     line-height: 1.45;
     color: var(--ink-2);
   }
@@ -657,7 +657,7 @@
   .split {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 20px;
+    gap: var(--sp-5);
   }
 
   .bars {
@@ -678,18 +678,18 @@
   .bars .cost {
     grid-column: 3;
     justify-self: end;
-    font-size: 12px;
+    font-size: var(--fs-xs);
     margin-top: -4px;
   }
 
   .name {
     font-weight: 600;
-    font-size: 14px;
+    font-size: var(--fs-md);
   }
 
   .name small {
     font-weight: 600;
-    font-size: 12px;
+    font-size: var(--fs-xs);
   }
 
   .track {
@@ -723,7 +723,7 @@
   .sub .name {
     padding-left: 14px;
     font-weight: 550;
-    font-size: 13px;
+    font-size: var(--fs-sm);
     color: var(--ink-2);
   }
 
@@ -736,20 +736,20 @@
   }
 
   .sub b {
-    font-size: 13px;
+    font-size: var(--fs-sm);
     font-weight: 600;
   }
 
   .bars b {
     font-weight: 650;
-    font-size: 14px;
+    font-size: var(--fs-md);
     min-width: 72px;
     text-align: right;
   }
 
   .seg {
     display: inline-flex;
-    padding: 4px;
+    padding: var(--sp-1);
     background: var(--surface-2);
     border-radius: 999px;
     gap: 2px;
@@ -760,7 +760,7 @@
     background: none;
     border-radius: 999px;
     padding: 7px 12px;
-    font-size: 13px;
+    font-size: var(--fs-sm);
     font-weight: 650;
     color: var(--ink-3);
     cursor: pointer;
@@ -773,17 +773,17 @@
   }
 
   .foot {
-    font-size: 13px;
+    font-size: var(--fs-sm);
     margin-top: 14px;
   }
 
-  @media (max-width: 900px) {
+  @media (max-width: 1179.98px) {
     .split {
       grid-template-columns: minmax(0, 1fr);
     }
   }
 
-  @media (max-width: 560px) {
+  @media (max-width: 559.98px) {
     .energie,
     .heads,
     .split {
@@ -800,17 +800,17 @@
     }
 
     .big {
-      font-size: 28px;
+      font-size: var(--fs-xl);
     }
 
     .big small {
-      font-size: 14px;
+      font-size: var(--fs-md);
     }
 
     /* Narrow cards: a chip wraps instead of spilling out. */
     .heads .chip {
       white-space: normal;
-      font-size: 12px;
+      font-size: var(--fs-xs);
       line-height: 1.3;
     }
 
@@ -821,7 +821,7 @@
 
     .seg button {
       padding: 6px 10px;
-      font-size: 12px;
+      font-size: var(--fs-xs);
     }
 
     .bars li {

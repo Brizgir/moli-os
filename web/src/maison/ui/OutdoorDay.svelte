@@ -117,7 +117,7 @@
   }
 
   small {
-    font-size: 12px;
+    font-size: var(--fs-xs);
     font-weight: 650;
     color: var(--ink-3);
   }
@@ -129,7 +129,7 @@
 
   em {
     font-style: normal;
-    font-size: 13px;
+    font-size: var(--fs-sm);
     color: var(--ink-3);
   }
 </style>

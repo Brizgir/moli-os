@@ -46,13 +46,13 @@
     padding: 0;
     list-style: none;
     display: grid;
-    gap: 12px;
+    gap: var(--sp-3);
   }
 
   li {
     display: flex;
     justify-content: space-between;
-    gap: 12px;
+    gap: var(--sp-3);
     font-size: 14.5px;
   }
 
@@ -67,7 +67,7 @@
     flex: none;
     display: inline-flex;
     align-items: center;
-    gap: 4px;
+    gap: var(--sp-1);
     font-weight: 650;
   }
 

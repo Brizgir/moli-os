@@ -114,7 +114,7 @@
     flex: 1;
     min-width: 200px;
     gap: 2px;
-    font-size: 14px;
+    font-size: var(--fs-md);
   }
 
   .toggle {
@@ -131,7 +131,7 @@
 
   .intro {
     margin: 0;
-    font-size: 14px;
+    font-size: var(--fs-md);
   }
 
   ul {

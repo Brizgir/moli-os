@@ -44,11 +44,11 @@
   .gauges {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 8px;
+    gap: var(--sp-2);
   }
 
   .small {
-    font-size: 13px;
+    font-size: var(--fs-sm);
     margin: 10px 0 0;
   }
 </style>

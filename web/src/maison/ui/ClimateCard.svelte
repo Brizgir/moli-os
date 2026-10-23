@@ -361,7 +361,7 @@
   }
 
   .reading span {
-    font-size: 12px;
+    font-size: var(--fs-xs);
     color: var(--ink-3);
     font-weight: 600;
     margin-top: 4px;
@@ -369,7 +369,7 @@
 
   .facts {
     display: grid;
-    gap: 8px;
+    gap: var(--sp-2);
     justify-items: start;
   }
 
@@ -401,7 +401,7 @@
     background: var(--surface-2);
     color: var(--ink);
     font: inherit;
-    font-size: 20px;
+    font-size: var(--fs-lg);
     line-height: 1;
     cursor: pointer;
   }

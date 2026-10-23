@@ -94,7 +94,7 @@
   .row {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: var(--sp-3);
     flex-wrap: wrap;
   }
 
@@ -120,7 +120,7 @@
   }
 
   .text .muted {
-    font-size: 13px;
+    font-size: var(--fs-sm);
   }
 
   .btn {
@@ -153,15 +153,15 @@
 
   label {
     display: grid;
-    gap: 4px;
-    font-size: 12px;
+    gap: var(--sp-1);
+    font-size: var(--fs-xs);
     font-weight: 650;
     color: var(--ink-2);
   }
 
   input {
     font: inherit;
-    font-size: 14px;
+    font-size: var(--fs-md);
     padding: 9px 12px;
     border-radius: var(--r-sm);
     border: 1px solid var(--line);
@@ -171,6 +171,6 @@
 
   small {
     grid-column: 1 / -1;
-    font-size: 12px;
+    font-size: var(--fs-xs);
   }
 </style>

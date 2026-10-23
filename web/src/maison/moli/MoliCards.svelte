@@ -51,13 +51,13 @@
   .board {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
-    gap: 16px;
+    gap: var(--sp-4);
     align-items: start;
   }
 
   .board.compact {
     grid-template-columns: 1fr;
-    gap: 12px;
+    gap: var(--sp-3);
   }
 
   .slot {
@@ -73,7 +73,7 @@
   .cams {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr));
-    gap: 12px;
+    gap: var(--sp-3);
   }
 
   @keyframes rise {
@@ -83,7 +83,7 @@
     }
   }
 
-  @media (max-width: 760px) {
+  @media (max-width: 767.98px) {
     .slot.wide {
       grid-column: auto;
     }

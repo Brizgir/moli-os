@@ -140,7 +140,7 @@
   label {
     display: grid;
     gap: 6px;
-    font-size: 14px;
+    font-size: var(--fs-md);
     font-weight: 650;
   }
 
@@ -163,7 +163,7 @@
   .error {
     min-height: 20px;
     color: var(--alert);
-    font-size: 14px;
+    font-size: var(--fs-md);
     font-weight: 600;
   }
 
@@ -174,7 +174,7 @@
     background: var(--cool);
     color: #fff;
     font: inherit;
-    font-size: 16px;
+    font-size: var(--fs-base);
     font-weight: 700;
     cursor: pointer;
   }

@@ -76,7 +76,7 @@
     display: flex;
     flex-wrap: wrap;
     gap: 6px 16px;
-    font-size: 14px;
+    font-size: var(--fs-md);
     color: var(--ink-2);
   }
 

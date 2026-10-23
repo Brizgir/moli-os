@@ -258,7 +258,7 @@
   .rings {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
-    gap: 20px;
+    gap: var(--sp-5);
   }
 
   .ring {
@@ -268,7 +268,7 @@
 
   .ring p {
     margin: 0;
-    font-size: 14px;
+    font-size: var(--fs-md);
   }
 
   .picture {
@@ -277,22 +277,22 @@
     background: var(--surface-2);
     display: grid;
     place-items: center;
-    padding: 12px;
+    padding: var(--sp-3);
     color: var(--ink-3);
-    font-size: 14px;
+    font-size: var(--fs-md);
     text-align: center;
   }
 
   .wall {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(min(100%, 420px), 1fr));
-    gap: 20px;
+    gap: var(--sp-5);
   }
 
   .slot {
     position: relative;
     display: grid;
-    gap: 8px;
+    gap: var(--sp-2);
   }
 
   .lock {
@@ -305,7 +305,7 @@
     z-index: 50;
     display: grid;
     place-items: center;
-    padding: 24px;
+    padding: var(--sp-6);
   }
 
   .backdrop {
@@ -349,7 +349,7 @@
   }
 
   .seen h3 {
-    font-size: 13px;
+    font-size: var(--fs-sm);
     letter-spacing: 0.1em;
     text-transform: uppercase;
     color: #a9b1c2;
@@ -362,17 +362,17 @@
     padding: 0;
     display: flex;
     flex-wrap: wrap;
-    gap: 8px;
+    gap: var(--sp-2);
   }
 
   .seen li {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--sp-2);
     padding: 8px 14px;
     border-radius: 999px;
     background: rgb(255 255 255 / 9%);
-    font-size: 14px;
+    font-size: var(--fs-md);
   }
 
   .seen .muted {
@@ -384,13 +384,13 @@
     display: flex;
     flex-wrap: wrap;
     gap: 4px 12px;
-    font-size: 14px;
+    font-size: var(--fs-md);
   }
 
   .event {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--sp-2);
     border: 0;
     padding: 0;
     background: none;
@@ -426,7 +426,7 @@
     align-items: center;
     justify-content: space-between;
     gap: 10px;
-    font-size: 14px;
+    font-size: var(--fs-md);
   }
 
   .photo figcaption span {
@@ -459,7 +459,7 @@
     background: none;
     color: #eef1f7;
     font: inherit;
-    font-size: 13px;
+    font-size: var(--fs-sm);
     text-align: left;
     cursor: pointer;
   }
@@ -479,7 +479,7 @@
   .thumb span {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
+    gap: var(--sp-1);
     padding: 0 4px 4px;
   }
 </style>

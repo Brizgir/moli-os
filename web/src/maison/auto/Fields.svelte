@@ -79,8 +79,8 @@
 <style>
   .seg {
     display: flex;
-    gap: 4px;
-    padding: 4px;
+    gap: var(--sp-1);
+    padding: var(--sp-1);
     border-radius: 14px;
     background: var(--surface-2);
     flex-wrap: wrap;
@@ -115,7 +115,7 @@
   .num {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--sp-2);
   }
 
   .num input {

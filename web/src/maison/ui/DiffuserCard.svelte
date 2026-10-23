@@ -253,7 +253,7 @@
     background: var(--surface);
     border-radius: 999px;
     padding: 7px 11px;
-    font-size: 13px;
+    font-size: var(--fs-sm);
     font-weight: 600;
     color: var(--ink-2);
     box-shadow: var(--shadow);
@@ -278,7 +278,7 @@
 
   .palette {
     display: flex;
-    gap: 8px;
+    gap: var(--sp-2);
     flex-wrap: wrap;
   }
 

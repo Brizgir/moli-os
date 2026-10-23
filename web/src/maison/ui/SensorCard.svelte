@@ -64,7 +64,7 @@
   }
 
   .when {
-    font-size: 13px;
+    font-size: var(--fs-sm);
   }
 
   dl {
@@ -75,7 +75,7 @@
   }
 
   dt {
-    font-size: 12px;
+    font-size: var(--fs-xs);
     font-weight: 650;
     color: var(--ink-3);
   }

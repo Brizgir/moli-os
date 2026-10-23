@@ -88,7 +88,7 @@
   button {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--sp-2);
     min-width: 0;
     border: 0;
     border-radius: var(--r-sm);
@@ -97,7 +97,7 @@
     color: inherit;
     font: inherit;
     font-weight: 650;
-    font-size: 14px;
+    font-size: var(--fs-md);
     text-align: left;
     cursor: pointer;
     transition: transform 0.15s var(--ease);

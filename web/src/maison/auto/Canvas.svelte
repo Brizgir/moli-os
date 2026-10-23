@@ -385,7 +385,7 @@
     display: grid;
     place-content: center;
     justify-items: center;
-    gap: 12px;
+    gap: var(--sp-3);
     color: var(--ink-3);
     font-weight: 600;
     pointer-events: none;
@@ -395,7 +395,7 @@
     pointer-events: auto;
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--sp-2);
     border: 0;
     border-radius: 999px;
     padding: 12px 20px;
@@ -410,8 +410,8 @@
     left: 14px;
     bottom: 14px;
     display: flex;
-    gap: 4px;
-    padding: 4px;
+    gap: var(--sp-1);
+    padding: var(--sp-1);
     border-radius: 14px;
     background: var(--surface);
     box-shadow: var(--shadow-lift);

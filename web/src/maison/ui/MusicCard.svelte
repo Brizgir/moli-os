@@ -54,7 +54,7 @@
   .now {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: var(--sp-3);
     padding: 12px 14px;
     border-radius: 16px;
     background: var(--surface-2);
@@ -87,6 +87,6 @@
 
   .what span,
   .small {
-    font-size: 13px;
+    font-size: var(--fs-sm);
   }
 </style>

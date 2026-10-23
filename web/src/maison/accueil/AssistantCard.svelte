@@ -36,7 +36,7 @@
 <style>
   .assistant {
     display: grid;
-    gap: 12px;
+    gap: var(--sp-3);
   }
 
   .ask {
@@ -62,14 +62,14 @@
   }
 
   .words small {
-    font-size: 13px;
+    font-size: var(--fs-sm);
     color: var(--ink-3);
   }
 
   .ideas {
     display: flex;
     flex-wrap: wrap;
-    gap: 8px;
+    gap: var(--sp-2);
   }
 
   .idea {
@@ -79,7 +79,7 @@
     background: var(--surface-2);
     color: var(--ink-2);
     font: inherit;
-    font-size: 13px;
+    font-size: var(--fs-sm);
     font-weight: 600;
     cursor: pointer;
     min-height: 36px;

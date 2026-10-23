@@ -73,11 +73,11 @@
     align-items: baseline;
     gap: 6px 10px;
     margin-bottom: 12px;
-    font-size: 13px;
+    font-size: var(--fs-sm);
   }
 
   .readout strong {
-    font-size: 16px;
+    font-size: var(--fs-base);
     font-weight: 650;
   }
 
@@ -96,7 +96,7 @@
     align-items: baseline;
     gap: 6px 10px;
     margin-bottom: 6px;
-    font-size: 13px;
+    font-size: var(--fs-sm);
   }
 
   .running strong {
@@ -182,7 +182,7 @@
     display: flex;
     flex-wrap: wrap;
     gap: 6px 14px;
-    font-size: 12px;
+    font-size: var(--fs-xs);
     margin-top: 10px;
   }
 

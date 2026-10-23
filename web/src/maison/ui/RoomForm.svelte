@@ -136,12 +136,12 @@
     box-shadow: var(--shadow-lift);
     padding: 26px 24px 20px;
     display: grid;
-    gap: 16px;
+    gap: var(--sp-4);
   }
 
   h2 {
     margin: 0;
-    font-size: 20px;
+    font-size: var(--fs-lg);
     font-weight: 750;
   }
 
@@ -156,14 +156,14 @@
 
   .field > span,
   legend {
-    font-size: 13px;
+    font-size: var(--fs-sm);
     font-weight: 700;
     color: var(--ink-2);
     padding: 0;
   }
 
   .field small {
-    font-size: 12px;
+    font-size: var(--fs-xs);
     color: var(--ink-3);
   }
 
@@ -210,9 +210,9 @@
   .hint {
     display: flex;
     align-items: flex-start;
-    gap: 8px;
+    gap: var(--sp-2);
     margin: 0;
-    font-size: 13px;
+    font-size: var(--fs-sm);
     color: var(--ink-3);
   }
 
@@ -224,13 +224,13 @@
   .error {
     margin: 0;
     color: var(--alert);
-    font-size: 14px;
+    font-size: var(--fs-md);
   }
 
   .actions {
     display: flex;
     justify-content: flex-end;
-    gap: 8px;
+    gap: var(--sp-2);
   }
 
   .primary,
@@ -270,7 +270,7 @@
     background: none;
     color: var(--ink-3);
     font: inherit;
-    font-size: 13px;
+    font-size: var(--fs-sm);
     text-decoration: underline;
     cursor: pointer;
   }
@@ -280,9 +280,9 @@
     flex-wrap: wrap;
     align-items: center;
     justify-content: space-between;
-    gap: 8px;
+    gap: var(--sp-2);
     margin: 0;
-    font-size: 14px;
+    font-size: var(--fs-md);
     color: var(--ink-2);
   }
 </style>
