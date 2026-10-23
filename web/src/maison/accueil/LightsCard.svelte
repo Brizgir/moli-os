@@ -71,8 +71,8 @@
 
   .tiles {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: var(--sp-3);
+    grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+    gap: var(--sp-2);
   }
 
   .moods {
@@ -130,10 +130,6 @@
   @media (max-width: 767.98px) {
     .tiles {
       grid-template-columns: 1fr 1fr;
-    }
-
-    .compact .tiles {
-      grid-template-columns: repeat(3, minmax(0, 1fr));
     }
   }
 </style>

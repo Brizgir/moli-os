@@ -3,11 +3,13 @@
   import { t } from '../../lib/i18n.svelte.js';
   import Icon from './Icon.svelte';
   import LightTile from './LightTile.svelte';
+  import Tile from './Tile.svelte';
 
-  /** A light (or any on/off thing): tap to switch. With `dimmer`, dimmable
-   *  lights show their level and a slider, colour lamps a palette (whites
-   *  by temperature, colours as « #rrggbb »). A room's tile (`members`:
-   *  its lamps) offers the palette when one of them takes it. */
+  /** A light (or any on/off thing) as a `Tile`: tap to switch. With
+   *  `dimmer`, dimmable lights show their level and a slider under the
+   *  tile, colour lamps a palette (whites by temperature, colours as
+   *  « #rrggbb »). A room's tile (`members`: its lamps) offers the palette
+   *  when one of them takes it. */
   // `also`: other lights switched with this one (one tile for the kitchen
   // and its corridor), on when any of them is.
   let { id, name = null, icon = 'light', dimmer = false, compact = false, point = null, members = null, also = [] } = $props();
@@ -99,11 +101,6 @@
   });
   // No temperature means colour mode (Hue): then the bulb wears the colour.
   const tint = $derived(on && hex && value(id, 'color_temp') == null ? hex : null);
-  const tintInk = $derived.by(() => {
-    if (!tint) return null;
-    const [r, g, b] = [1, 3, 5].map((i) => parseInt(tint.slice(i, i + 2), 16) / 255);
-    return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.6 ? '#3a2a10' : '#fff';
-  });
 
   // [catalogue key of its name, kelvin, look]; and [key, colour sent to the lamp].
   const WHITES = [
@@ -140,16 +137,10 @@
   }
 </script>
 
-<div class="tile" class:on class:busy class:off-grid={!ok || !d || cut} class:compact>
-  <button class="hit" onclick={tap} disabled={!d || (!ok && !cut)} aria-pressed={on} aria-label={t('commun.action', { label, action: state })}>
-    <span class="bulb" style:background={tint} style:color={tintInk} style:--glow={tint && `${tint}66`}><Icon name={icon} size={compact ? 22 : 26} /></span>
-    <span class="text">
-      <b>{label}</b>
-      <small>{state}</small>
-    </span>
-    <span class="switch" aria-hidden="true"><i></i></span>
-  </button>
+<div class="light" class:compact>
+  <Tile {icon} {label} {state} {on} {tint} {busy} dim={!ok || !d || cut} pressed={on} onclick={tap} />
   {#if on && (dimmable || canColor || canWhite)}
+    <div class="panel">
     <div class="controls">
       {#if dimmable}
         <input
@@ -201,9 +192,10 @@
         {/each}
       </div>
     {/if}
+    </div>
   {/if}
   {#if fanId}
-    <div class="fan" class:spin={fanOn}>
+    <div class="panel fan" class:spin={fanOn}>
       <button class="fan-toggle" class:on={fanOn} onclick={() => fanSet('fan_switch', !fanOn)} aria-pressed={fanOn} aria-label={fanOn ? t('commun.lampe.ventilo_marche') : t('commun.lampe.ventilo_arret')}>
         <Icon name="fan" size={18} /><span>{t('commun.lampe.ventilateur')}</span>
       </button>
@@ -219,12 +211,51 @@
 </div>
 
 <style>
+  .light {
+    display: grid;
+    gap: var(--sp-2);
+    min-width: 0;
+  }
+
+  /* The settings, in a panel under the tile. */
+  .panel {
+    display: grid;
+    gap: var(--sp-3);
+    padding: 10px 12px;
+    border-radius: var(--r-sm);
+    background: var(--surface-2);
+  }
+
+  .controls {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-3);
+  }
+
+  .level {
+    flex: 1;
+    min-width: 0;
+    margin: 0;
+    accent-color: var(--warm);
+    height: 28px;
+  }
+
+  .palette {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .bulbs {
+    display: grid;
+    gap: var(--sp-2);
+  }
+
   .fan {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 10px;
-    margin: -6px 16px 14px;
   }
 
   .fan-toggle {
@@ -302,167 +333,6 @@
     color: #fff;
   }
 
-  .bulbs {
-    display: grid;
-    gap: var(--sp-2);
-    padding: 0 12px 12px;
-  }
-
-  .tile {
-    position: relative;
-    border-radius: var(--r-md);
-    background: var(--surface-2);
-    transition: background 0.35s var(--ease), box-shadow 0.35s var(--ease);
-    overflow: hidden;
-  }
-
-  .tile.on {
-    background: linear-gradient(155deg, var(--warm-soft) 0%, var(--surface) 70%);
-    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--warm) 25%, transparent);
-  }
-
-  .hit {
-    all: unset;
-    box-sizing: border-box;
-    width: 100%;
-    min-height: 112px;
-    padding: var(--sp-4);
-    display: grid;
-    grid-template-columns: auto 1fr;
-    grid-template-rows: auto 1fr;
-    gap: 10px 12px;
-    cursor: pointer;
-  }
-
-  .compact .hit {
-    min-height: 76px;
-    grid-template-columns: auto 1fr auto;
-    grid-template-rows: auto;
-    align-items: center;
-  }
-
-  .hit:focus-visible {
-    outline: 3px solid var(--cool);
-    outline-offset: -3px;
-    border-radius: var(--r-md);
-  }
-
-  .bulb {
-    width: 46px;
-    height: 46px;
-    border-radius: 50%;
-    display: grid;
-    place-items: center;
-    background: var(--surface);
-    color: var(--ink-3);
-    transition: all 0.35s var(--ease);
-  }
-
-  .compact .bulb {
-    width: 40px;
-    height: 40px;
-  }
-
-  .on .bulb {
-    background: var(--warm);
-    color: #fff;
-    box-shadow: 0 0 0 6px var(--glow, var(--warm-glow)), 0 6px 22px var(--glow, var(--warm-glow));
-  }
-
-  .text {
-    grid-column: 1 / -1;
-    align-self: end;
-    display: grid;
-    gap: 2px;
-  }
-
-  .compact .text {
-    grid-column: auto;
-    align-self: center;
-  }
-
-  .text b {
-    font-weight: 650;
-    font-size: var(--fs-base);
-  }
-
-  .text small {
-    color: var(--ink-3);
-    font-size: var(--fs-sm);
-    font-weight: 550;
-  }
-
-  .on .text small {
-    color: var(--warm-ink);
-  }
-
-  /* A small rocker, top right. */
-  .switch {
-    position: absolute;
-    top: 18px;
-    right: 16px;
-    width: 40px;
-    height: 24px;
-    border-radius: 999px;
-    background: var(--surface-3);
-    transition: background 0.3s var(--ease);
-  }
-
-  .compact .switch {
-    position: relative;
-    top: auto;
-    right: auto;
-  }
-
-  .switch i {
-    position: absolute;
-    top: 3px;
-    left: 3px;
-    width: 18px;
-    height: 18px;
-    border-radius: 50%;
-    background: var(--surface);
-    box-shadow: 0 1px 3px rgb(0 0 0 / 20%);
-    transition: transform 0.3s var(--ease);
-  }
-
-  .on .switch {
-    background: var(--warm);
-  }
-
-  .on .switch i {
-    transform: translateX(16px);
-  }
-
-  .busy .bulb {
-    animation: pulse 1s ease-in-out infinite;
-  }
-
-  @keyframes pulse {
-    50% {
-      opacity: 0.55;
-    }
-  }
-
-  .off-grid {
-    opacity: 0.55;
-  }
-
-  .controls {
-    display: flex;
-    align-items: center;
-    gap: var(--sp-3);
-    margin: -6px 16px 16px;
-  }
-
-  .level {
-    flex: 1;
-    min-width: 0;
-    margin: 0;
-    accent-color: var(--warm);
-    height: 28px;
-  }
-
   /* The current colour, ringed by the hue wheel. */
   .swatch-toggle {
     all: unset;
@@ -496,13 +366,6 @@
   .other:focus-within {
     outline: 3px solid var(--cool);
     outline-offset: 2px;
-  }
-
-  .palette {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-    padding: 0 16px 16px;
   }
 
   .dot {

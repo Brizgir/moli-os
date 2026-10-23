@@ -16,6 +16,7 @@
   --surface: #ffffff;
   --surface-2: #f5f7fa;
   --surface-3: #e9edf3;
+  --tile-on: #ffffff; /* a lit tile, in front of its card */
   --ink: #171c28;
   --ink-2: #4a5265;
   --ink-3: #6b7386; /* 4.6:1 on white (WCAG AA for small text) */
@@ -73,6 +74,7 @@
   --surface: #161a22;
   --surface-2: #1b2029;
   --surface-3: #232935;
+  --tile-on: #2a3140;
   --ink: #eceff5;
   --ink-2: #b3bac8;
   --ink-3: #788195;

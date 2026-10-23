@@ -3,6 +3,7 @@
   import { t } from '../../lib/i18n.svelte.js';
   import Icon from './Icon.svelte';
   import LightTile from './LightTile.svelte';
+  import Tile from './Tile.svelte';
   import ClimateCard from './ClimateCard.svelte';
   import CoverTile from './CoverTile.svelte';
   import DiffuserCard from './DiffuserCard.svelte';
@@ -11,13 +12,13 @@
   import AmbiancePicker from './AmbiancePicker.svelte';
   import { phase, PHASES } from '../lib/printers.js';
 
-  /** One room, compact: its temperature and a switch for its lights in the
-   *  head, its lights and plugs as small pads (a ⚙ opens a lamp's dimmer,
-   *  colours, fan; a speaker's pad opens its card: what plays, play/pause,
-   *  volume, « Mets… »), its clims as one line each (a tap opens the dial), and
-   *  what it senses as chips. `icons`: pads show an icon only (names on
-   *  hover and for screen readers). `every`: each sensor shows, even
-   *  silent (filtered view). */
+  /** One room: its temperature and a switch for its lights in the head,
+   *  then a tile per thing (`Tile`): lights and plugs (a tap switches, the
+   *  small button opens a lamp's dimmer, colours, fan), TV and speakers (a
+   *  tap opens the remote or the card: what plays, play/pause, volume,
+   *  « Mets… »), clims (a tap opens the dial), and what it senses as chips.
+   *  `icons`: tiles show the disc only (names on hover and for screen
+   *  readers). `every`: each sensor shows, even silent (filtered view). */
   /** `onedit`: the room's sheet (rename, icon, other names), from Pièces. */
   let { room, every = false, icons = false, onedit = null } = $props();
 
@@ -136,7 +137,7 @@
   };
   const litCount = (outlets, id) => outlets.filter((o) => isOn(id, o.key)).length;
 
-  /** The pads: lights, then TV and speakers, then plugs. */
+  /** The tiles: lights, then TV and speakers, then plugs. */
   const pads = $derived([
     ...room.lights.map((d) => ({ d, point: null })),
     ...room.media.map((d) => ({ d, point: deviceKind(d) === 'tv' ? 'power' : null, speaker: deviceKind(d) === 'speaker', tv: deviceKind(d) === 'tv' })),
@@ -239,28 +240,23 @@
         {@const cut = unpowered(d.id) && !isFixture(d)}
         {@const more = !speaker && !point && !cut && (fine(d) || hasFan(d.id) || (isFixture(d) && d.members?.some(hasFan)))}
         {@const label = name ?? nameOf(d.id)}
-        <div class="pad-wrap">
-          {#if speaker}
-            <button class="pad" class:on={lit} class:open={open === d.id} class:off-grid={!reachable(d.id)} onclick={() => (open = open === d.id ? null : d.id)} title={label} aria-expanded={open === d.id} aria-label={t('commun.action', { label, action: stateOf(d, point) })}>
-              <span class="ico"><Icon name={padIcon(d)} size={icons ? 22 : 18} /></span>
-              {#if !icons}<b>{label}</b><small>{stateOf(d, point)}</small>{/if}
-            </button>
-          {:else}
-            <button class="pad" class:on={lit} class:cut class:off-grid={!reachable(d.id) && !cut} onclick={() => tap(d, point, outlets, name)} title={label} aria-pressed={lit} aria-label={t('commun.action', { label, action: stateOf(d, point, outlets) })}>
-              <span class="ico"><Icon name={outlets ? 'power' : padIcon(d)} size={icons ? 22 : 18} /></span>
-              {#if !icons}<b>{label}</b><small>{stateOf(d, point, outlets)}</small>{/if}
-            </button>
-          {/if}
-          {#if tv}
-            <button class="more" class:open={open === d.id} onclick={() => (open = open === d.id ? null : d.id)} aria-expanded={open === d.id} title={t('commun.piece.telecommande')} aria-label={t('commun.piece.telecommande_nom', { name: nameOf(d.id) })}>
-              <Icon name="remote" size={13} />
-            </button>
-          {:else if more}
-            <button class="more" class:open={open === d.id} onclick={() => (open = open === d.id ? null : d.id)} aria-expanded={open === d.id} title={t('commun.piece.regler')} aria-label={t('commun.piece.regler_nom', { name: nameOf(d.id) })}>
-              <Icon name="tune" size={13} />
-            </button>
-          {/if}
-        </div>
+        {@const opens = speaker || tv || more}
+        <Tile
+          icon={outlets ? 'power' : padIcon(d)}
+          {label}
+          state={stateOf(d, point, outlets)}
+          on={lit}
+          tone={speaker ? 'good' : 'warm'}
+          dim={cut || (!reachable(d.id) && !cut)}
+          compact={icons}
+          open={open === d.id}
+          pressed={speaker ? null : lit}
+          expanded={speaker ? open === d.id : null}
+          onclick={() => (speaker ? (open = open === d.id ? null : d.id) : tap(d, point, outlets, name))}
+          onmore={opens && !speaker ? () => (open = open === d.id ? null : d.id) : null}
+          moreOpen={open === d.id}
+          moreIcon={tv ? 'remote' : 'tune'}
+          moreLabel={tv ? t('commun.piece.telecommande_nom', { name: nameOf(d.id) }) : t('commun.piece.regler_nom', { name: nameOf(d.id) })} />
       {/each}
     </div>
     {#if open && pads.some((p) => p.d.id === open && p.speaker)}
@@ -280,18 +276,29 @@
     <DiffuserCard id={d.id} />
   {/each}
 
-  {#each room.climates as d (d.id)}
-    {@const on = isOn(d.id)}
-    <button class="clim" class:on onclick={() => (openClim = openClim === d.id ? null : d.id)} aria-expanded={openClim === d.id}>
-      <Icon name="air-conditioner" size={18} />
-      <b>{nameOf(d.id)}</b>
-      <span class="num">{num(value(d.id, 'temperature'), 0)}° → {num(value(d.id, 'target_temperature'), 1)}°</span>
-      <span class="state">{on ? (MODES[value(d.id, 'mode')] ? t(MODES[value(d.id, 'mode')]) : t('commun.piece.en_marche')) : t('commun.piece.eteinte')}</span>
-    </button>
-    {#if openClim === d.id}
-      <ClimateCard id={d.id} name={nameOf(d.id)} />
-    {/if}
-  {/each}
+  {#if room.climates.length}
+    <div class="pads" class:icons>
+      {#each room.climates as d (d.id)}
+        {@const on = isOn(d.id)}
+        {@const mode = on ? (MODES[value(d.id, 'mode')] ? t(MODES[value(d.id, 'mode')]) : t('commun.piece.en_marche')) : t('commun.piece.eteinte')}
+        <Tile
+          icon="air-conditioner"
+          label={nameOf(d.id)}
+          state={`${num(value(d.id, 'temperature'), 0)}° → ${num(value(d.id, 'target_temperature'), 1)}° · ${mode}`}
+          {on}
+          tone="cool"
+          compact={icons}
+          open={openClim === d.id}
+          expanded={openClim === d.id}
+          onclick={() => (openClim = openClim === d.id ? null : d.id)} />
+      {/each}
+    </div>
+    {#each room.climates as d (d.id)}
+      {#if openClim === d.id}
+        <ClimateCard id={d.id} name={nameOf(d.id)} />
+      {/if}
+    {/each}
+  {/if}
 
   {#if sensorChips.length}
     <div class="chips">
@@ -512,156 +519,15 @@
     transform: translateX(16px);
   }
 
-  /* Pads: small, side by side. */
+  /* Tiles, two or more side by side; the discs alone when asked. */
   .pads {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(98px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
     gap: var(--sp-2);
   }
 
   .pads.icons {
-    grid-template-columns: repeat(auto-fill, minmax(54px, 1fr));
-  }
-
-  .pad-wrap {
-    position: relative;
-    min-width: 0;
-  }
-
-  .pad {
-    box-sizing: border-box;
-    width: 100%;
-    height: 100%;
-    min-height: 74px;
-    display: grid;
-    align-content: start;
-    gap: 3px;
-    padding: 10px;
-    border: none;
-    border-radius: var(--r-md);
-    background: var(--surface-2);
-    color: var(--ink);
-    font: inherit;
-    text-align: left;
-    text-decoration: none;
-    cursor: pointer;
-    transition: background 0.3s var(--ease), box-shadow 0.3s var(--ease);
-  }
-
-  .icons .pad {
-    min-height: 54px;
-    padding: 0;
-    place-items: center;
-    align-content: center;
-  }
-
-  .pad.on {
-    background: linear-gradient(155deg, var(--warm-soft) 0%, var(--surface) 85%);
-    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--warm) 30%, transparent);
-  }
-
-  .pad.open {
-    box-shadow: inset 0 0 0 2px var(--ink-3);
-  }
-
-  .pad.cut,
-  .pad.off-grid {
-    opacity: 0.45;
-  }
-
-  .ico {
-    width: 30px;
-    height: 30px;
-    margin-bottom: 3px;
-    border-radius: 50%;
-    display: grid;
-    place-items: center;
-    background: var(--surface);
-    color: var(--ink-3);
-  }
-
-  .icons .ico {
-    width: 38px;
-    height: 38px;
-    margin: 0;
-  }
-
-  .pad.on .ico {
-    background: var(--warm);
-    color: #fff;
-  }
-
-  .pad b {
-    font-size: var(--fs-sm);
-    font-weight: 650;
-    line-height: 1.2;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-    overflow-wrap: anywhere;
-  }
-
-  .pad small {
-    font-size: 11.5px;
-    color: var(--ink-3);
-  }
-
-  .pad.on small {
-    color: var(--warm-ink);
-  }
-
-  .more {
-    position: absolute;
-    top: 6px;
-    right: 6px;
-    display: grid;
-    place-items: center;
-    width: 22px;
-    height: 22px;
-    border: none;
-    border-radius: 50%;
-    background: var(--surface);
-    color: var(--ink-3);
-    cursor: pointer;
-  }
-
-  .more.open {
-    background: var(--warm);
-    color: #fff;
-  }
-
-  /* A clim, on one line. */
-  .clim {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    width: 100%;
-    padding: 10px 14px;
-    border: none;
-    border-radius: var(--r-md);
-    background: var(--surface-2);
-    color: var(--ink);
-    font: inherit;
-    font-size: var(--fs-md);
-    text-align: left;
-    cursor: pointer;
-  }
-
-  .clim b {
-    flex: 1;
-    font-weight: 650;
-  }
-
-  .clim .state {
-    font-size: 12.5px;
-    font-weight: 600;
-    color: var(--ink-3);
-  }
-
-  .clim.on .state {
-    color: var(--cool);
+    grid-template-columns: repeat(auto-fill, minmax(64px, 1fr));
   }
 
   .chips {
