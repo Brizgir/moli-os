@@ -16,7 +16,7 @@
    *  then a tile per thing (`Tile`): lights and plugs (a tap switches, the
    *  small button opens a lamp's dimmer, colours, fan), TV and speakers (a
    *  tap opens the remote or the card: what plays, play/pause, volume,
-   *  « Mets… »), clims (a tap opens the dial), and what it senses as chips.
+   *  « Mets… »), clims (a tap opens the dial), and what it senses as low tiles.
    *  `icons`: tiles show the disc only (names on hover and for screen
    *  readers). `every`: each sensor shows, even silent (filtered view). */
   /** `onedit`: the room's sheet (rename, icon, other names), from Pièces. */
@@ -301,13 +301,9 @@
   {/if}
 
   {#if sensorChips.length}
-    <div class="chips">
+    <div class="readings">
       {#each sensorChips as c, i (i)}
-        {#if c.href}
-          <a class="chip {c.tone}" href={c.href}><Icon name={c.icon} size={15} />{c.text}</a>
-        {:else}
-          <span class="chip {c.tone}"><Icon name={c.icon} size={15} />{c.text}</span>
-        {/if}
+        <Tile row static={!c.href} href={c.href ?? null} icon={c.icon} label={c.text} on={!!c.tone} tone={c.tone || 'cool'} />
       {/each}
     </div>
   {/if}
@@ -530,13 +526,10 @@
     grid-template-columns: repeat(auto-fill, minmax(64px, 1fr));
   }
 
-  .chips {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-  }
-
-  .chips a {
-    text-decoration: none;
+  /* What the room senses: low tiles, two or more side by side. */
+  .readings {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: var(--sp-2);
   }
 </style>

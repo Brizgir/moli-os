@@ -5,26 +5,35 @@
   /** The one tile for a thing in the house, drawn as Apple Home draws
    *  them: an icon in a disc, a name, a word of state. Lit when `on` (the
    *  disc takes the tone: warm for a light, cool for the climate, good for
-   *  what plays), muted otherwise; `tint`: a lamp's own colour on the
-   *  disc. A tap is the main action (`onclick`, `href` for a link);
-   *  `onmore` adds a small round button top right (dimmer, remote…).
+   *  what plays, alert for what is wrong), muted otherwise; `tint`: a
+   *  lamp's own colour on the disc; `glyph`: a letter in the disc instead
+   *  of the icon (a person). `value`: a figure that matters (a
+   *  temperature), big. `badge`: a small icon top right (a lock, a hand).
+   *  A tap is the main action (`onclick`, `href` for a link, `static` for
+   *  a reading only); `onmore` adds a small round button top right
+   *  (dimmer, remote…). `row`: the disc and the words side by side, low.
    *  `compact`: the disc alone, the name for the pointer and the reader.
    *  `pressed` / `expanded`: what the tap means, for ARIA. */
   let {
     icon = 'light',
     label,
     state = '',
+    value = null,
     on = false,
     tone = 'warm',
     tint = null,
+    glyph = null,
+    badge = null,
     busy = false,
     dim = false,
     compact = false,
+    row = false,
     open = false,
     pressed = null,
     expanded = null,
     onclick = null,
     href = null,
+    static: fixed = false,
     onmore = null,
     moreIcon = 'tune',
     moreLabel = '',
@@ -37,15 +46,34 @@
     const [r, g, b] = [1, 3, 5].map((i) => parseInt(tint.slice(i, i + 2), 16) / 255);
     return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.6 ? '#3a2a10' : '#fff';
   });
-  const said = $derived(state ? t('commun.action', { label, action: state }) : label);
+  const words = $derived([value, state].filter((x) => x != null && x !== '').join(' · '));
+  const said = $derived(words ? t('commun.action', { label, action: words }) : label);
 </script>
 
-<div class="wrap" class:compact>
+{#snippet inside()}
+  <span class="top">
+    <span class="disc" style:background={on && tint ? tint : null} style:color={on && tintInk ? tintInk : null}>
+      {#if glyph}{glyph}{:else}<Icon name={icon} size={compact ? 24 : 22} />{/if}
+    </span>
+    {#if value != null && !row}<b class="value num">{value}</b>{/if}
+    {#if badge}<span class="badge"><Icon name={badge} size={13} /></span>{/if}
+  </span>
+  <span class="text">
+    <b>{label}</b>
+    {#if state}<small>{state}</small>{/if}
+  </span>
+  {#if value != null && row}<b class="value num">{value}</b>{/if}
+{/snippet}
+
+<div class="wrap" class:compact class:row>
   {#if href}
     <a class="tile" class:on class:dim class:busy class:open data-tone={tone} {href} title={compact ? label : null} aria-label={compact ? said : null}>
-      <span class="disc" style:background={on && tint ? tint : null} style:color={on && tintInk ? tintInk : null}><Icon name={icon} size={compact ? 24 : 22} /></span>
-      <span class="text"><b>{label}</b>{#if state}<small>{state}</small>{/if}</span>
+      {@render inside()}
     </a>
+  {:else if fixed}
+    <div class="tile fixed" class:on class:dim class:busy data-tone={tone} role="group" title={compact ? label : null} aria-label={said}>
+      {@render inside()}
+    </div>
   {:else}
     <button
       class="tile"
@@ -59,8 +87,7 @@
       aria-label={said}
       aria-pressed={pressed == null ? undefined : pressed}
       aria-expanded={expanded == null ? undefined : expanded}>
-      <span class="disc" style:background={on && tint ? tint : null} style:color={on && tintInk ? tintInk : null}><Icon name={icon} size={compact ? 24 : 22} /></span>
-      <span class="text"><b>{label}</b>{#if state}<small>{state}</small>{/if}</span>
+      {@render inside()}
     </button>
   {/if}
   {#if onmore}
@@ -97,7 +124,11 @@
       transform 0.15s var(--ease);
   }
 
-  .tile:active {
+  .tile.fixed {
+    cursor: default;
+  }
+
+  .tile:not(.fixed):active {
     transform: scale(0.97);
   }
 
@@ -141,7 +172,15 @@
     --tone-ink: var(--alert);
   }
 
+  .top {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-2);
+    min-width: 0;
+  }
+
   .disc {
+    flex: none;
     width: 40px;
     height: 40px;
     border-radius: 50%;
@@ -149,6 +188,7 @@
     place-items: center;
     background: var(--surface-3);
     color: var(--ink-3);
+    font-weight: 700;
     transition:
       background 0.3s var(--ease),
       box-shadow 0.3s var(--ease);
@@ -168,6 +208,24 @@
     50% {
       opacity: 0.5;
     }
+  }
+
+  .value {
+    margin-left: auto;
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: var(--ink);
+    white-space: nowrap;
+  }
+
+  .badge {
+    display: inline-grid;
+    color: var(--ink-3);
+  }
+
+  .on .badge {
+    color: var(--tone-ink);
   }
 
   .text {
@@ -202,6 +260,28 @@
     color: var(--tone-ink);
   }
 
+  /* Side by side, low: a reading, a person. */
+  .row .tile {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-rows: auto;
+    align-items: center;
+    min-height: 60px;
+    padding: var(--sp-2) var(--sp-3) var(--sp-2) var(--sp-2);
+  }
+
+  .row .disc {
+    width: 34px;
+    height: 34px;
+  }
+
+  .row .text {
+    align-self: center;
+  }
+
+  .row .value {
+    font-size: 18px;
+  }
+
   /* The disc alone, square. */
   .compact .tile {
     min-height: 64px;
@@ -210,7 +290,9 @@
     place-items: center;
   }
 
-  .compact .text {
+  .compact .text,
+  .compact .value,
+  .compact .badge {
     display: none;
   }
 

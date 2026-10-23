@@ -5,6 +5,7 @@
   import { nextHeating } from '../lib/today.js';
   import { t } from '../../lib/i18n.svelte.js';
   import Icon from './Icon.svelte';
+  import Tile from './Tile.svelte';
 
   /** The heating at a glance (Netatmo): each heated room with its
    *  temperature and its setpoint, the next change the timed automations
@@ -115,25 +116,19 @@
   </div>
   <div class="rooms">
     {#each rooms as r (r.id)}
-      <svelte:element
-        this={writable(r.id) ? 'button' : 'div'}
-        class="room"
-        class:warm={value(r.id, 'heating') === true}
-        class:picked={picked === r.id}
-        class:manual={value(r.id, 'setpoint_mode') === 'manual'}
-        aria-expanded={writable(r.id) ? picked === r.id : undefined}
-        aria-label={writable(r.id) ? t('maison.accueil.chauffage.regler', { room: r.name }) : undefined}
-        onclick={writable(r.id) ? () => pick(r.id) : undefined}
-        role={writable(r.id) ? undefined : 'group'}
-      >
-        <span class="name">
-          {r.name}
-          {#if value(r.id, 'setpoint_mode') === 'manual'}<span class="hand"><Icon name="hand" size={13} /></span>{/if}
-          {#if protectedRoom(r.name)}<span class="lock" role="img" aria-label={t('commun.piece.protegee_titre')}><Icon name="lock" size={13} /></span>{/if}
-        </span>
-        <b class="num">{value(r.id, 'temperature') != null ? `${num(value(r.id, 'temperature'), 1)}°` : '—'}</b>
-        <small>{aim(r.id)}</small>
-      </svelte:element>
+      {@const manual = value(r.id, 'setpoint_mode') === 'manual'}
+      <Tile
+        icon={value(r.id, 'heating') === true ? 'fire' : 'radiator'}
+        label={r.name}
+        value={value(r.id, 'temperature') != null ? `${num(value(r.id, 'temperature'), 1)}°` : '—'}
+        state={aim(r.id)}
+        on={value(r.id, 'heating') === true}
+        tone="warm"
+        badge={protectedRoom(r.name) ? 'lock' : manual ? 'hand' : null}
+        static={!writable(r.id)}
+        open={picked === r.id}
+        expanded={writable(r.id) ? picked === r.id : null}
+        onclick={writable(r.id) ? () => pick(r.id) : null} />
     {/each}
   </div>
   {#if picked}
@@ -195,43 +190,7 @@
   .rooms {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-    gap: var(--sp-3);
-  }
-
-  .room {
-    display: grid;
-    gap: var(--sp-1);
-    padding: 14px 16px;
-    border-radius: 18px;
-    background: var(--surface-2);
-    min-width: 0;
-  }
-
-  button.room {
-    border: 2px solid transparent;
-    color: inherit;
-    font: inherit;
-    text-align: left;
-    cursor: pointer;
-    transition: border-color 0.15s;
-  }
-
-  button.room:hover {
-    border-color: var(--line);
-  }
-
-  .room.warm {
-    background: linear-gradient(155deg, var(--warm-soft) 0%, var(--surface-2) 85%);
-  }
-
-  .room.picked,
-  .room.picked:hover {
-    border-color: var(--warm);
-  }
-
-  .hand {
-    display: inline-grid;
-    color: var(--warm);
+    gap: var(--sp-2);
   }
 
   .setter {
@@ -304,39 +263,10 @@
     letter-spacing: -0.02em;
   }
 
-  button.room:focus-visible,
   .round:focus-visible,
   .close:focus-visible {
     outline: 2px solid currentColor;
     outline-offset: 2px;
-  }
-
-  .name {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-size: var(--fs-md);
-    font-weight: 600;
-    color: var(--ink-2);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .lock {
-    display: inline-grid;
-    color: var(--cool);
-  }
-
-  .room b {
-    font-size: 30px;
-    font-weight: 700;
-    letter-spacing: -0.02em;
-  }
-
-  .room small {
-    font-size: var(--fs-sm);
-    color: var(--ink-3);
   }
 
   .actions {
@@ -389,10 +319,6 @@
     .rooms {
       grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 10px;
-    }
-
-    .room b {
-      font-size: 24px;
     }
   }
 </style>
