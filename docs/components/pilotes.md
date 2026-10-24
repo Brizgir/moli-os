@@ -670,7 +670,7 @@ pièces ; il commande ensuite les membres en origine `system` (journal : `lumina
   démarrage.
 - **Configuration** : `[[driver.options.person]]` avec `id`, `name`, `macs` (adresses Wi-Fi
   des téléphones ; iPhone : adresse privée « Fixe » pour le réseau de la maison).
-- **Points** : `home` (binaire, sémantique occupation), lecture seule.
+- **Points** : `home` (binaire, sémantique occupation), lecture seule. **Où est chacun** : l'appareil `personnes:<id>` d'une personne (serveur, `whereabouts.rs`) prend ce `home` quand aucun téléphone de l'appli n'a parlé (l'appli garde la priorité : elle connaît la position) ; à la maison par le Wi-Fi, la zone est la zone maison, sans position. L'`id` de la personne doit être le même ici et dans le carnet des personnes.
 - **Machines** : `[[driver.options.machine]]` avec `id`, `name`, `ip` (sur le réseau déclaré) : appareil « Machine » (`description` = son adresse), point `online` (allumée tant qu'elle répond, éteinte après deux relevés sans réponse). C'est l'équivalent de l'intégration `ping` de HA pour un ordinateur.
 
 ## `netatmo` : chauffage Netatmo Energy (`crates/moli-netatmo`)

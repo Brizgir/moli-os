@@ -5,7 +5,9 @@
 //! « quand tout le monde est parti » is `personnes:maison/everyone_away`.
 //!
 //! - home: a phone of theirs says it is home (home Wi-Fi, or inside the home
-//!   zone); away when every phone of theirs says it is away;
+//!   zone); away when every phone of theirs says it is away. When no phone of
+//!   the app has spoken, the house's own Wi-Fi watch (the `presence` driver,
+//!   `presence:<person id>/home`) says it instead;
 //! - position, accuracy, battery: from their phone that spoke last;
 //! - zone: the home zone when home, else the smallest zone containing the
 //!   position, else « Ailleurs ».
@@ -75,6 +77,9 @@ pub(crate) fn zone_of(zones: &[Zone], at: (f64, f64)) -> Option<&Zone> {
 #[derive(Debug, Default, Clone)]
 struct Phone {
     home: Option<bool>,
+    /// Seen on the house's Wi-Fi by the `presence` driver (no app, no
+    /// position): heard only when no phone of the app has a word.
+    wifi: bool,
     at: Option<(f64, f64)>,
     accuracy: Option<f64>,
     battery: Option<f64>,
@@ -114,18 +119,48 @@ impl Whereabouts {
     }
 
     /// Each phone's word, by the person it belongs to: the devices of the
-    /// phones driver (its own `person` point says whose each is).
+    /// phones driver (its own `person` point says whose each is), and the
+    /// house's Wi-Fi watch (the `presence` driver: one device per person,
+    /// named after them, with a `home` point; its machines have none).
     fn phones(&self) -> BTreeMap<String, Vec<Phone>> {
         let mut by_person: BTreeMap<String, Vec<Phone>> = BTreeMap::new();
         let snapshot = self.hub.snapshot();
-        let instances: HashSet<String> = snapshot
-            .drivers
-            .iter()
-            .filter(|d| d.kind == "phones")
-            .map(|d| d.instance.as_str().to_owned())
-            .collect();
+        let of_kind = |kind: &str| -> HashSet<String> {
+            snapshot
+                .drivers
+                .iter()
+                .filter(|d| d.kind == kind)
+                .map(|d| d.instance.as_str().to_owned())
+                .collect()
+        };
+        let (apps, watches) = (of_kind("phones"), of_kind("presence"));
         for view in snapshot.devices {
-            if !instances.contains(view.device.instance.as_str()) {
+            let instance = view.device.instance.as_str();
+            let wifi = watches.contains(instance);
+            if !wifi && !apps.contains(instance) {
+                continue;
+            }
+            let home = view.state.get("home").and_then(|s| match s.value {
+                Value::Bool(b) => Some(b),
+                _ => None,
+            });
+            let ts = view.state.values().map(|s| s.ts).max().unwrap_or(0);
+            if wifi {
+                // The device is the person: `presence:<person id>`.
+                let id = view.device.id.to_string();
+                let Some(person) = id.strip_prefix(&format!("{instance}:")) else {
+                    continue;
+                };
+                if !view.state.contains_key("home") {
+                    continue;
+                }
+                let phone = Phone {
+                    home,
+                    wifi: true,
+                    ts,
+                    ..Phone::default()
+                };
+                by_person.entry(person.to_owned()).or_default().push(phone);
                 continue;
             }
             let Some(person) = view.state.get("person").and_then(|s| match &s.value {
@@ -135,12 +170,9 @@ impl Whereabouts {
                 continue;
             };
             let num = |k: &str| view.state.get(k).and_then(|s| s.value.as_f64());
-            let ts = view.state.values().map(|s| s.ts).max().unwrap_or(0);
             let phone = Phone {
-                home: view.state.get("home").and_then(|s| match s.value {
-                    Value::Bool(b) => Some(b),
-                    _ => None,
-                }),
+                home,
+                wifi: false,
                 at: num("latitude").zip(num("longitude")),
                 accuracy: num("accuracy"),
                 battery: num("battery"),
@@ -152,15 +184,20 @@ impl Whereabouts {
     }
 }
 
-/// Where a person is, from their phones.
+/// Where a person is, from their phones: the app's first (it knows the
+/// position), the house's Wi-Fi only when the app has no word.
 fn locate(phones: &[Phone], zones: &[Zone], home_zone: Option<&Zone>) -> Where {
-    let home = if phones.iter().any(|p| p.home == Some(true)) {
-        Some(true)
-    } else if phones.iter().any(|p| p.home == Some(false)) {
-        Some(false)
-    } else {
-        None
+    let said = |wifi: bool| {
+        let mine = phones.iter().filter(|p| p.wifi == wifi);
+        if mine.clone().any(|p| p.home == Some(true)) {
+            Some(true)
+        } else if mine.clone().any(|p| p.home == Some(false)) {
+            Some(false)
+        } else {
+            None
+        }
     };
+    let home = said(false).or_else(|| said(true));
     let latest = phones
         .iter()
         .filter(|p| p.at.is_some())
@@ -405,6 +442,7 @@ mod tests {
         let zones = vec![home.clone(), work, city];
         let phone = |home: Option<bool>, at: Option<(f64, f64)>, ts: u64| Phone {
             home,
+            wifi: false,
             at,
             accuracy: Some(10.0),
             battery: Some(50.0),
@@ -443,5 +481,54 @@ mod tests {
         assert_eq!(w.home, Some(true));
         // Nothing known.
         assert_eq!(locate(&[], &zones, None), Where::default());
+    }
+
+    #[test]
+    fn the_house_wifi_speaks_when_no_phone_of_the_app_does() {
+        let home = zone("maison", "Maison", (43.0, 3.0), 150.0);
+        let zones = vec![home.clone()];
+        let wifi = |home: Option<bool>, ts: u64| Phone {
+            home,
+            wifi: true,
+            ts,
+            ..Phone::default()
+        };
+        let app = |home: Option<bool>, at: Option<(f64, f64)>| Phone {
+            home,
+            wifi: false,
+            at,
+            accuracy: Some(10.0),
+            battery: Some(50.0),
+            ts: 1,
+        };
+        // Seen on the Wi-Fi, no app: home, in the home zone, no position.
+        let w = locate(&[wifi(Some(true), 1)], &zones, Some(&home));
+        assert_eq!(
+            (w.home, w.zone.as_deref(), w.at),
+            (Some(true), Some("Maison"), None)
+        );
+        // Gone from the Wi-Fi, no app: away, elsewhere.
+        let w = locate(&[wifi(Some(false), 1)], &zones, Some(&home));
+        assert_eq!(w.home, Some(false));
+        assert!(w.zone.is_some_and(|z| z != "Maison"));
+        // The app has a word: it wins, whatever the Wi-Fi says.
+        let w = locate(
+            &[wifi(Some(true), 9), app(Some(false), Some((44.0, 3.0)))],
+            &zones,
+            Some(&home),
+        );
+        assert_eq!(w.home, Some(false));
+        let w = locate(
+            &[wifi(Some(false), 9), app(Some(true), None)],
+            &zones,
+            Some(&home),
+        );
+        assert_eq!(w.home, Some(true));
+        // The app is silent (no `home` yet): the Wi-Fi speaks, the app's
+        // battery still shows.
+        let w = locate(&[wifi(Some(true), 1), app(None, None)], &zones, Some(&home));
+        assert_eq!((w.home, w.battery), (Some(true), Some(50.0)));
+        // Nobody knows.
+        assert_eq!(locate(&[wifi(None, 1)], &zones, Some(&home)).home, None);
     }
 }
