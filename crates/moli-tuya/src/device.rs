@@ -44,6 +44,9 @@ pub struct Order {
     pub at: Instant,
 }
 
+/// Orders sent, waiting for the device's acknowledgement.
+type Pending = Vec<(Instant, oneshot::Sender<Result<(), String>>)>;
+
 /// An order older than this is never sent: the caller gave up, and a
 /// heater switched on hours later is worse than a refusal.
 const ORDER_TTL: Duration = Duration::from_secs(5);
@@ -118,6 +121,96 @@ impl Floor {
             }
             _ => announced,
         }
+    }
+}
+
+/// A diffuser's timer, as the device itself reports it. When it runs out
+/// the device switches its light off (`switch_led`) and resets `countdown`
+/// and `countdown_left`, but leaves `switch` and `mist_mode` as they are:
+/// the mist goes on, while the app promises the device goes off. Moli
+/// finishes the job. A timer Moli itself just wrote (« 0 »: a person
+/// cancelled it) is not an end: the diffuser goes on.
+#[derive(Debug)]
+struct MistTimer {
+    /// DP ids, as the frames carry them.
+    switch: String,
+    countdown: String,
+    left: String,
+    /// What the device last said.
+    on: Option<bool>,
+    program: Option<String>,
+    minutes: Option<i64>,
+    /// `countdown_left` went from > 0 to 0, and nothing was done about it.
+    ran_out: bool,
+    /// Moli wrote `countdown` since the device last showed a running timer.
+    written: bool,
+}
+
+impl MistTimer {
+    /// Only a device with a mist, a main switch and the timer pair.
+    fn new(device: &TuyaDevice) -> Option<Self> {
+        device.dp_by_code("mist_mode")?;
+        let switch = device
+            .dp_by_code("switch")
+            .filter(|dp| dp.kind == crate::model::DpKind::Boolean)?;
+        let countdown = device.dp_by_code("countdown")?;
+        let left = device.dp_by_code("countdown_left")?;
+        Some(Self {
+            switch: switch.id.to_string(),
+            countdown: countdown.id.to_string(),
+            left: left.id.to_string(),
+            on: None,
+            program: None,
+            minutes: None,
+            ran_out: false,
+            written: false,
+        })
+    }
+
+    /// An order of Moli leaves: what the device reports next is its doing.
+    fn written(&mut self, dps: &Map<String, Json>) {
+        if dps.contains_key(&self.countdown) {
+            self.written = true;
+        }
+    }
+
+    /// A frame from the device. `true`: its timer just ran out on its own
+    /// and the mist is still on; the driver switches the device off.
+    fn observe(&mut self, command: u32, dps: &Map<String, Json>) -> bool {
+        if let Some(Json::Bool(on)) = dps.get(&self.switch) {
+            self.on = Some(*on);
+        }
+        if let Some(Json::String(program)) = dps.get(&self.countdown) {
+            self.program = Some(program.clone());
+        }
+        if let Some(minutes) = dps.get(&self.left).and_then(Json::as_i64) {
+            let was_running = self.minutes.is_some_and(|m| m > 0);
+            self.minutes = Some(minutes);
+            if minutes > 0 {
+                // A timer runs: whatever Moli wrote before is behind us.
+                self.ran_out = false;
+                self.written = false;
+            } else if was_running {
+                self.ran_out = true;
+            }
+        }
+        // Only what the device says on its own, once the timer is cleared:
+        // the reply to a query or an order is never an end.
+        if command != cmd::STATUS || !self.ran_out || self.program.as_deref() != Some("0") {
+            return false;
+        }
+        self.ran_out = false;
+        if std::mem::take(&mut self.written) {
+            return false;
+        }
+        self.on != Some(false)
+    }
+
+    /// The order that finishes the job: main switch off.
+    fn off(&self) -> Map<String, Json> {
+        let mut dps = Map::new();
+        dps.insert(self.switch.clone(), Json::Bool(false));
+        dps
     }
 }
 
@@ -234,13 +327,14 @@ impl Link {
         writer.write_all(&query).await?;
 
         let wants_power = self.device.dps.iter().any(|d| POWER_DPS.contains(&d.id));
+        let mut mist = MistTimer::new(&self.device);
         let mut heartbeat = tokio::time::interval(HEARTBEAT);
         heartbeat.tick().await;
         let mut refresh = tokio::time::interval(REFRESH_POWER);
         refresh.tick().await;
         let mut heard = Instant::now();
         // Orders sent, waiting for the device's acknowledgement.
-        let mut pending: Vec<(Instant, oneshot::Sender<Result<(), String>>)> = Vec::new();
+        let mut pending: Pending = Vec::new();
         loop {
             let mut chunk = [0u8; 2048];
             tokio::select! {
@@ -266,7 +360,7 @@ impl Link {
                                 let _ = done.send(outcome.clone());
                             }
                         }
-                        self.report(&codec, &frame).await;
+                        self.heard(&mut codec, &mut writer, &frame, mist.as_mut(), &mut pending).await?;
                     }
                 }
                 _ = heartbeat.tick() => {
@@ -289,6 +383,9 @@ impl Link {
                         order.refuse(moli_i18n::tr!("pilotes.tuya.expire"));
                         continue;
                     }
+                    if let Some(timer) = mist.as_mut() {
+                        timer.written(&order.dps);
+                    }
                     send_order(&mut codec, &mut writer, id, &order.dps).await?;
                     pending.push((Instant::now(), order.done));
                 }
@@ -296,7 +393,52 @@ impl Link {
         }
     }
 
-    async fn report(&self, codec: &Codec, frame: &Frame) {
+    /// A frame from the device: its DPs are published. A diffuser whose
+    /// timer just ran out on its own, mist still on, is switched off by the
+    /// driver's own order, as the app promises. Not a person's nor an
+    /// automation's doing: the log says so.
+    async fn heard(
+        &self,
+        codec: &mut Codec,
+        writer: &mut OwnedWriteHalf,
+        frame: &Frame,
+        mist: Option<&mut MistTimer>,
+        pending: &mut Pending,
+    ) -> Result<(), LinkError> {
+        let dps = self.report(codec, frame).await;
+        let (Some(dps), Some(timer)) = (dps, mist) else {
+            return Ok(());
+        };
+        if !timer.observe(frame.cmd, &dps) {
+            return Ok(());
+        }
+        tracing::info!(
+            device = self.device.name,
+            origin = "driver",
+            "tuya diffuser timer ran out: switching it off, as the app promises"
+        );
+        let (done, outcome) = oneshot::channel();
+        send_order(codec, writer, &self.device.id, &timer.off()).await?;
+        pending.push((Instant::now(), done));
+        let name = self.device.name.clone();
+        tokio::spawn(async move {
+            let failed = match outcome.await {
+                Ok(Ok(())) => return,
+                Ok(Err(why)) => why,
+                Err(_) => moli_i18n::tr!("pilotes.tuya.connexion_perdue"),
+            };
+            tracing::warn!(
+                device = name,
+                origin = "driver",
+                error = %failed,
+                "tuya diffuser not switched off after its timer"
+            );
+        });
+        Ok(())
+    }
+
+    /// Publishes the DPs a frame carries, and hands them back raw.
+    async fn report(&self, codec: &Codec, frame: &Frame) -> Option<Map<String, Json>> {
         if !matches!(
             frame.cmd,
             cmd::STATUS
@@ -306,26 +448,26 @@ impl Link {
                 | cmd::CONTROL_NEW
                 | cmd::UPDATEDPS
         ) {
-            return;
+            return None;
         }
         let json = match codec.open_json(&frame.payload) {
             Ok(Some(json)) => json,
-            Ok(None) => return,
+            Ok(None) => return None,
             Err(e) => {
                 tracing::debug!(device = self.device.name, error = %e, "unreadable tuya payload");
-                return;
+                return None;
             }
         };
         // 3.4+ nest the DPs under `data`.
         let dps = json
             .get("dps")
-            .or_else(|| json.get("data").and_then(|d| d.get("dps")));
-        if let Some(Json::Object(dps)) = dps {
-            let values = self.device.decode_dps(dps);
-            if !values.is_empty() {
-                let _ = self.up.send(Up::State(self.index, values)).await;
-            }
+            .or_else(|| json.get("data").and_then(|d| d.get("dps")))
+            .and_then(Json::as_object)?;
+        let values = self.device.decode_dps(dps);
+        if !values.is_empty() {
+            let _ = self.up.send(Up::State(self.index, values)).await;
         }
+        Some(dps.clone())
     }
 }
 
@@ -382,6 +524,202 @@ fn now() -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tokio::net::TcpListener;
+
+    const KEY: [u8; 16] = *b"0123456789abcdef";
+
+    /// An aroma diffuser as the cloud describes it, completed by the driver.
+    fn diffuser() -> TuyaDevice {
+        let mut device: TuyaDevice = serde_json::from_value(json!({
+            "id": "bf000000000000000001", "name": "Diffuseur", "category": "jsq", "version": "3.3",
+            "dps": [
+                { "id": 1, "code": "switch", "type": "Boolean", "writable": true },
+                { "id": 11, "code": "switch_led", "type": "Boolean", "writable": true },
+                { "id": 13, "code": "countdown", "type": "String" },
+                { "id": 14, "code": "countdown_left", "type": "Integer", "unit": "min" },
+                { "id": 103, "code": "mist_mode", "type": "String" },
+            ]
+        }))
+        .unwrap();
+        device.complete();
+        device
+    }
+
+    fn dps(json: Json) -> Map<String, Json> {
+        serde_json::from_value(json).unwrap()
+    }
+
+    /// The timer set an hour ago, a minute left: what a query shows.
+    fn running() -> MistTimer {
+        let mut timer = MistTimer::new(&diffuser()).unwrap();
+        assert!(!timer.observe(
+            cmd::DP_QUERY,
+            &dps(json!({"1": true, "11": true, "13": "1", "14": 1, "103": "small"}))
+        ));
+        timer
+    }
+
+    /// What the device reports when its timer runs out: light off, timer
+    /// cleared, mist untouched.
+    fn ran_out() -> Map<String, Json> {
+        dps(json!({"11": false, "13": "0", "14": 0}))
+    }
+
+    #[test]
+    fn a_timer_that_runs_out_switches_the_diffuser_off() {
+        let mut timer = running();
+        assert!(timer.observe(cmd::STATUS, &ran_out()));
+        assert_eq!(timer.off(), dps(json!({"1": false})));
+        // Said once: the same report again, or the device's answer to the
+        // order, change nothing.
+        assert!(!timer.observe(cmd::STATUS, &ran_out()));
+        assert!(!timer.observe(cmd::CONTROL, &dps(json!({"1": false}))));
+    }
+
+    #[test]
+    fn a_timer_moli_cancelled_leaves_the_diffuser_on() {
+        let mut timer = running();
+        // A person cancels the timer in Moli: `countdown` = « 0 » goes out,
+        // the device confirms with the same report as an end.
+        timer.written(&dps(json!({"13": "0"})));
+        assert!(!timer.observe(cmd::STATUS, &ran_out()));
+        // Later a timer is set again and runs out: the device goes off.
+        assert!(!timer.observe(cmd::STATUS, &dps(json!({"13": "1", "14": 60}))));
+        assert!(!timer.observe(cmd::STATUS, &dps(json!({"14": 1}))));
+        assert!(timer.observe(cmd::STATUS, &ran_out()));
+    }
+
+    #[test]
+    fn a_timer_moli_set_is_not_a_cancellation() {
+        let mut timer = running();
+        // Moli sets a new timer: the device shows it running, then it ends.
+        timer.written(&dps(json!({"13": "1"})));
+        assert!(!timer.observe(cmd::STATUS, &dps(json!({"13": "1", "14": 60}))));
+        assert!(timer.observe(cmd::STATUS, &ran_out()));
+    }
+
+    #[test]
+    fn an_end_is_only_what_the_device_says_on_its_own() {
+        // The timer cleared in a reply to Moli's query: not an end seen live.
+        let mut timer = running();
+        assert!(!timer.observe(cmd::DP_QUERY, &ran_out()));
+        // Already off (a person switched it off, the device cleared its
+        // timer): nothing to finish.
+        let mut timer = running();
+        assert!(!timer.observe(
+            cmd::STATUS,
+            &dps(json!({"1": false, "11": false, "13": "0", "14": 0}))
+        ));
+        // No timer ever seen running: a cleared timer is not an end.
+        let mut timer = MistTimer::new(&diffuser()).unwrap();
+        assert!(!timer.observe(cmd::STATUS, &ran_out()));
+    }
+
+    #[test]
+    fn a_device_without_mist_has_no_timer_to_finish() {
+        let plug: TuyaDevice = serde_json::from_value(json!({
+            "id": "bf000000000000000002", "name": "Prise", "category": "cz",
+            "dps": [
+                { "id": 1, "code": "switch", "type": "Boolean", "writable": true },
+                { "id": 13, "code": "countdown", "type": "Integer", "writable": true },
+                { "id": 14, "code": "countdown_left", "type": "Integer" },
+            ]
+        }))
+        .unwrap();
+        assert!(MistTimer::new(&plug).is_none());
+        let mut no_timer = diffuser();
+        no_timer.dps.retain(|dp| dp.code != "countdown_left");
+        assert!(MistTimer::new(&no_timer).is_none());
+    }
+
+    /// A frame as a device sends it: a return code after the header.
+    fn from_device(command: u32, payload: &[u8]) -> Vec<u8> {
+        let mut frame = Codec::new(Version::V33, KEY).encode(command, payload);
+        frame.splice(16..16, [0, 0, 0, 0]);
+        let total = frame.len();
+        frame[12..16].copy_from_slice(&u32::try_from(total - 16).unwrap().to_be_bytes());
+        let crc = crc32fast::hash(&frame[..total - 8]).to_be_bytes();
+        frame[total - 8..total - 4].copy_from_slice(&crc);
+        frame
+    }
+
+    /// What Moli sent: the command and the JSON it carries.
+    async fn request(stream: &mut TcpStream) -> (u32, Json) {
+        let mut header = [0; 16];
+        stream.read_exact(&mut header).await.unwrap();
+        let size = u32::from_be_bytes(header[12..16].try_into().unwrap()) as usize;
+        let mut body = vec![0; size];
+        stream.read_exact(&mut body).await.unwrap();
+        let json = Codec::new(Version::V33, KEY)
+            .open_json(&body[..size - 8])
+            .unwrap()
+            .unwrap_or(Json::Null);
+        (u32::from_be_bytes(header[8..12].try_into().unwrap()), json)
+    }
+
+    #[tokio::test]
+    async fn on_the_wire_the_end_of_a_timer_becomes_a_switch_off_order() {
+        let listener = TcpListener::bind(("127.0.0.31", PORT)).await.unwrap();
+        let device = tokio::spawn(async move {
+            let (mut stream, _) = listener.accept().await.unwrap();
+            assert_eq!(request(&mut stream).await.0, cmd::DP_QUERY);
+            stream
+                .write_all(&from_device(
+                    cmd::DP_QUERY,
+                    br#"{"dps":{"1":true,"11":true,"13":"1","14":1,"103":"small"}}"#,
+                ))
+                .await
+                .unwrap();
+            // A minute later: the light goes off, the mist does not.
+            stream
+                .write_all(&from_device(
+                    cmd::STATUS,
+                    br#"{"dps":{"11":false,"13":"0","14":0}}"#,
+                ))
+                .await
+                .unwrap();
+            let (command, json) = request(&mut stream).await;
+            assert_eq!(command, cmd::CONTROL);
+            assert_eq!(json["dps"], json!({"1": false}));
+            stream
+                .write_all(&from_device(cmd::CONTROL, b""))
+                .await
+                .unwrap();
+            // Nothing else follows (the heartbeat is far away).
+            assert!(
+                timeout(Duration::from_millis(200), stream.read(&mut [0; 64]))
+                    .await
+                    .is_err()
+            );
+        });
+        let (up, mut events) = mpsc::channel(8);
+        let (_, address) = watch::channel(None);
+        let (_orders, orders) = mpsc::channel(1);
+        let mut link = Link {
+            index: 0,
+            device: Arc::new(diffuser()),
+            key: KEY,
+            address,
+            orders,
+            up,
+        };
+        let session = tokio::spawn(async move {
+            link.session(
+                "127.0.0.31",
+                Version::V33,
+                &mut Some(false),
+                &mut Floor::new(None),
+            )
+            .await
+        });
+        assert!(matches!(events.recv().await, Some(Up::Online(0, true))));
+        assert!(matches!(events.recv().await, Some(Up::State(0, _))));
+        assert!(
+            matches!(events.recv().await, Some(Up::State(0, values)) if values.contains(&("countdown_left".into(), Value::Int(0))))
+        );
+        device.await.unwrap();
+        session.abort();
+    }
 
     #[test]
     fn a_broadcast_never_lowers_the_version_a_device_proved() {
